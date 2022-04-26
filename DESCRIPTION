@@ -19,3 +19,5 @@ Depends:
     R (>= 2.10)
 LazyData: true
 URL: http://marinebon.org/obisindicators/
+Imports: 
+    dggridR
