@@ -20,5 +20,6 @@ Depends:
 LazyData: true
 URL: http://marinebon.org/obisindicators/
 Imports: 
-    dggridR (>= 3.0.0)
+    dggridR (>= 3.0.0),
+    gsl
 Remotes: r-barnes/dggridR

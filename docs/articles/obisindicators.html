@@ -72,7 +72,194 @@
     
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="http://marinebon.org/obisindicators/">obisindicators</a></span><span class="op">)</span></code></pre></div>
-  </main>
+<div class="section level2">
+<h2 id="use-data">use data<a class="anchor" aria-label="anchor" href="#use-data"></a>
+</h2>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span class="va">occ</span> <span class="op">&lt;-</span> <span class="va">occ_1M</span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="create-a-discrete-global-grid">Create a discrete global grid<a class="anchor" aria-label="anchor" href="#create-a-discrete-global-grid"></a>
+</h2>
+<p>Create an ISEA discrete global grid of resolution 9 using the <a href="https://github.com/r-barnes/dggridR" class="external-link">dggridR</a> package:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/r-barnes/dggridR/" class="external-link">dggridR</a></span><span class="op">)</span> <span class="co"># remotes::install_github("r-barnes/dggridR")</span>
+
+<span class="va">dggs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgconstruct.html" class="external-link">dgconstruct</a></span><span class="op">(</span>projection <span class="op">=</span> <span class="st">"ISEA"</span>, topology <span class="op">=</span> <span class="st">"HEXAGON"</span>, res <span class="op">=</span> <span class="fl">9</span><span class="op">)</span></code></pre></div>
+<p>Here’s on overview of all possible resolutions:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span class="va">inf</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dginfo.html" class="external-link">dginfo</a></span><span class="op">(</span><span class="va">dggs</span><span class="op">)</span>
+<span class="co">#&gt;    res            cells                area_km      spacing_km          cls_km</span>
+<span class="co">#&gt; 1    0               12 51006562.1724088639021 7053.6524314108 8199.5003701020</span>
+<span class="co">#&gt; 2    1               32 17002187.3908029571176 4072.4281300451 4678.9698717297</span>
+<span class="co">#&gt; 3    2               92  5667395.7969343187287 2351.2174771369 2691.2520709129</span>
+<span class="co">#&gt; 4    3              272  1889131.9323114394210 1357.4760433484 1551.8675487723</span>
+<span class="co">#&gt; 5    4              812   629710.6441038132180  783.7391590456  895.6018416484</span>
+<span class="co">#&gt; 6    5             2432   209903.5480346043769  452.4920144495  517.0049969031</span>
+<span class="co">#&gt; 7    6             7292    69967.8493448681256  261.2463863485  298.4793231872</span>
+<span class="co">#&gt; 8    7            21872    23322.6164482893764  150.8306714832  172.3244908961</span>
+<span class="co">#&gt; 9    8            65612     7774.2054827631255   87.0821287828   99.4910857272</span>
+<span class="co">#&gt; 10   9           196832     2591.4018275877083   50.2768904944   57.4411078487</span>
+<span class="co">#&gt; 11  10           590492      863.8006091959028   29.0273762609   33.1636203580</span>
+<span class="co">#&gt; 12  11          1771472      287.9335363986343   16.7589634981   19.1470215381</span>
+<span class="co">#&gt; 13  12          5314412       95.9778454662114    9.6757920870   11.0545373459</span>
+<span class="co">#&gt; 14  13         15943232       31.9926151554038    5.5863211660    6.3823399790</span>
+<span class="co">#&gt; 15  14         47829692       10.6642050518013    3.2252640290    3.6848456792</span>
+<span class="co">#&gt; 16  15        143489072        3.5547350172671    1.8621070553    2.1274466399</span>
+<span class="co">#&gt; 17  16        430467212        1.1849116724224    1.0750880097    1.2282818893</span>
+<span class="co">#&gt; 18  17       1291401632        0.3949705574741    0.6207023518    0.7091488792</span>
+<span class="co">#&gt; 19  18       3874204892        0.1316568524914    0.3583626699    0.4094272963</span>
+<span class="co">#&gt; 20  19      11622614672        0.0438856174971    0.2069007839    0.2363829597</span>
+<span class="co">#&gt; 21  20      34867844012        0.0146285391657    0.1194542233    0.1364757654</span>
+<span class="co">#&gt; 22  21     104603532032        0.0048761797219    0.0689669280    0.0787943199</span>
+<span class="co">#&gt; 23  22     313810596092        0.0016253932406    0.0398180744    0.0454919218</span>
+<span class="co">#&gt; 24  23     941431788272        0.0005417977469    0.0229889760    0.0262647733</span>
+<span class="co">#&gt; 25  24    2824295364812        0.0001805992490    0.0132726915    0.0151639739</span>
+<span class="co">#&gt; 26  25    8472886094432        0.0000601997497    0.0076629920    0.0087549244</span>
+<span class="co">#&gt; 27  26   25418658283292        0.0000200665832    0.0044242305    0.0050546580</span>
+<span class="co">#&gt; 28  27   76255974849872        0.0000066888611    0.0025543307    0.0029183081</span>
+<span class="co">#&gt; 29  28  228767924549612        0.0000022296204    0.0014747435    0.0016848860</span>
+<span class="co">#&gt; 30  29  686303773648832        0.0000007432068    0.0008514436    0.0009727694</span>
+<span class="co">#&gt; 31  30 2058911320946492        0.0000002477356    0.0004915812    0.0005616287</span></code></pre></div>
+<p>Then assign cell numbers to the occurrence data:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span class="fu"><a href="https://rdrr.io/r/base/system.time.html" class="external-link">system.time</a></span><span class="op">(</span><span class="op">{</span>
+<span class="va">occ</span><span class="op">$</span><span class="va">cell</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgGEO_to_SEQNUM.html" class="external-link">dgGEO_to_SEQNUM</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">occ</span><span class="op">$</span><span class="va">decimalLongitude</span>, <span class="va">occ</span><span class="op">$</span><span class="va">decimalLatitude</span><span class="op">)</span> <span class="co"># dgtransform deprecated</span>
+<span class="op">}</span><span class="op">)</span> <span class="co"># elapsed: 8.693</span>
+<span class="co">#&gt;    user  system elapsed </span>
+<span class="co">#&gt;   7.803   0.141   8.033</span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="calculate-metrics">Calculate metrics<a class="anchor" aria-label="anchor" href="#calculate-metrics"></a>
+</h2>
+<p>The following function calculates the number of records, species
+richness, Simpson index, Shannon index, Hurlbert index (n = 50), and
+Hill numbers for each cell.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span class="co"># library(gsl)</span>
+<span class="co"># </span>
+<span class="co"># calc_es50() &lt;- function(df, esn = 50) {</span>
+<span class="co">#   t1 &lt;- df %&gt;%</span>
+<span class="co">#     group_by(cell, species) %&gt;%</span>
+<span class="co">#     summarize(ni = sum(records))</span>
+<span class="co">#   t2 &lt;- t1 %&gt;%</span>
+<span class="co">#     group_by(cell) %&gt;%</span>
+<span class="co">#     mutate(n = sum(ni))</span>
+<span class="co">#   t3 &lt;- t2 %&gt;%</span>
+<span class="co">#     group_by(cell, species) %&gt;%</span>
+<span class="co">#     mutate(</span>
+<span class="co">#       hi = -(ni/n*log(ni/n)),</span>
+<span class="co">#       si = (ni/n)^2,</span>
+<span class="co">#       qi = ni/n,</span>
+<span class="co">#       esi = case_when(</span>
+<span class="co">#         n-ni &gt;= esn ~ 1-exp(lngamma(n-ni+1)+lngamma(n-esn+1)-lngamma(n-ni-esn+1)-lngamma(n+1)),</span>
+<span class="co">#         n &gt;= esn ~ 1</span>
+<span class="co">#       )</span>
+<span class="co">#     )</span>
+<span class="co">#   t4 &lt;- t3 %&gt;%</span>
+<span class="co">#     group_by(cell) %&gt;%</span>
+<span class="co">#     summarize(</span>
+<span class="co">#       n = sum(ni),</span>
+<span class="co">#       sp = n(),</span>
+<span class="co">#       shannon = sum(hi),</span>
+<span class="co">#       simpson = sum(si),</span>
+<span class="co">#       maxp = max(qi),</span>
+<span class="co">#       es = sum(esi)</span>
+<span class="co">#     )</span>
+<span class="co">#   result &lt;- t4 %&gt;%</span>
+<span class="co">#     mutate(</span>
+<span class="co">#       hill_1 = exp(shannon),</span>
+<span class="co">#       hill_2 = 1/simpson,</span>
+<span class="co">#       hill_inf = 1/maxp</span>
+<span class="co">#     )</span>
+<span class="co">#   return(result)</span>
+<span class="co"># }</span></code></pre></div>
+<p>Perform the calculation on species level data:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span class="fu"><a href="https://rdrr.io/r/base/system.time.html" class="external-link">system.time</a></span><span class="op">(</span><span class="op">{</span>
+<span class="va">metrics</span> <span class="op">&lt;-</span> <span class="va">occ</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span>
+  <span class="co">#filter(!is.na(species)) %&gt;%</span>
+  <span class="fu"><a href="../reference/calc_es50.html">calc_es50</a></span><span class="op">(</span><span class="op">)</span>
+<span class="op">}</span><span class="op">)</span> <span class="co"># started 11:43 am</span>
+
+<span class="va">metrics</span></code></pre></div>
+<p>Add cell geometries to the metrics table:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-spatial.github.io/sf/" class="external-link">sf</a></span><span class="op">)</span>
+
+<span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgearthgrid.html" class="external-link">dgearthgrid</a></span><span class="op">(</span><span class="va">dggs</span>, frame <span class="op">=</span> <span class="cn">FALSE</span>, wrapcells <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span>
+<span class="va">grid_sf</span> <span class="op">&lt;-</span> <span class="va">grid</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span>
+  <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_as_sf.html" class="external-link">st_as_sf</a></span><span class="op">(</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span>
+  <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_transform.html" class="external-link">st_wrap_dateline</a></span><span class="op">(</span>options <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"WRAPDATELINE=YES"</span>, <span class="st">"DATELINEOFFSET=230"</span><span class="op">)</span><span class="op">)</span>
+<span class="va">grid_sf</span><span class="op">$</span><span class="va">cell</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">grid</span><span class="op">)</span>
+
+<span class="va">metrics</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/sp/man/merge.html" class="external-link">merge</a></span><span class="op">(</span><span class="va">metrics</span>, <span class="va">grid_sf</span>, by.x <span class="op">=</span> <span class="st">"cell"</span>, by.y <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span>
+    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/geos_binary_pred.html" class="external-link">st_intersects</a></span><span class="op">(</span><span class="va">geometry</span>, <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_as_sfc.html" class="external-link">st_as_sfc</a></span><span class="op">(</span><span class="st">"SRID=4326;POLYGON((-180 85,180 85,180 -85,-180 -85,-180 85))"</span><span class="op">)</span>, sparse <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></code></pre></div>
+<p>Let’s check the results by creating a Shannon index map:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/ropenscilabs/rnaturalearth" class="external-link">rnaturalearth</a></span><span class="op">)</span>
+<span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/ropenscilabs/rnaturalearthdata" class="external-link">rnaturalearthdata</a></span><span class="op">)</span>
+<span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://sjmgarnier.github.io/viridis/" class="external-link">viridis</a></span><span class="op">)</span>
+<span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span>
+
+<span class="va">world</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/rnaturalearth/man/ne_countries.html" class="external-link">ne_countries</a></span><span class="op">(</span>scale <span class="op">=</span> <span class="st">"medium"</span>, returnclass <span class="op">=</span> <span class="st">"sf"</span><span class="op">)</span>
+
+<span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span>
+    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">geom_sf</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">metrics</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes_.html" class="external-link">aes_string</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"shannon"</span>, geometry <span class="op">=</span> <span class="st">"geometry"</span><span class="op">)</span>, lwd <span class="op">=</span> <span class="fl">0</span><span class="op">)</span> <span class="op">+</span>
+    <span class="fu"><a href="https://sjmgarnier.github.io/viridis/reference/scale_viridis.html" class="external-link">scale_fill_viridis</a></span><span class="op">(</span>option <span class="op">=</span> <span class="st">"inferno"</span>, na.value <span class="op">=</span> <span class="st">"white"</span>, name <span class="op">=</span> <span class="st">"Shannon index"</span><span class="op">)</span> <span class="op">+</span>
+    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">geom_sf</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">world</span>, fill <span class="op">=</span> <span class="st">"#dddddd"</span>, color <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span> <span class="op">+</span>
+    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>panel.grid.major.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, panel.grid.major.y <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, panel.grid.minor.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, panel.grid.minor.y <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, panel.background <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, axis.text.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, axis.text.y <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, axis.ticks <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, axis.title.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, axis.title.y <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">xlab</a></span><span class="op">(</span><span class="st">""</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ylab</a></span><span class="op">(</span><span class="st">""</span><span class="op">)</span> <span class="op">+</span>
+    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">coord_sf</a></span><span class="op">(</span><span class="op">)</span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="output">Output<a class="anchor" aria-label="anchor" href="#output"></a>
+</h2>
+<div class="section level3">
+<h3 id="shapefile">Shapefile<a class="anchor" aria-label="anchor" href="#shapefile"></a>
+</h3>
+<p>Write the <code>metrics</code> table to a shapefile:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span class="va">files</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">dir</a></span><span class="op">(</span><span class="st">"shapefile"</span>, full.names <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>
+<span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.remove</a></span><span class="op">(</span><span class="va">files</span><span class="op">)</span>
+<span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_write.html" class="external-link">st_write</a></span><span class="op">(</span><span class="va">metrics</span>, <span class="st">"shapefile/indicators.shp"</span>, layer <span class="op">=</span> <span class="st">"indicators"</span><span class="op">)</span>
+<span class="va">files</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">dir</a></span><span class="op">(</span><span class="st">"shapefile"</span>, full.names <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>
+<span class="fu"><a href="https://rdrr.io/r/utils/zip.html" class="external-link">zip</a></span><span class="op">(</span>zipfile <span class="op">=</span> <span class="st">"shapefile/metrics.zip"</span>, files <span class="op">=</span> <span class="va">files</span><span class="op">)</span>
+<span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.remove</a></span><span class="op">(</span><span class="va">files</span><span class="op">)</span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="map-image">Map image<a class="anchor" aria-label="anchor" href="#map-image"></a>
+</h3>
+<p>This create a high resolution PNG map image.</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span class="va">metrics</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/sf.html" class="external-link">st_sf</a></span><span class="op">(</span><span class="va">metrics</span>, sf_column_name <span class="op">=</span> <span class="st">"geometry"</span><span class="op">)</span>
+<span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_crs.html" class="external-link">st_crs</a></span><span class="op">(</span><span class="va">metrics</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fl">4326</span>
+
+<span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span>
+  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">geom_sf</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">metrics</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes_.html" class="external-link">aes_string</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"n"</span>, color <span class="op">=</span> <span class="st">"n"</span>, geometry <span class="op">=</span> <span class="st">"geometry"</span><span class="op">)</span>, lwd <span class="op">=</span> <span class="fl">0.04</span><span class="op">)</span> <span class="op">+</span>
+  <span class="fu"><a href="https://sjmgarnier.github.io/viridis/reference/scale_viridis.html" class="external-link">scale_color_viridis</a></span><span class="op">(</span>option <span class="op">=</span> <span class="st">"inferno"</span>, na.value <span class="op">=</span> <span class="st">"white"</span>, name <span class="op">=</span> <span class="st">"Number of records"</span>, trans <span class="op">=</span> <span class="st">"log10"</span><span class="op">)</span> <span class="op">+</span>
+  <span class="fu"><a href="https://sjmgarnier.github.io/viridis/reference/scale_viridis.html" class="external-link">scale_fill_viridis</a></span><span class="op">(</span>option <span class="op">=</span> <span class="st">"inferno"</span>, na.value <span class="op">=</span> <span class="st">"white"</span>, name <span class="op">=</span> <span class="st">"Number of records"</span>, trans <span class="op">=</span> <span class="st">"log10"</span><span class="op">)</span> <span class="op">+</span>
+  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">geom_sf</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">world</span>, fill <span class="op">=</span> <span class="st">"#dddddd"</span>, color <span class="op">=</span> <span class="st">"#666666"</span>, lwd <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span> <span class="op">+</span>
+  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>
+    panel.grid.major.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,
+    panel.grid.major.y <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,
+    panel.grid.minor.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,
+    panel.grid.minor.y <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>, 
+    panel.background <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,
+    axis.text.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,
+    axis.text.y <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,
+    axis.ticks <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,
+    axis.title.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,
+    axis.title.y <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span>,
+    legend.position <span class="op">=</span> <span class="st">"bottom"</span>
+  <span class="op">)</span> <span class="op">+</span>
+  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">xlab</a></span><span class="op">(</span><span class="st">""</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ylab</a></span><span class="op">(</span><span class="st">""</span><span class="op">)</span> <span class="op">+</span>
+  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">coord_sf</a></span><span class="op">(</span>crs <span class="op">=</span> <span class="st">"+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"</span> <span class="op">)</span>
+
+<span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsave.html" class="external-link">ggsave</a></span><span class="op">(</span><span class="st">"map/map.png"</span>, width <span class="op">=</span> <span class="fl">12</span>, height <span class="op">=</span> <span class="fl">6</span>, dpi <span class="op">=</span> <span class="fl">600</span><span class="op">)</span></code></pre></div>
+</div>
+</div>
+  </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
+    </nav></aside>
 </div>
 
 
