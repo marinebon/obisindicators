@@ -3,7 +3,7 @@ pkgdown: 2.0.2
 pkgdown_sha: ~
 articles:
   obisindicators: obisindicators.html
-last_built: 2022-04-26T18:45Z
+last_built: 2022-04-26T19:02Z
 urls:
   reference: http://marinebon.org/obisindicators/reference
   article: http://marinebon.org/obisindicators/articles
