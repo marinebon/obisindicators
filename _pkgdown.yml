@@ -1,0 +1,22 @@
+url: http://marinebon.org/obisindicators/
+template:
+  bootstrap: 5
+
+reference:
+- title: "Read"
+  desc: "Functions for reading data."
+  contents:
+  - has_concept("read")
+- title: "Analyze"
+  desc: "Functions for calculating indicators."
+  contents:
+  - has_concept("analyze")
+- title: "Visualize"
+  desc: "Functions for visualizing indicators."
+  contents:
+  - has_concept("visualize")
+- title: "Data"
+  desc: >
+    Locally available datasets for running examples
+  contents:
+  - has_concept("data")

@@ -1,27 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>/404.html</loc>
+    <loc>http://marinebon.org/obisindicators/404.html</loc>
   </url>
   <url>
-    <loc>/LICENSE-text.html</loc>
+    <loc>http://marinebon.org/obisindicators/LICENSE-text.html</loc>
   </url>
   <url>
-    <loc>/articles/index.html</loc>
+    <loc>http://marinebon.org/obisindicators/LICENSE.html</loc>
   </url>
   <url>
-    <loc>/articles/obisindicators.html</loc>
+    <loc>http://marinebon.org/obisindicators/articles/index.html</loc>
   </url>
   <url>
-    <loc>/authors.html</loc>
+    <loc>http://marinebon.org/obisindicators/articles/obisindicators.html</loc>
   </url>
   <url>
-    <loc>/index.html</loc>
+    <loc>http://marinebon.org/obisindicators/authors.html</loc>
   </url>
   <url>
-    <loc>/reference/calc_es50.html</loc>
+    <loc>http://marinebon.org/obisindicators/index.html</loc>
   </url>
   <url>
-    <loc>/reference/index.html</loc>
+    <loc>http://marinebon.org/obisindicators/news/index.html</loc>
+  </url>
+  <url>
+    <loc>http://marinebon.org/obisindicators/reference/calc_es50.html</loc>
+  </url>
+  <url>
+    <loc>http://marinebon.org/obisindicators/reference/index.html</loc>
+  </url>
+  <url>
+    <loc>http://marinebon.org/obisindicators/reference/occ_1M.html</loc>
+  </url>
+  <url>
+    <loc>http://marinebon.org/obisindicators/reference/occ_SAtlantic.html</loc>
   </url>
 </urlset>
