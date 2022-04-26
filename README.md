@@ -13,3 +13,8 @@ remotes::install_github("mbon/obisindicators")
 library(obisindicators)
 ```
 
+## Developer Setup
+```r
+devtools::install_local()
+testthat::test_check(obisindicators)
+```
