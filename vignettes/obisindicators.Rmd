@@ -3,33 +3,36 @@ title: "obisindicators"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{obisindicators}
-  %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
-)
+  comment  = "#>",
+  warning  = FALSE, 
+  message  = FALSE)
 ```
 
 ```{r setup}
 library(obisindicators)
+library(dplyr)
 ```
 
-## use data
+## Get biological occurrences
 
-```{r}
-occ <- occ_1M
+```{r occ}
+occ <- occ_1M # occ_1M OR occ_SAtlantic
 ```
-
 
 ## Create a discrete global grid
 
 Create an ISEA discrete global grid of resolution 9 using the [dggridR](https://github.com/r-barnes/dggridR) package:
 
-```{r warning=FALSE, message=FALSE}
+```{r dgconstruct}
 library(dggridR) # remotes::install_github("r-barnes/dggridR")
 
 dggs <- dgconstruct(projection = "ISEA", topology = "HEXAGON", res = 9)
@@ -37,135 +40,89 @@ dggs <- dgconstruct(projection = "ISEA", topology = "HEXAGON", res = 9)
 
 Here's on overview of all possible resolutions:
 
-```{r warning=FALSE}
+```{r dginfo}
 inf <- dginfo(dggs)
 ```
 
 Then assign cell numbers to the occurrence data:
 
-```{r warning=FALSE, message=FALSE}
-system.time({
-occ$cell <- dgGEO_to_SEQNUM(dggs, occ$decimalLongitude, occ$decimalLatitude) # dgtransform deprecated
-}) # elapsed: 8.693
+```{r dgGEO_to_SEQNUM}
+occ$cell <- dgGEO_to_SEQNUM(dggs, occ$decimalLongitude, occ$decimalLatitude)[["seqnum"]]
 ```
 
 ## Calculate metrics
 
 The following function calculates the number of records, species richness, Simpson index, Shannon index, Hurlbert index (n = 50), and Hill numbers for each cell.
 
-```{r warning=FALSE, message=FALSE}
-# library(gsl)
-# 
-# calc_es50() <- function(df, esn = 50) {
-#   t1 <- df %>%
-#     group_by(cell, species) %>%
-#     summarize(ni = sum(records))
-#   t2 <- t1 %>%
-#     group_by(cell) %>%
-#     mutate(n = sum(ni))
-#   t3 <- t2 %>%
-#     group_by(cell, species) %>%
-#     mutate(
-#       hi = -(ni/n*log(ni/n)),
-#       si = (ni/n)^2,
-#       qi = ni/n,
-#       esi = case_when(
-#         n-ni >= esn ~ 1-exp(lngamma(n-ni+1)+lngamma(n-esn+1)-lngamma(n-ni-esn+1)-lngamma(n+1)),
-#         n >= esn ~ 1
-#       )
-#     )
-#   t4 <- t3 %>%
-#     group_by(cell) %>%
-#     summarize(
-#       n = sum(ni),
-#       sp = n(),
-#       shannon = sum(hi),
-#       simpson = sum(si),
-#       maxp = max(qi),
-#       es = sum(esi)
-#     )
-#   result <- t4 %>%
-#     mutate(
-#       hill_1 = exp(shannon),
-#       hill_2 = 1/simpson,
-#       hill_inf = 1/maxp
-#     )
-#   return(result)
-# }
-```
-
 Perform the calculation on species level data:
 
-```{r warning=FALSE, message=FALSE, eval=F}
-system.time({
-metrics <- occ %>%
-  #filter(!is.na(species)) %>%
-  calc_es50()
-}) # started 11:43 am
-
-metrics
+```{r calc_es50}
+metrics <- calc_es50(occ)
 ```
 
 Add cell geometries to the metrics table:
 
-```{r warning=FALSE, message=FALSE, eval=F}
+```{r dgcellstogrid}
 library(sf)
 
-grid <- dgearthgrid(dggs, frame = FALSE, wrapcells = FALSE)
-grid_sf <- grid %>%
-  st_as_sf() %>%
-  st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=230"))
-grid_sf$cell <- names(grid)
-
-metrics <- merge(metrics, grid_sf, by.x = "cell", by.y = "cell") %>%
-    filter(st_intersects(geometry, st_as_sfc("SRID=4326;POLYGON((-180 85,180 85,180 -85,-180 -85,-180 85))"), sparse = FALSE))
+grid <- dgcellstogrid(dggs, metrics$cell) %>% 
+  st_wrap_dateline() %>% 
+  rename(cell = seqnum) %>% 
+  left_join(
+    metrics,
+    by = "cell")
 ```
 
 Let's check the results by creating a Shannon index map:
 
-```{r warning=FALSE, message=FALSE, eval=F}
+```{r map_gcs}
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(viridis)
 library(ggplot2)
 
 world <- ne_countries(scale = "medium", returnclass = "sf")
+bb <- st_bbox(grid)
 
 ggplot() +
-    geom_sf(data = metrics, aes_string(fill = "shannon", geometry = "geometry"), lwd = 0) +
-    scale_fill_viridis(option = "inferno", na.value = "white", name = "Shannon index") +
-    geom_sf(data = world, fill = "#dddddd", color = NA) +
-    theme(panel.grid.major.x = element_blank(), panel.grid.major.y = element_blank(), panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank(), panel.background = element_blank(), axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks = element_blank(), axis.title.x = element_blank(), axis.title.y = element_blank()) + xlab("") + ylab("") +
-    coord_sf()
-```
-
-## Output
-### Shapefile
-
-Write the `metrics` table to a shapefile:
-
-```{r warning=FALSE, message=FALSE, results='hide', eval=F}
-files <- dir("shapefile", full.names = TRUE)
-file.remove(files)
-st_write(metrics, "shapefile/indicators.shp", layer = "indicators")
-files <- dir("shapefile", full.names = TRUE)
-zip(zipfile = "shapefile/metrics.zip", files = files)
-file.remove(files)
+  geom_sf(data = grid, aes_string(fill = "shannon", geometry = "geometry"), lwd = 0) +
+  scale_fill_viridis(option = "inferno", na.value = "white", name = "Shannon index") +
+  geom_sf(
+    data = world, fill = "#dddddd", color = NA) +
+  theme(
+    panel.grid.major.x = element_blank(), 
+    panel.grid.major.y = element_blank(), 
+    panel.grid.minor.x = element_blank(), 
+    panel.grid.minor.y = element_blank(), 
+    panel.background = element_blank(), 
+    axis.text.x = element_blank(), 
+    axis.text.y = element_blank(), 
+    axis.ticks = element_blank(), 
+    axis.title.x = element_blank(), 
+    axis.title.y = element_blank()) + 
+  xlab("") + ylab("") +
+  coord_sf(
+    xlim = bb[c("xmin","xmax")],
+    ylim = bb[c("ymin","ymax")])
 ```
 
 ### Map image
 
-This create a high resolution PNG map image.
+This creates a high resolution PNG map image.
 
-```{r warning=FALSE, message=FALSE, eval=F}
-metrics <- st_sf(metrics, sf_column_name = "geometry")
-st_crs(metrics) <- 4326
-
+```{r map_robin}
 ggplot() +
-  geom_sf(data = metrics, aes_string(fill = "n", color = "n", geometry = "geometry"), lwd = 0.04) +
-  scale_color_viridis(option = "inferno", na.value = "white", name = "Number of records", trans = "log10") +
-  scale_fill_viridis(option = "inferno", na.value = "white", name = "Number of records", trans = "log10") +
-  geom_sf(data = world, fill = "#dddddd", color = "#666666", lwd = 0.1) +
+  geom_sf(
+    aes_string(fill = "n", color = "n", geometry = "geometry"),
+    data = grid, lwd = 0.04) +
+  scale_color_viridis(
+    option = "inferno", na.value = "white", 
+    name = "Number of records", trans = "log10") +
+  scale_fill_viridis(
+    option = "inferno", na.value = "white", 
+    name = "Number of records", trans = "log10") +
+  geom_sf(
+    data = world, fill = "#dddddd", color = "#666666", lwd = 0.1) +
   theme(
     panel.grid.major.x = element_blank(),
     panel.grid.major.y = element_blank(),
@@ -177,11 +134,10 @@ ggplot() +
     axis.ticks = element_blank(),
     axis.title.x = element_blank(),
     axis.title.y = element_blank(),
-    legend.position = "bottom"
-  ) +
+    legend.position = "bottom") +
   xlab("") + ylab("") +
-  coord_sf(crs = "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs" )
-
-ggsave("map/map.png", width = 12, height = 6, dpi = 600)
+  coord_sf(
+    crs = "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs" )
+# ggsave("map/map.png", width = 12, height = 6, dpi = 600)
 ```
 

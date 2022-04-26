@@ -20,25 +20,24 @@
 #' @export
 #' @concept analyze
 #' @examples
+#' @importFrom gsl lngamma
 calc_es50 <- function(df, esn = 50) {
-  t1 <- df %>%
+  df %>%
     group_by(cell, species) %>%
-    summarize(ni = sum(records))
-  t2 <- t1 %>%
-    group_by(cell) %>%
-    mutate(n = sum(ni))
-  t3 <- t2 %>%
+    summarize(
+      ni = sum(records),
+      .groups = "drop_last") %>%
+    mutate(n = sum(ni)) %>%
     group_by(cell, species) %>%
     mutate(
       hi = -(ni/n*log(ni/n)),
       si = (ni/n)^2,
       qi = ni/n,
       esi = case_when(
-        n-ni >= esn ~ 1-exp(lngamma(n-ni+1)+lngamma(n-esn+1)-lngamma(n-ni-esn+1)-lngamma(n+1)),
+        n-ni >= esn ~ 1-exp(gsl::lngamma(n-ni+1)+gsl::lngamma(n-esn+1)-gsl::lngamma(n-ni-esn+1)-gsl::lngamma(n+1)),
         n >= esn ~ 1
       )
-    )
-  t4 <- t3 %>%
+    ) %>%
     group_by(cell) %>%
     summarize(
       n = sum(ni),
@@ -46,13 +45,10 @@ calc_es50 <- function(df, esn = 50) {
       shannon = sum(hi),
       simpson = sum(si),
       maxp = max(qi),
-      es = sum(esi)
-    )
-  result <- t4 %>%
+      es = sum(esi),
+      .groups = "drop") %>%
     mutate(
-      hill_1 = exp(shannon),
-      hill_2 = 1/simpson,
-      hill_inf = 1/maxp
-    )
-  return(result)
+      hill_1   = exp(shannon),
+      hill_2   = 1/simpson,
+      hill_inf = 1/maxp)
 }

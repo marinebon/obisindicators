@@ -22,6 +22,12 @@ LazyData: true
 URL: http://marinebon.org/obisindicators/
 Imports: 
     dggridR (>= 3.0.0),
-    gsl
+    dplyr,
+    ggplot2,
+    gsl,
+    rnaturalearth,
+    rnaturalearthdata,
+    sf,
+    viridis
 Remotes: r-barnes/dggridR
 Config/testthat/edition: 3
