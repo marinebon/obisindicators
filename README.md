@@ -16,5 +16,5 @@ library(obisindicators)
 ## Developer Setup
 ```r
 devtools::install_local()
-testthat::test_check(obisindicators)
+testthat::test_local()
 ```
