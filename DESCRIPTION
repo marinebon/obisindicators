@@ -13,7 +13,8 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 Suggests: 
     knitr,
-    rmarkdown
+    rmarkdown,
+    testthat (>= 3.0.0)
 VignetteBuilder: knitr
 Depends: 
     R (>= 2.10)
@@ -23,3 +24,4 @@ Imports:
     dggridR (>= 3.0.0),
     gsl
 Remotes: r-barnes/dggridR
+Config/testthat/edition: 3
