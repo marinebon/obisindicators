@@ -1,0 +1,14 @@
+name: ioos-sprint
+channels:
+  - conda-forge
+  - nodefaults
+  - pyviz
+dependencies:
+  - python>=3.9
+  - distributed
+  - dask
+  - hvplot
+  - holoviews
+  - cartopy
+  - datashader
+  - bokeh
