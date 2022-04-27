@@ -71,73 +71,13 @@ grid <- dgcellstogrid(dggs, metrics$cell) %>%
     by = "cell")
 ```
 
-Let's check the results by creating a Shannon index map:
+### Plot maps
+
+Let's look at the resulting metrics in map form.
 
 ```{r map_gcs}
-library(rnaturalearth)
-library(rnaturalearthdata)
-library(viridis)
-library(ggplot2)
-
-world <- ne_countries(scale = "medium", returnclass = "sf")
-bb <- st_bbox(grid)
-
-ggplot() +
-  geom_sf(data = grid, aes_string(fill = "shannon", geometry = "geometry"), lwd = 0) +
-  scale_fill_viridis(option = "inferno", na.value = "white", name = "Shannon index") +
-  geom_sf(
-    data = world, fill = "#dddddd", color = NA) +
-  theme(
-    panel.grid.major.x = element_blank(), 
-    panel.grid.major.y = element_blank(), 
-    panel.grid.minor.x = element_blank(), 
-    panel.grid.minor.y = element_blank(), 
-    panel.background = element_blank(), 
-    axis.text.x = element_blank(), 
-    axis.text.y = element_blank(), 
-    axis.ticks = element_blank(), 
-    axis.title.x = element_blank(), 
-    axis.title.y = element_blank()) + 
-  xlab("") + ylab("") +
-  coord_sf(
-    xlim = bb[c("xmin","xmax")],
-    ylim = bb[c("ymin","ymax")])
-```
-
-### Map image
-
-This creates a high resolution PNG map image.
-
-```{r map_robin}
-ggplot() +
-  geom_sf(
-    aes_string(fill = "n", color = "n", geometry = "geometry"),
-    data = grid, lwd = 0.04) +
-  scale_color_viridis(
-    option = "inferno", na.value = "white", 
-    name = "Number of records", trans = "log10") +
-  scale_fill_viridis(
-    option = "inferno", na.value = "white", 
-    name = "Number of records", trans = "log10") +
-  geom_sf(
-    data = world, fill = "#dddddd", color = "#666666", lwd = 0.1) +
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.minor.y = element_blank(), 
-    panel.background = element_blank(),
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    axis.ticks = element_blank(),
-    axis.title.x = element_blank(),
-    axis.title.y = element_blank(),
-    legend.position = "bottom") +
-  xlab("") + ylab("") +
-  coord_sf(
-    crs = "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs",
-    xlim = bb[c("xmin","xmax")],
-    ylim = bb[c("ymin","ymax")])
-# ggsave("map/map.png", width = 12, height = 6, dpi = 600)
+gmap_metric(grid, "es", label = "ES(50)")
+gmap_metric(grid, "shannon", label = "Shannon index")
+gmap_metric(grid, "n", label = "# of records", trans = "log10")
 ```
 
