@@ -71,7 +71,7 @@ grid <- dgcellstogrid(dggs, metrics$cell) %>%
     by = "cell")
 ```
 
-### Plot maps
+## Plot maps
 
 Let's look at the resulting metrics in map form.
 
