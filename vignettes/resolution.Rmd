@@ -1,0 +1,80 @@
+---
+title: "resolution"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{resolution}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(obisindicators)
+library(dplyr)
+library(gsl)
+library(dggridR) # remotes::install_github("r-barnes/dggridR")
+library(sf)
+```
+
+## Get biological occurrences
+
+```{r occ}
+occ <- occ_SAtlantic # occ_1M OR occ_SAtlantic
+```
+
+## Create function to make grid, calculate metrics, and plot maps for different resolution grid sizes
+
+```{r function}
+res_changes <- function(resolution = 9){
+    dggs <- dgconstruct(projection = "ISEA", topology = "HEXAGON", res = resolution)
+    occ$cell <- dgGEO_to_SEQNUM(dggs, occ$decimalLongitude, occ$decimalLatitude)[["seqnum"]]
+    metrics <- calc_es50(occ)
+
+  grid <- dgcellstogrid(dggs, metrics$cell) %>% 
+    st_wrap_dateline() %>% 
+    rename(cell = seqnum) %>% 
+    left_join(
+      metrics,
+      by = "cell")
+
+  gmap_metric(grid, "es", label = "ES(50)")
+}
+```
+
+## Different Resolutions
+
+Here we plot res 4, which has hex areas of ~630,000 sq km
+This is the highest resolution we can plot without having gaps in the Central Atlantic Region
+
+```{r}
+res_changes(4)
+```
+
+Here we plot res 6, which has hex areas of ~70,000 sq km.
+
+We still see some gaps and can begin to see the band of high amounts of sampling towards the bottom
+This can show us where more sampling is needed
+
+```{r}
+res_changes(6)
+```
+
+Here we plot res 9, which has hex areas of ~2600 sq km, the default resolution
+
+```{r}
+res_changes(9)
+```
+
+Here we plot res 11, which has hex areas of ~288 sq km
+
+We see a large amount of gaps throughout the South Atlantic when we get down to this small area
+
+```{r}
+res_changes(11)
+```
