@@ -20,6 +20,7 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(obisindicators)
 library(dplyr)
+library(gsl)
 ```
 
 ## Get biological occurrences
