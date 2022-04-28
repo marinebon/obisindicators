@@ -37,18 +37,39 @@
     <loc>http://marinebon.org/obisindicators/news/index.html</loc>
   </url>
   <url>
-    <loc>http://marinebon.org/obisindicators/reference/calc_es50.html</loc>
+    <loc>http://marinebon.org/obisindicators/reference/calc_indicators.html</loc>
   </url>
   <url>
-    <loc>http://marinebon.org/obisindicators/reference/gmap_metric.html</loc>
+    <loc>http://marinebon.org/obisindicators/reference/gmap_indicator.html</loc>
   </url>
   <url>
     <loc>http://marinebon.org/obisindicators/reference/index.html</loc>
   </url>
   <url>
+    <loc>http://marinebon.org/obisindicators/reference/occ_1960s.html</loc>
+  </url>
+  <url>
+    <loc>http://marinebon.org/obisindicators/reference/occ_1970s.html</loc>
+  </url>
+  <url>
+    <loc>http://marinebon.org/obisindicators/reference/occ_1980s.html</loc>
+  </url>
+  <url>
+    <loc>http://marinebon.org/obisindicators/reference/occ_1990s.html</loc>
+  </url>
+  <url>
     <loc>http://marinebon.org/obisindicators/reference/occ_1M.html</loc>
   </url>
   <url>
+    <loc>http://marinebon.org/obisindicators/reference/occ_2000s.html</loc>
+  </url>
+  <url>
+    <loc>http://marinebon.org/obisindicators/reference/occ_2010s.html</loc>
+  </url>
+  <url>
     <loc>http://marinebon.org/obisindicators/reference/occ_SAtlantic.html</loc>
+  </url>
+  <url>
+    <loc>http://marinebon.org/obisindicators/reference/occ_fk.html</loc>
   </url>
 </urlset>

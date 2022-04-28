@@ -26,7 +26,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.2</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -44,7 +44,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-articles">Articles</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-articles">
-    <a class="dropdown-item" href="../articles/regional_diversity.html">Map Regional Diversity</a>
+    <a class="dropdown-item" href="../articles/regional_diversity.html">Regional Diversity</a>
     <a class="dropdown-item" href="../articles/resolution.html">resolution</a>
     <a class="dropdown-item" href="../articles/temporal_subsets.html">Temporal Subsets</a>
   </div>
@@ -86,11 +86,11 @@
     
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators" class="external-link">obisindicators</a></span><span class="op">)</span>
-<span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span>
-<span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/RobinHankin/gsl" class="external-link">gsl</a></span><span class="op">)</span></code></pre></div>
+<span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></code></pre></div>
 <div class="section level2">
 <h2 id="get-biological-occurrences">Get biological occurrences<a class="anchor" aria-label="anchor" href="#get-biological-occurrences"></a>
 </h2>
+<p>Use the 1 million records subsampled from the full OBIS dataset otherwise available at <a href="https://obis.org/data/access" class="external-link uri">https://obis.org/data/access</a>.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="va">occ</span> <span class="op">&lt;-</span> <span class="va">occ_1M</span> <span class="co"># occ_1M OR occ_SAtlantic</span></code></pre></div>
 </div>
@@ -102,7 +102,7 @@
 <code class="sourceCode R"><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/r-barnes/dggridR/" class="external-link">dggridR</a></span><span class="op">)</span> <span class="co"># remotes::install_github("r-barnes/dggridR")</span>
 
 <span class="va">dggs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgconstruct.html" class="external-link">dgconstruct</a></span><span class="op">(</span>projection <span class="op">=</span> <span class="st">"ISEA"</span>, topology <span class="op">=</span> <span class="st">"HEXAGON"</span>, res <span class="op">=</span> <span class="fl">9</span><span class="op">)</span></code></pre></div>
-<p>Here’s on overview of all possible resolutions:</p>
+<p>Here’s on overview of all possible resolutions specified by the <code>res</code> parameter above:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="va">inf</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dginfo.html" class="external-link">dginfo</a></span><span class="op">(</span><span class="va">dggs</span><span class="op">)</span>
 <span class="co">#&gt;    res            cells                area_km      spacing_km          cls_km</span>
@@ -142,36 +142,46 @@
 <code class="sourceCode R"><span class="va">occ</span><span class="op">$</span><span class="va">cell</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgGEO_to_SEQNUM.html" class="external-link">dgGEO_to_SEQNUM</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">occ</span><span class="op">$</span><span class="va">decimalLongitude</span>, <span class="va">occ</span><span class="op">$</span><span class="va">decimalLatitude</span><span class="op">)</span><span class="op">[[</span><span class="st">"seqnum"</span><span class="op">]</span><span class="op">]</span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="calculate-metrics">Calculate metrics<a class="anchor" aria-label="anchor" href="#calculate-metrics"></a>
+<h2 id="calculate-indicators">Calculate indicators<a class="anchor" aria-label="anchor" href="#calculate-indicators"></a>
 </h2>
 <p>The following function calculates the number of records, species richness, Simpson index, Shannon index, Hurlbert index (n = 50), and Hill numbers for each cell.</p>
 <p>Perform the calculation on species level data:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="va">metrics</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_es50.html">calc_es50</a></span><span class="op">(</span><span class="va">occ</span><span class="op">)</span></code></pre></div>
-<p>Add cell geometries to the metrics table:</p>
+<code class="sourceCode R"><span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_indicators.html">calc_indicators</a></span><span class="op">(</span><span class="va">occ</span><span class="op">)</span></code></pre></div>
+<p>Add cell geometries to the indicators table (<code>idx</code>):</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-spatial.github.io/sf/" class="external-link">sf</a></span><span class="op">)</span>
 
-<span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgcellstogrid.html" class="external-link">dgcellstogrid</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">metrics</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
+<span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgcellstogrid.html" class="external-link">dgcellstogrid</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">idx</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
   <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_transform.html" class="external-link">st_wrap_dateline</a></span><span class="op">(</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
   <span class="fu"><a href="https://dplyr.tidyverse.org/reference/rename.html" class="external-link">rename</a></span><span class="op">(</span>cell <span class="op">=</span> <span class="va">seqnum</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
   <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html" class="external-link">left_join</a></span><span class="op">(</span>
-    <span class="va">metrics</span>,
+    <span class="va">idx</span>,
     by <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="plot-maps">Plot maps<a class="anchor" aria-label="anchor" href="#plot-maps"></a>
+<h2 id="plot-maps-of-indicators">Plot maps of indicators<a class="anchor" aria-label="anchor" href="#plot-maps-of-indicators"></a>
 </h2>
-<p>Let’s look at the resulting metrics in map form.</p>
+<p>Let’s look at the resulting indicators in map form.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu"><a href="../reference/gmap_metric.html">gmap_metric</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"es"</span>, label <span class="op">=</span> <span class="st">"ES(50)"</span><span class="op">)</span></code></pre></div>
+<code class="sourceCode R"><span class="co"># ES(50)</span>
+<span class="fu"><a href="../reference/gmap_indicator.html">gmap_indicator</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"es"</span>, label <span class="op">=</span> <span class="st">"ES(50)"</span><span class="op">)</span></code></pre></div>
 <p><img src="obisindicators_files/figure-html/map_gcs-1.png" width="700"></p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu"><a href="../reference/gmap_metric.html">gmap_metric</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"shannon"</span>, label <span class="op">=</span> <span class="st">"Shannon index"</span><span class="op">)</span></code></pre></div>
+<code class="sourceCode R">
+<span class="co"># Shannon index</span>
+<span class="fu"><a href="../reference/gmap_indicator.html">gmap_indicator</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"shannon"</span>, label <span class="op">=</span> <span class="st">"Shannon index"</span><span class="op">)</span></code></pre></div>
 <p><img src="obisindicators_files/figure-html/map_gcs-2.png" width="700"></p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu"><a href="../reference/gmap_metric.html">gmap_metric</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"n"</span>, label <span class="op">=</span> <span class="st">"# of records"</span>, trans <span class="op">=</span> <span class="st">"log10"</span><span class="op">)</span></code></pre></div>
+<code class="sourceCode R">
+<span class="co"># Number of records, log10 scale, Robinson projection (default)</span>
+<span class="fu"><a href="../reference/gmap_indicator.html">gmap_indicator</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"n"</span>, label <span class="op">=</span> <span class="st">"# of records"</span>, trans <span class="op">=</span> <span class="st">"log10"</span><span class="op">)</span></code></pre></div>
 <p><img src="obisindicators_files/figure-html/map_gcs-3.png" width="700"></p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R">
+<span class="co"># Number of records, log10 scale, Geographic projection</span>
+<span class="fu"><a href="../reference/gmap_indicator.html">gmap_indicator</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"n"</span>, label <span class="op">=</span> <span class="st">"# of records"</span>, trans <span class="op">=</span> <span class="st">"log10"</span>, crs<span class="op">=</span><span class="fl">4326</span><span class="op">)</span></code></pre></div>
+<p><img src="obisindicators_files/figure-html/map_gcs-4.png" width="700"></p>
 </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside>

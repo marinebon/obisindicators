@@ -26,7 +26,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.2</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -44,7 +44,7 @@
 <li class="active nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-articles">Articles</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-articles">
-    <a class="dropdown-item" href="../articles/regional_diversity.html">Map Regional Diversity</a>
+    <a class="dropdown-item" href="../articles/regional_diversity.html">Regional Diversity</a>
     <a class="dropdown-item" href="../articles/resolution.html">resolution</a>
     <a class="dropdown-item" href="../articles/temporal_subsets.html">Temporal Subsets</a>
   </div>
@@ -109,17 +109,17 @@
   <span class="va">occ_df</span><span class="op">$</span><span class="va">cell</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgGEO_to_SEQNUM.html" class="external-link">dgGEO_to_SEQNUM</a></span><span class="op">(</span>
     <span class="va">dggs</span>, <span class="va">occ_df</span><span class="op">$</span><span class="va">decimalLongitude</span>, 
     <span class="va">occ_df</span><span class="op">$</span><span class="va">decimalLatitude</span><span class="op">)</span><span class="op">[[</span><span class="st">"seqnum"</span><span class="op">]</span><span class="op">]</span>
-  <span class="co"># calc metrics</span>
-  <span class="va">metrics</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_es50.html">calc_es50</a></span><span class="op">(</span><span class="va">occ_df</span><span class="op">)</span>
-  <span class="co"># Add cell geometries to the metrics table:</span>
-  <span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgcellstogrid.html" class="external-link">dgcellstogrid</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">metrics</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
+  <span class="co"># calc indicators</span>
+  <span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_indicators.html">calc_indicators</a></span><span class="op">(</span><span class="va">occ_df</span><span class="op">)</span>
+  <span class="co"># Add cell geometries to the indicators table:</span>
+  <span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgcellstogrid.html" class="external-link">dgcellstogrid</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">idx</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
     <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_transform.html" class="external-link">st_wrap_dateline</a></span><span class="op">(</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
     <span class="fu"><a href="https://dplyr.tidyverse.org/reference/rename.html" class="external-link">rename</a></span><span class="op">(</span>cell <span class="op">=</span> <span class="va">seqnum</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
     <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html" class="external-link">left_join</a></span><span class="op">(</span>
-      <span class="va">metrics</span>,
+      <span class="va">idx</span>,
       by <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span>
   <span class="co"># Plot map</span>
-  <span class="fu"><a href="../reference/gmap_metric.html">gmap_metric</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"es"</span>, label <span class="op">=</span> <span class="st">"ES(50)"</span><span class="op">)</span>
+  <span class="fu"><a href="../reference/gmap_indicator.html">gmap_indicator</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"es"</span>, label <span class="op">=</span> <span class="st">"ES(50)"</span><span class="op">)</span>
 <span class="op">}</span></code></pre></div>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_1960s</span><span class="op">)</span></code></pre></div>

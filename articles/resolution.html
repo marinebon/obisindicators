@@ -26,7 +26,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.2</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -44,7 +44,7 @@
 <li class="active nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-articles">Articles</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-articles">
-    <a class="dropdown-item" href="../articles/regional_diversity.html">Map Regional Diversity</a>
+    <a class="dropdown-item" href="../articles/regional_diversity.html">Regional Diversity</a>
     <a class="dropdown-item" href="../articles/resolution.html">resolution</a>
     <a class="dropdown-item" href="../articles/temporal_subsets.html">Temporal Subsets</a>
   </div>
@@ -95,7 +95,6 @@
 <span class="co">#&gt; The following objects are masked from 'package:base':</span>
 <span class="co">#&gt; </span>
 <span class="co">#&gt;     intersect, setdiff, setequal, union</span>
-<span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/RobinHankin/gsl" class="external-link">gsl</a></span><span class="op">)</span>
 <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/r-barnes/dggridR/" class="external-link">dggridR</a></span><span class="op">)</span> <span class="co"># remotes::install_github("r-barnes/dggridR")</span>
 <span class="co">#&gt; Loading required package: rlang</span>
 <span class="co">#&gt; Loading required package: sf</span>
@@ -115,16 +114,16 @@
 <code class="sourceCode R"><span class="va">res_changes</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">resolution</span> <span class="op">=</span> <span class="fl">9</span><span class="op">)</span><span class="op">{</span>
     <span class="va">dggs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgconstruct.html" class="external-link">dgconstruct</a></span><span class="op">(</span>projection <span class="op">=</span> <span class="st">"ISEA"</span>, topology <span class="op">=</span> <span class="st">"HEXAGON"</span>, res <span class="op">=</span> <span class="va">resolution</span><span class="op">)</span>
     <span class="va">occ</span><span class="op">$</span><span class="va">cell</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgGEO_to_SEQNUM.html" class="external-link">dgGEO_to_SEQNUM</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">occ</span><span class="op">$</span><span class="va">decimalLongitude</span>, <span class="va">occ</span><span class="op">$</span><span class="va">decimalLatitude</span><span class="op">)</span><span class="op">[[</span><span class="st">"seqnum"</span><span class="op">]</span><span class="op">]</span>
-    <span class="va">metrics</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_es50.html">calc_es50</a></span><span class="op">(</span><span class="va">occ</span><span class="op">)</span>
+    <span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_indicators.html">calc_indicators</a></span><span class="op">(</span><span class="va">occ</span><span class="op">)</span>
 
-  <span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgcellstogrid.html" class="external-link">dgcellstogrid</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">metrics</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
+  <span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgcellstogrid.html" class="external-link">dgcellstogrid</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">idx</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
     <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_transform.html" class="external-link">st_wrap_dateline</a></span><span class="op">(</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
     <span class="fu"><a href="https://dplyr.tidyverse.org/reference/rename.html" class="external-link">rename</a></span><span class="op">(</span>cell <span class="op">=</span> <span class="va">seqnum</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
     <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html" class="external-link">left_join</a></span><span class="op">(</span>
-      <span class="va">metrics</span>,
+      <span class="va">idx</span>,
       by <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span>
 
-  <span class="fu"><a href="../reference/gmap_metric.html">gmap_metric</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"es"</span>, label <span class="op">=</span> <span class="st">"ES(50)"</span><span class="op">)</span>
+  <span class="fu"><a href="../reference/gmap_indicator.html">gmap_indicator</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"es"</span>, label <span class="op">=</span> <span class="st">"ES(50)"</span><span class="op">)</span>
 <span class="op">}</span></code></pre></div>
 </div>
 <div class="section level2">
