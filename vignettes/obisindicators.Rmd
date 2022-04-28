@@ -20,10 +20,11 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(obisindicators)
 library(dplyr)
-library(gsl)
 ```
 
 ## Get biological occurrences
+
+Use the 1 million records subsampled from the full OBIS dataset otherwise available at https://obis.org/data/access.
 
 ```{r occ}
 occ <- occ_1M # occ_1M OR occ_SAtlantic
@@ -39,7 +40,7 @@ library(dggridR) # remotes::install_github("r-barnes/dggridR")
 dggs <- dgconstruct(projection = "ISEA", topology = "HEXAGON", res = 9)
 ```
 
-Here's on overview of all possible resolutions:
+Here's on overview of all possible resolutions specified by the `res` parameter above:
 
 ```{r dginfo}
 inf <- dginfo(dggs)
@@ -51,35 +52,43 @@ Then assign cell numbers to the occurrence data:
 occ$cell <- dgGEO_to_SEQNUM(dggs, occ$decimalLongitude, occ$decimalLatitude)[["seqnum"]]
 ```
 
-## Calculate metrics
+## Calculate indicators
 
 The following function calculates the number of records, species richness, Simpson index, Shannon index, Hurlbert index (n = 50), and Hill numbers for each cell.
 
 Perform the calculation on species level data:
 
-```{r calc_es50}
-metrics <- calc_es50(occ)
+```{r calc_indicators}
+idx <- calc_indicators(occ)
 ```
 
-Add cell geometries to the metrics table:
+Add cell geometries to the indicators table (`idx`):
 
 ```{r dgcellstogrid}
 library(sf)
 
-grid <- dgcellstogrid(dggs, metrics$cell) %>% 
+grid <- dgcellstogrid(dggs, idx$cell) %>% 
   st_wrap_dateline() %>% 
   rename(cell = seqnum) %>% 
   left_join(
-    metrics,
+    idx,
     by = "cell")
 ```
 
-## Plot maps
+## Plot maps of indicators
 
-Let's look at the resulting metrics in map form.
+Let's look at the resulting indicators in map form.
 
 ```{r map_gcs}
-gmap_metric(grid, "es", label = "ES(50)")
-gmap_metric(grid, "shannon", label = "Shannon index")
-gmap_metric(grid, "n", label = "# of records", trans = "log10")
+# ES(50)
+gmap_indicator(grid, "es", label = "ES(50)")
+
+# Shannon index
+gmap_indicator(grid, "shannon", label = "Shannon index")
+
+# Number of records, log10 scale, Robinson projection (default)
+gmap_indicator(grid, "n", label = "# of records", trans = "log10")
+
+# Number of records, log10 scale, Geographic projection
+gmap_indicator(grid, "n", label = "# of records", trans = "log10", crs=4326)
 ```

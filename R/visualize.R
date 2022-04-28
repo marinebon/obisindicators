@@ -1,8 +1,8 @@
-#' Statically map metrics using ggplot
+#' Statically map indicators using ggplot
 #'
 #' @param grid spatial features, e.g. hexagons, to plot; requires a geometry
 #'   spatial column
-#' @param column column name with metric; default="shannon"
+#' @param column column name with indicator; default="shannon"
 #' @param label label to show on legend
 #' @param crs coordinate reference system; see `sf::st_crs()`
 #' @param trans For continuous scales, the name of a transformation object or
@@ -17,12 +17,13 @@
 #' @import rnaturalearth viridis ggplot2
 #'
 #' @examples
-gmap_metric <- function(
+gmap_indicator <- function(
     grid, column = "shannon", label = "Shannon index", trans = "identity",
     crs="+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"){
 
   world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
-  bb <- sf::st_bbox(grid)
+  bb <- sf::st_bbox(
+    st_transform(grid, crs))
 
   ggplot() +
     geom_sf(
@@ -49,6 +50,7 @@ gmap_metric <- function(
       axis.title.y = element_blank()) +
     xlab("") + ylab("") +
     coord_sf(
+      crs  = crs,
       xlim = bb[c("xmin","xmax")],
       ylim = bb[c("ymin","ymax")])
 }

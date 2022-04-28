@@ -17,7 +17,6 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(obisindicators)
 library(dplyr)
-library(gsl)
 library(dggridR) # remotes::install_github("r-barnes/dggridR")
 library(sf)
 ```
@@ -34,16 +33,16 @@ occ <- occ_SAtlantic # occ_1M OR occ_SAtlantic
 res_changes <- function(resolution = 9){
     dggs <- dgconstruct(projection = "ISEA", topology = "HEXAGON", res = resolution)
     occ$cell <- dgGEO_to_SEQNUM(dggs, occ$decimalLongitude, occ$decimalLatitude)[["seqnum"]]
-    metrics <- calc_es50(occ)
+    idx <- calc_indicators(occ)
 
-  grid <- dgcellstogrid(dggs, metrics$cell) %>% 
+  grid <- dgcellstogrid(dggs, idx$cell) %>% 
     st_wrap_dateline() %>% 
     rename(cell = seqnum) %>% 
     left_join(
-      metrics,
+      idx,
       by = "cell")
 
-  gmap_metric(grid, "es", label = "ES(50)")
+  gmap_indicator(grid, "es", label = "ES(50)")
 }
 ```
 

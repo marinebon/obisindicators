@@ -1,6 +1,6 @@
 Package: obisindicators
 Title: Develop marine biodiversity indicators from OBIS data
-Version: 0.0.1
+Version: 0.0.2
 URL: https://marinebon.org/obisindicators,
      https://github.com/marinebon/obisindicators
 BugReports: https://github.com/marinebon/obisindicators/issues

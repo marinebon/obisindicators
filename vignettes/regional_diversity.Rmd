@@ -1,10 +1,12 @@
 ---
-title: "Map Regional Diversity"
+title: "Regional Diversity"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{regional_diversity}
-  %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r, include = FALSE}
@@ -17,10 +19,14 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(obisindicators)
+library(dggridR)  # remotes::install_github("r-barnes/dggridR")
 library(dplyr)
+library(sf)
 ```
 
-## Get biological occurrences for South Atlantic
+## Get regional biological occurrences
+
+Let's use the regional subset for the South Atlantic from the full OBIS dataset otherwise available at https://obis.org/data/access.
 
 ```{r occ}
 occ <- occ_SAtlantic # occ_1M OR occ_SAtlantic
@@ -31,15 +37,7 @@ occ <- occ_SAtlantic # occ_1M OR occ_SAtlantic
 Create an ISEA discrete global grid of resolution 9 using the [dggridR](https://github.com/r-barnes/dggridR) package:
 
 ```{r dgconstruct}
-library(dggridR) # remotes::install_github("r-barnes/dggridR")
-
 dggs <- dgconstruct(projection = "ISEA", topology = "HEXAGON", res = 9)
-```
-
-Here's on overview of all possible resolutions:
-
-```{r dginfo}
-inf <- dginfo(dggs)
 ```
 
 Then assign cell numbers to the occurrence data:
@@ -48,36 +46,45 @@ Then assign cell numbers to the occurrence data:
 occ$cell <- dgGEO_to_SEQNUM(dggs, occ$decimalLongitude, occ$decimalLatitude)[["seqnum"]]
 ```
 
-## Calculate metrics
+## Calculate indicators
 
 The following function calculates the number of records, species richness, Simpson index, Shannon index, Hurlbert index (n = 50), and Hill numbers for each cell.
 
 Perform the calculation on species level data:
 
-```{r calc_es50}
-metrics <- calc_es50(occ)
+```{r calc_indicators}
+idx <- calc_indicators(occ)
 ```
 
-Add cell geometries to the metrics table:
+Add cell geometries to the indicators table (`idx`):
 
 ```{r dgcellstogrid}
-library(sf)
-
-grid <- dgcellstogrid(dggs, metrics$cell) %>% 
-  st_wrap_dateline() %>% 
-  rename(cell = seqnum) %>% 
+# rda <- here::here("data-raw/region_diversity_stop-dgcellstogrid.RData")
+# save.image(rda)
+# load(rda)
+grid <- dgcellstogrid(dggs, idx$cell) %>% 
+  st_wrap_dateline() %>%
+  rename(cell = seqnum) %>%
   left_join(
-    metrics,
+    idx,
     by = "cell")
 ```
 
-## Plot maps
+## Plot maps of indicators
 
-Let's look at the resulting metrics in map form.
+Let's look at the resulting indicators in map form.
 
 ```{r map_gcs}
-gmap_metric(grid, "es", label = "ES(50)")
-gmap_metric(grid, "shannon", label = "Shannon index")
-gmap_metric(grid, "n", label = "# of records", trans = "log10")
+# ES(50)
+gmap_indicator(grid, "es", label = "ES(50)")
+
+# Shannon index
+gmap_indicator(grid, "shannon", label = "Shannon index")
+
+# Number of records, log10 scale, Robinson projection (default)
+gmap_indicator(grid, "n", label = "# of records", trans = "log10")
+
+# Number of records, log10 scale, Geographic projection
+gmap_indicator(grid, "n", label = "# of records", trans = "log10", crs=4326)
 ```
 

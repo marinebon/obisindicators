@@ -26,17 +26,17 @@ plot_the_hex_grid <- function(occ_df){
   occ_df$cell <- dgGEO_to_SEQNUM(
     dggs, occ_df$decimalLongitude, 
     occ_df$decimalLatitude)[["seqnum"]]
-  # calc metrics
-  metrics <- calc_es50(occ_df)
-  # Add cell geometries to the metrics table:
-  grid <- dgcellstogrid(dggs, metrics$cell) %>% 
+  # calc indicators
+  idx <- calc_indicators(occ_df)
+  # Add cell geometries to the indicators table:
+  grid <- dgcellstogrid(dggs, idx$cell) %>% 
     st_wrap_dateline() %>% 
     rename(cell = seqnum) %>% 
     left_join(
-      metrics,
+      idx,
       by = "cell")
   # Plot map
-  gmap_metric(grid, "es", label = "ES(50)")
+  gmap_indicator(grid, "es", label = "ES(50)")
 }
 ```
 
