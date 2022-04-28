@@ -75,31 +75,31 @@ grid_1970s <- dgcellstogrid(dggs, grid_1970s$cell) %>%
   st_wrap_dateline() %>% 
   rename(cell = seqnum) %>% 
   left_join(
-    metrics_1960s,
+    metrics_1970s,
     by = "cell")
 grid_1980s <- dgcellstogrid(dggs, grid_1980s$cell) %>% 
   st_wrap_dateline() %>% 
   rename(cell = seqnum) %>% 
   left_join(
-    metrics_1960s,
+    metrics_1980s,
     by = "cell")
 grid_1990s <- dgcellstogrid(dggs, grid_1990s$cell) %>% 
   st_wrap_dateline() %>% 
   rename(cell = seqnum) %>% 
   left_join(
-    metrics_1960s,
+    metrics_1990s,
     by = "cell")
 grid_2000s <- dgcellstogrid(dggs, grid_2000s$cell) %>% 
   st_wrap_dateline() %>% 
   rename(cell = seqnum) %>% 
   left_join(
-    metrics_1960s,
+    metrics_2000s,
     by = "cell")
 grid_2010s <- dgcellstogrid(dggs, grid_2010s$cell) %>% 
   st_wrap_dateline() %>% 
   rename(cell = seqnum) %>% 
   left_join(
-    metrics_1960s,
+    metrics_2010s,
     by = "cell")
 ```
 
