@@ -12,7 +12,9 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+```
 
+```{r def_plotter}
 library(dggridR)
 library(obisindicators)
 library(sf)
@@ -39,7 +41,12 @@ plot_the_hex_grid <- function(occ_df){
 ```
 
 ```{r dgGEO_to_SEQNUM}
-occ_all <- rbind(occ_1960s, occ_1970s, occ_1980s, occ_1990s, occ_2000s, occ_2010s)
+plot_the_hex_grid(occ_1960s)
+plot_the_hex_grid(occ_1970s)
+plot_the_hex_grid(occ_1980s)
+plot_the_hex_grid(occ_1990s)
+plot_the_hex_grid(occ_2000s)
+plot_the_hex_grid(occ_2010s)
 ```
 
 
