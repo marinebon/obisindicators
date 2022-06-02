@@ -3,10 +3,10 @@ R package for generating indicators from OBIS
 
 ## Example Plots
 Animated map of OBIS data segemented by decade:
-![decadal_animation](static/img/decadal_animation.gif)
+![decadal_animation](https://raw.githubusercontent.com/marinebon/obisindicators/main/static/img/decadal_animation.gif)
 
 All data from OBIS in one map:
-![all_data](static/img/all_data.png)
+![all_data](https://raw.githubusercontent.com/marinebon/obisindicators/main/static/img/all_data.png)
 
 
 ## Install
