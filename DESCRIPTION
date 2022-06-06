@@ -10,7 +10,11 @@ Authors@R:
     person("Pieter", "Provoost", , "ben@ecoquants.com", role = c("aut"),
       comment = c(ORCID = "0000-0002-4236-0384")),
     person("Tylar", "Murray", , "tylarmurray@usf.edu", role = c("aut"),
-      comment = c(ORCID = "0000-0001-8241-1919")))
+      comment = c(ORCID = "0000-0001-8241-1919")),
+    person("Abby", "Benson", , , role = c("ctb"),),
+    person("NOAA", "IOOS",   , , role = c("fnd"),),
+    person("NOAA", "MBON",   , , role = c("fnd"),),
+ )
 Description: Use data from the Ocean Biogeographic Information System to build marine biodiversity indicators relevant to scientific investigators and resource managers.
 License: MIT + file LICENSE
 Encoding: UTF-8
