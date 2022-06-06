@@ -10,9 +10,16 @@ All data from OBIS in one map:
 
 
 ## Install
-
+Basic installation is simple:
 ```r
 remotes::install_github("marinebon/obisindicators")
+```
+
+But you will also need to install dependencies.
+You will need to install RTools and devtools to do this.
+Once those are installed run the following to complete installation of this package and its dependencies:
+```
+devtools::install_local()
 ```
 
 ## Use
