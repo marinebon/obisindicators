@@ -16,8 +16,7 @@ jobs:
           use-public-rspm: true
       - uses: r-lib/actions/setup-r-dependencies@v1  # this tests installation
       - name: run tests  # this runs unit tests
-        run: |
-          testthat::test_local()
+        run: testthat::test_local()
   test_website_build:
     runs-on: ubuntu-latest
     steps:
@@ -31,5 +30,4 @@ jobs:
           extra-packages: pkgdown
           needs: website
       - name: build package website
-        run: |
-          Rscript -e 'pkgdown::build_site()'
+        run: Rscript -e 'pkgdown::build_site()'
