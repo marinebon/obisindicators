@@ -2,7 +2,7 @@
 R package for generating indicators from OBIS
 
 ## Example Plots
-Animated map of OBIS data segemented by decade:
+Animated map of OBIS data limited to 1M randomly selected records per decade:
 ![decadal_animation](https://raw.githubusercontent.com/marinebon/obisindicators/main/static/img/decadal_animation.gif)
 
 All data from OBIS in one map:
