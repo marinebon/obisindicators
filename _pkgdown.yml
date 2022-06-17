@@ -2,6 +2,14 @@ url: http://marinebon.org/obisindicators/
 template:
   bootstrap: 5
 
+articles:
+- title: Examples
+  navbar: ~
+  contents:
+  - regional_diversity
+  - resolution
+  - temporal_subsets
+
 reference:
 - title: "Read"
   desc: "Functions for reading data."
@@ -16,7 +24,7 @@ reference:
   contents:
   - has_concept("visualize")
 - title: "Data"
-  desc: >
-    Locally available datasets for running examples
+  desc: "Locally available datasets for running examples."
   contents:
   - has_concept("data")
+
