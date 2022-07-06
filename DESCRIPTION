@@ -36,6 +36,7 @@ Imports:
     dplyr,
     ggplot2,
     gsl,
+    h3,
     rnaturalearth,
     rnaturalearthdata,
     sf,
