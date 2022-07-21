@@ -18,6 +18,8 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
+# library(obisindicators)
+# devtools::load_all() # load the local version of obisindicators
 library(dplyr)
 ```
 
@@ -26,7 +28,8 @@ library(dplyr)
 Use the 1 million records subsampled from the full OBIS dataset otherwise available at https://obis.org/data/access.
 
 ```{r occ}
-occ <- occ_1M # occ_1M OR occ_SAtlantic
+# occ <- occ_SAtlantic # S Atlantic
+occ <- occ_1M # global 
 ```
 
 
@@ -34,15 +37,21 @@ occ <- occ_1M # occ_1M OR occ_SAtlantic
 
 ```{r}
 # remotes::install_github("crazycapivara/h3-r")
-# devtools::load_all()
-h3_dggs <- obisindicators::make_hex_res(2)
+# devtools::document() # update DESCRIPTION, NAMESPACE based on roxygen comments
+# devtools::load_all() # load the local version of obisindicators
+hex_res <- 2
+hex <- obisindicators::make_hex_res(hex_res)
 ```
 
 
 Then assign cell numbers to the occurrence data:
 
 ```{r dgGEO_to_SEQNUM}
-occ$cell <- dgGEO_to_SEQNUM(h3_dggs, occ$decimalLongitude, occ$decimalLatitude)[["seqnum"]]
+occ <- occ %>% 
+  mutate(
+    cell = h3::geo_to_h3(
+      data.frame(decimalLongitude, decimalLatitude),
+      res = hex_res))
 ```
 
 ## Calculate indicators
@@ -58,14 +67,21 @@ idx <- calc_indicators(occ)
 Add cell geometries to the indicators table (`idx`):
 
 ```{r dgcellstogrid}
-library(sf)
-
-grid <- dgcellstogrid(h3_dggs, idx$cell) %>% 
-  st_wrap_dateline() %>% 
-  rename(cell = seqnum) %>% 
-  left_join(
+grid <- hex %>% 
+  inner_join(
     idx,
-    by = "cell")
+    by = c("hexid" = "cell"))
+# plot(hex_idx["sp"])
+# 
+# library(sf)
+# 
+# grid <- dgcellstogrid(h3_dggs, idx$cell) %>% 
+#   st_wrap_dateline() %>% 
+#   rename(cell = seqnum) %>% 
+#   left_join(
+#     idx,
+#     by = "cell")
+
 ```
 
 ## Plot maps of indicators
@@ -75,4 +91,40 @@ Let's look at the resulting indicators in map form.
 ```{r map_gcs}
 # ES(50)
 obisindicators::gmap_indicator(grid, "es", label = "ES(50)")
+
+# grid_0 <- grid
+# grid <- grid_0
+grid <- rbind(
+  grid %>%
+    filter(!on_dtln),
+  # bind ok hex with those on dateline that we fix
+  grid %>%
+    filter(on_dtln) %>%
+    rowwise() %>%
+    mutate(
+      geometry = obisindicators:::fix_dateline(geometry)))
+
+obisindicators::gmap_indicator(grid, "es", label = "ES(50)")
+
+obisindicators::gmap_indicator(grid, "n", label = "N")
+
+grid %>%
+  filter(!on_dtln) %>% 
+  obisindicators::gmap_indicator("n", label = "N")
+
+grid %>%
+  filter(!on_dtln) %>% 
+  obisindicators::gmap_indicator("es", label = "ES(50)")
 ```
+
+
+
+## TODO
+
+- [ ] fix the dateline hexagons; why not fixed with `make_hex_res()` calling `fix_dateline()`?
+- [ ] what's up with no N Pacific data in global `occ_1M` subsample?
+
+## References
+
+* [crazycapivara/h3-r: R bindings for H3, a hierarchical hexagonal geospatial indexing system](https://github.com/crazycapivara/h3-r)
+* [Introduction to H3 for R • H3 for R](https://crazycapivara.github.io/h3-r/articles/h3.html)

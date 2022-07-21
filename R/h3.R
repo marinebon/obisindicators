@@ -1,3 +1,9 @@
+#' Fix dateline so hexagon doesn't span globe
+#'
+#' @param geom
+#' @import sf tibble dplyr
+#'
+#' @return
 fix_dateline <- function(geom){
   # geom = g
 
@@ -99,7 +105,7 @@ make_hex_res <- function(hex_res = 2){
       filter(on_dtln) %>%
       rowwise() %>%
       mutate(
-        geometry = fix_dateline(geometry)))
+        geometry = obisindicators:::fix_dateline(geometry)))
 
   # hex_sf %>%
   #   # filter(!on_dtln) %>%
