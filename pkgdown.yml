@@ -1,12 +1,12 @@
 pandoc: 2.7.3
-pkgdown: 2.0.3
+pkgdown: 2.0.6
 pkgdown_sha: ~
 articles:
   obisindicators: obisindicators.html
   regional_diversity: regional_diversity.html
   resolution: resolution.html
   temporal_subsets: temporal_subsets.html
-last_built: 2022-06-08T21:39Z
+last_built: 2022-08-03T11:38Z
 urls:
   reference: http://marinebon.org/obisindicators/reference
   article: http://marinebon.org/obisindicators/articles

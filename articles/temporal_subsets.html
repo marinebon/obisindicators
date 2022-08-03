@@ -8,8 +8,8 @@
 <meta name="description" content="obisindicators">
 <title>Temporal Subsets • obisindicators</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="../deps/bootstrap-5.1.0/bootstrap.min.css" rel="stylesheet">
-<script src="../deps/bootstrap-5.1.0/bootstrap.bundle.min.js"></script><!-- Font Awesome icons --><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/all.min.css" integrity="sha256-mmgLkCYLUQbXn0B1SRqzHar6dCnv9oZFPEC1g1cwlkk=" crossorigin="anonymous">
+<link href="../deps/bootstrap-5.1.3/bootstrap.min.css" rel="stylesheet">
+<script src="../deps/bootstrap-5.1.3/bootstrap.bundle.min.js"></script><!-- Font Awesome icons --><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/all.min.css" integrity="sha256-mmgLkCYLUQbXn0B1SRqzHar6dCnv9oZFPEC1g1cwlkk=" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/v4-shims.min.css" integrity="sha256-wZjR52fzng1pJHwx4aV2AO3yyTOXrcDW7jBpJtTwVxw=" crossorigin="anonymous">
 <!-- bootstrap-toc --><script src="https://cdn.rawgit.com/afeld/bootstrap-toc/v1.0.1/dist/bootstrap-toc.min.js"></script><!-- headroom.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/headroom.min.js" integrity="sha256-AsUX4SJE1+yuDu5+mAVzJbuYNPHj/WroHuZ8Ir/CkE0=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/jQuery.headroom.min.js" integrity="sha256-ZX/yNShbjqsohH1k95liqY9Gd8uOiE1S4vZc+9KQ1K4=" crossorigin="anonymous"></script><!-- clipboard.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.6/clipboard.min.js" integrity="sha256-inc5kl9MA1hkeYUt+EC3BhlIgyp/2jDIyBLS6k3UxPI=" crossorigin="anonymous"></script><!-- search --><script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/6.4.6/fuse.js" integrity="sha512-zv6Ywkjyktsohkbp9bb45V6tEMoWhzFzXis+LrMehmJZZSys19Yxf1dopHx7WzIKxr5tK2dVcYmaCk2uqdjF4A==" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/autocomplete.js/0.38.0/autocomplete.jquery.min.js" integrity="sha512-GU9ayf+66Xx2TmpxqJpliWbT5PiGYxpaG8rfnBEk1LL8l1KGkRShhngwdXK1UgqhAzWpZHSiYPc09/NwDQIGyg==" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.min.js" integrity="sha512-5CYOlHXGh6QpOFA/TeTylKLWfB3ftPsde7AnmhuitiTX4K5SqCLBeKro6sPS8ilsz1Q4NRx3v8Ko2IBiszzdww==" crossorigin="anonymous"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Temporal Subsets">
 <meta property="og:description" content="obisindicators">
@@ -74,7 +74,7 @@
 
 
 <script src="temporal_subsets_files/accessible-code-block-0.0.1/empty-anchor.js"></script><div class="row">
-  <main id="main"><div class="page-header">
+  <main id="main" class="col-md-9"><div class="page-header">
       <img src="" class="logo" alt=""><h1>Temporal Subsets</h1>
             
       
@@ -85,59 +85,59 @@
     
     
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/r-barnes/dggridR/" class="external-link">dggridR</a></span><span class="op">)</span>
-<span class="co">#&gt; Loading required package: dplyr</span>
-<span class="co">#&gt; </span>
-<span class="co">#&gt; Attaching package: 'dplyr'</span>
-<span class="co">#&gt; The following objects are masked from 'package:stats':</span>
-<span class="co">#&gt; </span>
-<span class="co">#&gt;     filter, lag</span>
-<span class="co">#&gt; The following objects are masked from 'package:base':</span>
-<span class="co">#&gt; </span>
-<span class="co">#&gt;     intersect, setdiff, setequal, union</span>
-<span class="co">#&gt; Loading required package: rlang</span>
-<span class="co">#&gt; Loading required package: sf</span>
-<span class="co">#&gt; Linking to GEOS 3.8.0, GDAL 3.0.4, PROJ 6.3.1; sf_use_s2() is TRUE</span>
-<span class="co">#&gt; Loading required package: sp</span>
-<span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators" class="external-link">obisindicators</a></span><span class="op">)</span>
-<span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-spatial.github.io/sf/" class="external-link">sf</a></span><span class="op">)</span>
-
-<span class="va">plot_the_hex_grid</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">occ_df</span><span class="op">)</span><span class="op">{</span>
-  <span class="co"># Create a discrete global grid</span>
-  <span class="va">dggs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgconstruct.html" class="external-link">dgconstruct</a></span><span class="op">(</span>projection <span class="op">=</span> <span class="st">"ISEA"</span>, topology <span class="op">=</span> <span class="st">"HEXAGON"</span>, res <span class="op">=</span> <span class="fl">5</span><span class="op">)</span>
-  <span class="co"># assign cell numbers to the occurrence data:</span>
-  <span class="va">occ_df</span><span class="op">$</span><span class="va">cell</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgGEO_to_SEQNUM.html" class="external-link">dgGEO_to_SEQNUM</a></span><span class="op">(</span>
-    <span class="va">dggs</span>, <span class="va">occ_df</span><span class="op">$</span><span class="va">decimalLongitude</span>, 
-    <span class="va">occ_df</span><span class="op">$</span><span class="va">decimalLatitude</span><span class="op">)</span><span class="op">[[</span><span class="st">"seqnum"</span><span class="op">]</span><span class="op">]</span>
-  <span class="co"># calc indicators</span>
-  <span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_indicators.html">calc_indicators</a></span><span class="op">(</span><span class="va">occ_df</span><span class="op">)</span>
-  <span class="co"># Add cell geometries to the indicators table:</span>
-  <span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgcellstogrid.html" class="external-link">dgcellstogrid</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">idx</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
-    <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_transform.html" class="external-link">st_wrap_dateline</a></span><span class="op">(</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
-    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/rename.html" class="external-link">rename</a></span><span class="op">(</span>cell <span class="op">=</span> <span class="va">seqnum</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> 
-    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html" class="external-link">left_join</a></span><span class="op">(</span>
-      <span class="va">idx</span>,
-      by <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span>
-  <span class="co"># Plot map</span>
-  <span class="fu"><a href="../reference/gmap_indicator.html">gmap_indicator</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"es"</span>, label <span class="op">=</span> <span class="st">"ES(50)"</span><span class="op">)</span>
-<span class="op">}</span></code></pre></div>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/r-barnes/dggridR/" class="external-link">dggridR</a></span><span class="op">)</span></span>
+<span><span class="co">#&gt; Loading required package: dplyr</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Attaching package: 'dplyr'</span></span>
+<span><span class="co">#&gt; The following objects are masked from 'package:stats':</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;     filter, lag</span></span>
+<span><span class="co">#&gt; The following objects are masked from 'package:base':</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;     intersect, setdiff, setequal, union</span></span>
+<span><span class="co">#&gt; Loading required package: rlang</span></span>
+<span><span class="co">#&gt; Loading required package: sf</span></span>
+<span><span class="co">#&gt; Linking to GEOS 3.8.0, GDAL 3.0.4, PROJ 6.3.1; sf_use_s2() is TRUE</span></span>
+<span><span class="co">#&gt; Loading required package: sp</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators" class="external-link">obisindicators</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-spatial.github.io/sf/" class="external-link">sf</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">plot_the_hex_grid</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">occ_df</span><span class="op">)</span><span class="op">{</span></span>
+<span>  <span class="co"># Create a discrete global grid</span></span>
+<span>  <span class="va">dggs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgconstruct.html" class="external-link">dgconstruct</a></span><span class="op">(</span>projection <span class="op">=</span> <span class="st">"ISEA"</span>, topology <span class="op">=</span> <span class="st">"HEXAGON"</span>, res <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
+<span>  <span class="co"># assign cell numbers to the occurrence data:</span></span>
+<span>  <span class="va">occ_df</span><span class="op">$</span><span class="va">cell</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgGEO_to_SEQNUM.html" class="external-link">dgGEO_to_SEQNUM</a></span><span class="op">(</span></span>
+<span>    <span class="va">dggs</span>, <span class="va">occ_df</span><span class="op">$</span><span class="va">decimalLongitude</span>, </span>
+<span>    <span class="va">occ_df</span><span class="op">$</span><span class="va">decimalLatitude</span><span class="op">)</span><span class="op">[[</span><span class="st">"seqnum"</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="co"># calc indicators</span></span>
+<span>  <span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_indicators.html">calc_indicators</a></span><span class="op">(</span><span class="va">occ_df</span><span class="op">)</span></span>
+<span>  <span class="co"># Add cell geometries to the indicators table:</span></span>
+<span>  <span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dggridR/man/dgcellstogrid.html" class="external-link">dgcellstogrid</a></span><span class="op">(</span><span class="va">dggs</span>, <span class="va">idx</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> </span>
+<span>    <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_transform.html" class="external-link">st_wrap_dateline</a></span><span class="op">(</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> </span>
+<span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/rename.html" class="external-link">rename</a></span><span class="op">(</span>cell <span class="op">=</span> <span class="va">seqnum</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> </span>
+<span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html" class="external-link">left_join</a></span><span class="op">(</span></span>
+<span>      <span class="va">idx</span>,</span>
+<span>      by <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span></span>
+<span>  <span class="co"># Plot map</span></span>
+<span>  <span class="fu"><a href="../reference/gmap_indicator.html">gmap_indicator</a></span><span class="op">(</span><span class="va">grid</span>, <span class="st">"es"</span>, label <span class="op">=</span> <span class="st">"ES(50)"</span><span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_1960s</span><span class="op">)</span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_1960s</span><span class="op">)</span></span></code></pre></div>
 <p><img src="temporal_subsets_files/figure-html/dgGEO_to_SEQNUM-1.png" width="700"></p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_1970s</span><span class="op">)</span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_1970s</span><span class="op">)</span></span></code></pre></div>
 <p><img src="temporal_subsets_files/figure-html/dgGEO_to_SEQNUM-2.png" width="700"></p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_1980s</span><span class="op">)</span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_1980s</span><span class="op">)</span></span></code></pre></div>
 <p><img src="temporal_subsets_files/figure-html/dgGEO_to_SEQNUM-3.png" width="700"></p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_1990s</span><span class="op">)</span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_1990s</span><span class="op">)</span></span></code></pre></div>
 <p><img src="temporal_subsets_files/figure-html/dgGEO_to_SEQNUM-4.png" width="700"></p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_2000s</span><span class="op">)</span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_2000s</span><span class="op">)</span></span></code></pre></div>
 <p><img src="temporal_subsets_files/figure-html/dgGEO_to_SEQNUM-5.png" width="700"></p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_2010s</span><span class="op">)</span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">plot_the_hex_grid</span><span class="op">(</span><span class="va">occ_2010s</span><span class="op">)</span></span></code></pre></div>
 <p><img src="temporal_subsets_files/figure-html/dgGEO_to_SEQNUM-6.png" width="700"></p>
   </main>
 </div>
@@ -151,7 +151,7 @@
 
 <div class="pkgdown-footer-right">
   <p></p>
-<p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.0.3.</p>
+<p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.0.6.</p>
 </div>
 
     </footer>
