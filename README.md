@@ -38,6 +38,12 @@ devtools::install_local()
 testthat::test_local()
 ```
 
+### Awesome-obisindicators usage from the community
+project                                                                               | description
+--------------------------------------------------------------------------------------|---------------------------
+[global-obis-es50](https://github.com/USF-IMARS/global-obis-es50/)                    | Global biodiversity assessment.
+[california-coast-ecostress-biodiversity/](https://github.com/USF-IMARS/california-coast-ecostress-biodiversity/) | Biodiversity assessment of the CA coast as relevant to NASA EcoSTRESS data.
+
 ### Notes on creating vignettes
 * create new vignettes via `usethis::use_vignette("new_vignette_name")`
 * to pre-build a vignette
