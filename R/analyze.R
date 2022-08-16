@@ -7,11 +7,17 @@
 #'   `cell`, `species`, `records`
 #' @param esn expected number of marine species
 #'
-#' @return Data frame with the following extra columns: - `n`: number of records
-#'   - `sp`: species richness - `shannon`: Shannon index - `simpson`: Simpson
-#'   index - `es`: Hurlbert index (n = 50), i.e. expected species from 50
-#'   samples ES(50) - `hill_1`: Hill number `exp(shannon)` - `hill_2`: Hill
-#'   number `1/simpson` - `hill_inf`: Hill number `1/maxp`
+#' @return Data frame with the following extra columns:
+#'
+#'   - `n`: number of records
+#'   - `sp`: species richness
+#'   - `shannon`: Shannon index
+#'   - `simpson`: Simpson index
+#'   - `es`: Hurlbert index (n = 50), i.e. expected species from 50
+#'   samples ES(50)
+#'   - `hill_1`: Hill number `exp(shannon)`
+#'   - `hill_2`: Hill number `1/simpson`
+#'   - `hill_inf`: Hill number `1/maxp`
 #'
 #' @details The expected number of marine species in a random sample of 50
 #'  individuals (records) is an indicator on marine biodiversity richness. The

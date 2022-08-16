@@ -71,17 +71,7 @@ grid <- hex %>%
   inner_join(
     idx,
     by = c("hexid" = "cell"))
-# plot(hex_idx["sp"])
-# 
-# library(sf)
-# 
-# grid <- dgcellstogrid(h3_dggs, idx$cell) %>% 
-#   st_wrap_dateline() %>% 
-#   rename(cell = seqnum) %>% 
-#   left_join(
-#     idx,
-#     by = "cell")
-
+# plot(grid["sp"])
 ```
 
 ## Plot maps of indicators
@@ -89,12 +79,12 @@ grid <- hex %>%
 Let's look at the resulting indicators in map form.
 
 ```{r map_gcs}
-# ES(50)
-obisindicators::gmap_indicator(grid, "es", label = "ES(50)")
+# obisindicators::gmap_indicator(grid, "es", label = "ES(50)")
+obisindicators::gmap_indicator(grid, "sp", label = "Species Richness")
 
 # grid_0 <- grid
 # grid <- grid_0
-grid <- rbind(
+grid2 <- rbind(
   grid %>%
     filter(!on_dtln),
   # bind ok hex with those on dateline that we fix
@@ -104,9 +94,15 @@ grid <- rbind(
     mutate(
       geometry = obisindicators:::fix_dateline(geometry)))
 
-obisindicators::gmap_indicator(grid, "es", label = "ES(50)")
+obisindicators::gmap_indicator(grid2, "n", label = "N")
 
-obisindicators::gmap_indicator(grid, "n", label = "N")
+grid3 <- grid %>%
+    filter(!on_dtln)
+
+obisindicators::gmap_indicator(grid3, "n", label = "N")
+
+obisindicators::gmap_indicator(grid2, "es", label = "ES(50)")
+
 
 grid %>%
   filter(!on_dtln) %>% 

@@ -21,17 +21,20 @@ gmap_indicator <- function(
     grid, column = "shannon", label = "Shannon index", trans = "identity",
     crs="+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"){
 
+  # grid; column = "sp"; label = "Species Richness"
+  # trans = "identity"; crs="+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+
   world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
   bb <- sf::st_bbox(
     st_transform(grid, crs))
 
-  ggplot() +
+  p <- ggplot() +
     geom_sf(
       data = grid, aes_string(
-        fill = column, geometry = "geometry"), lwd = 0) +
-    viridis::scale_color_viridis(
-      option = "inferno", na.value = "white",
-      name = label, trans = trans) +
+        fill = column, geometry = "geometry"), lwd = 0, color=NA) +
+    # viridis::scale_color_viridis(
+    #   option = "inferno", na.value = "white",
+    #   name = label, trans = trans) +
     viridis::scale_fill_viridis(
       option = "inferno", na.value = "white",
       name = label, trans = trans) +
@@ -53,4 +56,5 @@ gmap_indicator <- function(
       crs  = crs,
       xlim = bb[c("xmin","xmax")],
       ylim = bb[c("ymin","ymax")])
+  return(p)
 }
