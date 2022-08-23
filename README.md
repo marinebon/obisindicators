@@ -43,6 +43,7 @@ project                                                                         
 --------------------------------------------------------------------------------------|---------------------------
 [global-obis-es50](https://github.com/USF-IMARS/global-obis-es50/)                    | Global biodiversity assessment.
 [california-coast-ecostress-biodiversity/](https://github.com/USF-IMARS/california-coast-ecostress-biodiversity/) | Biodiversity assessment of the CA coast as relevant to NASA EcoSTRESS data.
+[OHW22 Galapagos analysis](https://github.com/oceanhackweek/ohw22-proj-biodiversity-indicators) | Biodiversity assessment in the Galapagos with and without newly collected data.
 
 ### Notes on creating vignettes
 * create new vignettes via `usethis::use_vignette("new_vignette_name")`
