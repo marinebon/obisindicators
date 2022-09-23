@@ -15,3 +15,6 @@ spatial feature \code{sf} object
 \description{
 TODO: + sf feature or extent to minimize
 }
+\examples{
+hexes <- make_hex_res(0)
+}

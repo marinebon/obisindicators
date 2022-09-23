@@ -19,7 +19,8 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 # library(obisindicators)
-# devtools::load_all() # load the local version of obisindicators
+devtools::document() # update DESCRIPTION, NAMESPACE based on roxygen comments
+devtools::load_all() # load the local version of obisindicators
 library(dplyr)
 ```
 
@@ -28,19 +29,16 @@ library(dplyr)
 Use the 1 million records subsampled from the full OBIS dataset otherwise available at https://obis.org/data/access.
 
 ```{r occ}
-# occ <- occ_SAtlantic # S Atlantic
-occ <- occ_1M # global 
+occ <- obisindicators::occ_1M  # global 1M records subset 
 ```
 
 
 ## Create an H3 hexagonal grid
 
 ```{r}
-# remotes::install_github("crazycapivara/h3-r")
-# devtools::document() # update DESCRIPTION, NAMESPACE based on roxygen comments
-# devtools::load_all() # load the local version of obisindicators
-hex_res <- 2
+hex_res <- 1  # hex_res 0 is too big to work, all others work
 hex <- obisindicators::make_hex_res(hex_res)
+mapview(hex)
 ```
 
 
@@ -79,11 +77,8 @@ grid <- hex %>%
 Let's look at the resulting indicators in map form.
 
 ```{r map_gcs}
-# obisindicators::gmap_indicator(grid, "es", label = "ES(50)")
-obisindicators::gmap_indicator(grid, "sp", label = "Species Richness")
+obisindicators::gmap_indicator(grid, "es", label = "ES(50)")
 
-# grid_0 <- grid
-# grid <- grid_0
 grid2 <- rbind(
   grid %>%
     filter(!on_dtln),
