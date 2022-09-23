@@ -40,11 +40,15 @@ make_hex_res <- function(hex_res = 2){
   # NOTE: DATELINEOFFSET is inv proportional to hex_res b/c we need to look
   #       further from the dateline as hex sizes get bigger.
   dl_offset <- 60  # 60 is enough for hex_res >= 1. res 0 is weird; don't use it.
-  hex_sf <- h3::h3_to_geo_boundary_sf(hex_ids) %>%
+  hex_sf <- purrr::map_df(hex_ids, h3::h3_to_geo_boundary_sf) %>%
     sf::st_wrap_dateline(c(
       "WRAPDATELINE=YES",
-      glue::glue("DATELINEOFFSET={dl_offset}")))
-  mapview(hex_sf)
+      glue::glue("DATELINEOFFSET={dl_offset}"))) %>%
+    dplyr::mutate(
+      hexid = hex_ids
+    )
+
+  # mapview(hex_sf)
 
   # # sanity check: see all hexagons have same area
   # hex_sf <- hex_sf %>%
