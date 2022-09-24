@@ -32,16 +32,14 @@ Depends:
     R (>= 2.10)
 LazyData: true
 Imports: 
-    dggridR (>= 3.0.0),
     dplyr,
     ggplot2,
     gsl,
-    h3,
+    h3-r,
     rnaturalearth,
     rnaturalearthdata,
     sf,
     viridis
 Remotes: 
-    r-barnes/dggridR,
     crazycapivara/h3-r
 Config/testthat/edition: 3
