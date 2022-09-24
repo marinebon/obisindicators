@@ -38,7 +38,7 @@ occ <- obisindicators::occ_1M  # global 1M records subset
 ```{r}
 hex_res <- 1  # hex_res 0 is too big to work, all others work
 hex <- obisindicators::make_hex_res(hex_res)
-mapview(hex)
+# mapview::mapview(hex)  # show the hex grid with h3 IDs 
 ```
 
 
@@ -48,7 +48,7 @@ Then assign cell numbers to the occurrence data:
 occ <- occ %>% 
   mutate(
     cell = h3::geo_to_h3(
-      data.frame(decimalLongitude, decimalLatitude),
+      data.frame(decimalLatitude, decimalLongitude),
       res = hex_res))
 ```
 
@@ -69,7 +69,9 @@ grid <- hex %>%
   inner_join(
     idx,
     by = c("hexid" = "cell"))
-# plot(grid["sp"])
+# you can now visualize with:
+# plot(grid["es"])
+# mapview::mapview(grid["es"])
 ```
 
 ## Plot maps of indicators
@@ -77,51 +79,17 @@ grid <- hex %>%
 Let's look at the resulting indicators in map form.
 
 ```{r map_gcs}
-obisindicators::gmap_indicator(grid, "es", label = "ES(50)")
-
-grid2 <- rbind(
-  grid %>%
-    filter(!on_dtln),
-  # bind ok hex with those on dateline that we fix
-  grid %>%
-    filter(on_dtln) %>%
-    rowwise() %>%
-    mutate(
-      geometry = obisindicators:::fix_dateline(geometry)))
-
-obisindicators::gmap_indicator(grid2, "n", label = "N")
-
-grid3 <- grid %>%
-    filter(!on_dtln)
-
-obisindicators::gmap_indicator(grid3, "n", label = "N")
-
-obisindicators::gmap_indicator(grid2, "es", label = "ES(50)")
-
-
-grid %>%
-  filter(!on_dtln) %>% 
-  obisindicators::gmap_indicator("n", label = "N")
-
-grid %>%
-  filter(!on_dtln) %>% 
-  obisindicators::gmap_indicator("es", label = "ES(50)")
+obisindicators::gmap_indicator(
+  grid, "es", label = "ES(50)",
+  crs="+proj=robin +lon_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
 ```
-
-
-
-## TODO
-
-- [ ] fix the dateline hexagons; why not fixed with `make_hex_res()` calling `fix_dateline()`?
-- [ ] what's up with no N Pacific data in global `occ_1M` subsample?
 
 ## References
 
 * [crazycapivara/h3-r: R bindings for H3, a hierarchical hexagonal geospatial indexing system](https://github.com/crazycapivara/h3-r)
 * [Introduction to H3 for R • H3 for R](https://crazycapivara.github.io/h3-r/articles/h3.html)
 
-
-## `deckgl`
+# `deckgl`
 
 ```{r}
 remotes::install_github("crazycapivara/deckgl")
@@ -155,8 +123,6 @@ if (interactive())
 
 ```
 
-
-## more on h3 mapping and transmeridian issue
 
 * [Introduction to r-deckgl • deckgl for R](https://crazycapivara.github.io/deckgl/articles/deckgl.html)
 * [Add a h3 cluster layer to the deckgl widget — add_h3_cluster_layer • deckgl for R](https://crazycapivara.github.io/deckgl/reference/add_h3_cluster_layer.html)
