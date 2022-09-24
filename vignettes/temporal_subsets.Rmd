@@ -15,26 +15,26 @@ knitr::opts_chunk$set(
 ```
 
 ```{r def_plotter}
-library(dggridR)
-library(obisindicators)
 library(sf)
 
 plot_the_hex_grid <- function(occ_df){
-  # Create a discrete global grid
-  dggs <- dgconstruct(projection = "ISEA", topology = "HEXAGON", res = 5)
-  # assign cell numbers to the occurrence data:
-  occ_df$cell <- dgGEO_to_SEQNUM(
-    dggs, occ_df$decimalLongitude, 
-    occ_df$decimalLatitude)[["seqnum"]]
-  # calc indicators
+  hex_res <- 1  # hex_res 0 is too big to work, all others work
+  hex <- obisindicators::make_hex_res(hex_res)
+  # mapview::mapview(hex)  # you can view the hex grid with h3 IDs 
+  
+  # === Then assign cell numbers to the occurrence data:
+  occ_df <- occ_df %>% 
+    mutate(
+      cell = h3::geo_to_h3(
+        data.frame(decimalLatitude, decimalLongitude),
+        res = hex_res))  # calc indicators
   idx <- calc_indicators(occ_df)
   # Add cell geometries to the indicators table:
-  grid <- dgcellstogrid(dggs, idx$cell) %>% 
-    st_wrap_dateline() %>% 
-    rename(cell = seqnum) %>% 
-    left_join(
+  grid <- hex %>% 
+    inner_join(
       idx,
-      by = "cell")
+      by = c("hexid" = "cell"))
+
   # Plot map
   gmap_indicator(grid, "es", label = "ES(50)")
 }

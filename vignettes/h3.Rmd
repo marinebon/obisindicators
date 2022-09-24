@@ -39,12 +39,7 @@ occ <- obisindicators::occ_1M  # global 1M records subset
 hex_res <- 1  # hex_res 0 is too big to work, all others work
 hex <- obisindicators::make_hex_res(hex_res)
 # mapview::mapview(hex)  # show the hex grid with h3 IDs 
-```
-
-
-Then assign cell numbers to the occurrence data:
-
-```{r dgGEO_to_SEQNUM}
+# === Then assign cell numbers to the occurrence data:
 occ <- occ %>% 
   mutate(
     cell = h3::geo_to_h3(

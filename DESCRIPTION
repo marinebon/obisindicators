@@ -1,6 +1,6 @@
 Package: obisindicators
 Title: Develop marine biodiversity indicators from OBIS data
-Version: 0.0.3
+Version: 0.1.0
 URL: https://marinebon.org/obisindicators,
      https://github.com/marinebon/obisindicators
 BugReports: https://github.com/marinebon/obisindicators/issues
@@ -13,7 +13,7 @@ Authors@R:
     person("Pieter", "Provoost", , "ben@ecoquants.com", role = c("aut"),
       comment = c(ORCID = "0000-0002-4236-0384")
     ),
-    person("Tylar", "Murray", , "tylarmurray@usf.edu", role = c("aut"),
+    person("Tylar", "Murray", , "email@tylar.info", role = c("aut"),
       comment = c(ORCID = "0000-0001-8241-1919")
     ),
     person("Abby", "Benson", , , role = c("ctb"),)
@@ -35,7 +35,7 @@ Imports:
     dplyr,
     ggplot2,
     gsl,
-    h3-r,
+    h3,
     rnaturalearth,
     rnaturalearthdata,
     sf,

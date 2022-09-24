@@ -30,8 +30,6 @@ library(obisindicators)
 
 ## Developer Stuff
 ### Setup
-You will likely need [Rtools](https://cran.r-project.org/bin/windows/Rtools/) to install the `dggridr` dependency.
-Rtools is installed separately from R and Rstudio.
 
 ```r
 devtools::install_local()
