@@ -3,7 +3,7 @@
 \docType{data}
 \name{occ_1960s}
 \alias{occ_1960s}
-\title{OBIS occurrences, temporal sample for the 1960s}
+\title{OBIS occurrences, temporal sample for the 1960s, limited to 1M records}
 \format{
 A data frame with 1,014,006 rows and 4 variables:
 \itemize{

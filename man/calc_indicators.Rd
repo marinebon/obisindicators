@@ -13,12 +13,17 @@ calc_indicators(df, esn = 50)
 \item{esn}{expected number of marine species}
 }
 \value{
-Data frame with the following extra columns: - \code{n}: number of records
+Data frame with the following extra columns:
 \itemize{
-\item \code{sp}: species richness - \code{shannon}: Shannon index - \code{simpson}: Simpson
-index - \code{es}: Hurlbert index (n = 50), i.e. expected species from 50
-samples ES(50) - \code{hill_1}: Hill number \code{exp(shannon)} - \code{hill_2}: Hill
-number \code{1/simpson} - \code{hill_inf}: Hill number \code{1/maxp}
+\item \code{n}: number of records
+\item \code{sp}: species richness
+\item \code{shannon}: Shannon index
+\item \code{simpson}: Simpson index
+\item \code{es}: Hurlbert index (n = 50), i.e. expected species from 50
+samples ES(50)
+\item \code{hill_1}: Hill number \code{exp(shannon)}
+\item \code{hill_2}: Hill number \code{1/simpson}
+\item \code{hill_inf}: Hill number \code{1/maxp}
 }
 }
 \description{

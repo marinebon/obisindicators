@@ -38,6 +38,8 @@ devtools::install_local()
 testthat::test_local()
 ```
 
+When editing locally, you will need to reload the `obisindicators` from your local copy of the files. To do this use `devtools::load_all()`. Additionally, you will need to run `document()` to update things from roxygen docstrings. All of this is summarized in the cheatsheet in RStudio under `Help > Cheat Sheets > Package Dev w/ Devtools`. You must use the workflow outlined in [that pdf](https://www.rstudio.org/links/package_development_cheat_sheet) or you are gonna have a bad time. 
+
 ### Awesome-obisindicators usage from the community
 project                                                                               | description
 --------------------------------------------------------------------------------------|---------------------------
