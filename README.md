@@ -22,15 +22,29 @@ Once those are installed run the following to complete installation of this pack
 devtools::install_local()
 ```
 
-## Use
+### notes for ubuntu 22 
+Note that you will need to install R and the devtools package before being able to install this R package.
+As of 2022 October, these are the commands that were needed to install all required dependencies on a fresh ubuntu 22 installation:
 
+```bash
+# dependencies that R can't install for devtools
+sudo apt-get install r-base libfontconfig1-dev libcurl4-openssl-dev libharfbuzz-dev libfribidi-dev libxml2-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev
+# dependencies that R can't install for obisindicator's dependencies
+sudo apt-get install libgsl-dev libgdal-dev
+```
+
+```R
+install.packages("devtools")
+devtools::install_local()
+```
+
+## Use
 ```r
 library(obisindicators)
 ```
 
 ## Developer Stuff
 ### Setup
-
 ```r
 devtools::install_local()
 testthat::test_local()
