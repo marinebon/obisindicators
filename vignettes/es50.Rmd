@@ -1,0 +1,42 @@
+---
+title: "es50"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{es50}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+The ES(50) biodiversity - or the "Hurlburt index" - is a [diversity index](https://en.wikipedia.org/wiki/Diversity_index) which estimates "richness" using the concept of rarefaction curves.
+The Hurlburt index is particularly good at dealing with issues of sampling bias, which is why it is the index we recommend here.
+
+
+https://esajournals.onlinelibrary.wiley.com/doi/10.2307/1934145
+
+If you need something more recent then I can recommend https://www.sciencedirect.com/science/article/pii/B978012384719500424X
+
+
+
+[R.tabula vignette](https://cran.r-project.org/web/packages/tabula/vignettes/diversity.html)
+
+obis Hurlbert calculation methods here: https://iobis.github.io/notebook-diversity-indicators/
+
+
+```{r implementations, eval = FALSE}
+# I'm still trying to figure out how es50 is actually calculated. Pieter uses this equation 
+esi = case_when(
+        n-ni >= esn ~ 1-exp(lngamma(n-ni+1)+lngamma(n-esn+1)-lngamma(n-ni-esn+1)-lngamma(n+1)),
+        n >= esn ~ 1 and then sums (esi) for a cell.
+# John Waller at GBIF used 
+entropart::Hurlburt(3).
+# In the OceanHackWeek project we have been using 
+vegan::rarefy(as.integer(species_counts$x), 50).
+# Are these all the same? Does anyone know?
+```
