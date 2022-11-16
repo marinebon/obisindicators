@@ -35,9 +35,11 @@ Imports:
     dplyr,
     ggplot2,
     gsl,
-    github::crazycapivara/h3-r,
+    h3,
     rnaturalearth,
     rnaturalearthdata,
     sf,
     viridis    
+Remotes: 
+    crazycapivara/h3-r
 Config/testthat/edition: 3
