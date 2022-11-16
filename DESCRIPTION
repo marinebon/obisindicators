@@ -41,5 +41,5 @@ Imports:
     sf,
     viridis    
 Remotes: 
-    crazycapivara/h3-r
+    h3=crazycapivara/h3-r
 Config/testthat/edition: 3
