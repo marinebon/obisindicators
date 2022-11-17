@@ -5,6 +5,7 @@
 #' @param hex_res resolution of H3 hexagons; see [Table of Cell Areas for H3 Resolutions | H3](https://h3geo.org/docs/core-library/restable/)
 #'
 #' @return spatial feature `sf` object
+#' @concept visualize
 #' @export
 #' @import dplyr h3 purrr sf units glue
 #'
