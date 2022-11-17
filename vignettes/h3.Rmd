@@ -54,7 +54,7 @@ The following function calculates the number of records, species richness, Simps
 Perform the calculation on species level data:
 
 ```{r calc_indicators}
-idx <- calc_indicators(occ)
+idx <- obisindicators::calc_indicators(occ)
 ```
 
 Add cell geometries to the indicators table (`idx`):
