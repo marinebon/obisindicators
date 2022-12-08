@@ -1,15 +1,15 @@
 #' Make hexagon feature
 #'
-#' TODO: + sf feature or extent to minimize
-#'
-#' @param hex_res resolution of H3 hexagons; see [Table of Cell Areas for H3 Resolutions | H3](https://h3geo.org/docs/core-library/restable/)
+#' @param hex_res resolution of H3 hexagons; 
+#'     see [Table of Cell Areas for H3 Resolutions | H3](https://h3geo.org/docs/core-library/restable/)
 #'
 #' @return spatial feature `sf` object
 #' @concept visualize
 #' @export
 #' @import dplyr h3 purrr sf units glue
 #'
-#' @examples hexes <- make_hex_res(0)
+#' @examples 
+#'    hexes <- make_hex_res(0)
 make_hex_res <- function(hex_res = 2){
   # librarian::shelf(dplyr, h3, mapview, purrr, sf, units, glue)
 
