@@ -1,75 +1,33 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>http://marinebon.org/obisindicators/404.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/CONTRIBUTING.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/LICENSE-text.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/LICENSE.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/articles/index.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/articles/obisindicators.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/articles/regional_diversity.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/articles/resolution.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/articles/temporal_subsets.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/authors.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/index.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/news/index.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/calc_indicators.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/gmap_indicator.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/index.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/occ_1960s.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/occ_1970s.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/occ_1980s.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/occ_1990s.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/occ_1M.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/occ_2000s.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/occ_2010s.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/occ_SAtlantic.html</loc>
-  </url>
-  <url>
-    <loc>http://marinebon.org/obisindicators/reference/occ_fk.html</loc>
-  </url>
+<urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
+<url><loc>http://marinebon.org/obisindicators/404.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/CONTRIBUTING.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/LICENSE-text.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/LICENSE.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/articles/h3.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/articles/h3t.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/articles/index.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/articles/obisindicators.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/articles/regional_diversity.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/articles/resolution.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/articles/temporal_subsets.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/authors.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/index.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/news/index.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/calc_indicators.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/gmap_indicator.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/index.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/make_hex_res.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/obis_h3t_sql.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/obis_h3t_url.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/occ_1960s.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/occ_1970s.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/occ_1980s.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/occ_1990s.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/occ_1M.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/occ_2000s.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/occ_2010s.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/occ_SAtlantic.html</loc></url>
+<url><loc>http://marinebon.org/obisindicators/reference/occ_fk.html</loc></url>
 </urlset>
+
