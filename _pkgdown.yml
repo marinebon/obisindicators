@@ -20,9 +20,10 @@ reference:
   desc: "Functions for calculating indicators."
   contents:
   - has_concept("analyze")
-- title: "H3 tiling (h3t)"
-  desc: "Build and serve indicators as H3 hexagon tiles."
+- title: "H3 grid & tiles"
+  desc: "Build an H3 grid, and serve indicators as H3 hexagon tiles."
   contents:
+  - make_hex_res
   - has_concept("h3t")
 - title: "Visualize"
   desc: "Functions for visualizing indicators."
