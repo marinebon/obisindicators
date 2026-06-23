@@ -9,6 +9,7 @@ articles:
   - regional_diversity
   - resolution
   - temporal_subsets
+  - h3t
 
 reference:
 - title: "Read"
@@ -19,6 +20,10 @@ reference:
   desc: "Functions for calculating indicators."
   contents:
   - has_concept("analyze")
+- title: "H3 tiling (h3t)"
+  desc: "Build and serve indicators as H3 hexagon tiles."
+  contents:
+  - has_concept("h3t")
 - title: "Visualize"
   desc: "Functions for visualizing indicators."
   contents:

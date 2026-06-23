@@ -1,6 +1,6 @@
 Package: obisindicators
 Title: Develop marine biodiversity indicators from OBIS data
-Version: 0.1.0
+Version: 0.2.0
 URL: https://marinebon.org/obisindicators,
      https://github.com/marinebon/obisindicators
 BugReports: https://github.com/marinebon/obisindicators/issues
@@ -22,24 +22,29 @@ Description: Use data from the Ocean Biogeographic Information System to build m
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.0
-Suggests: 
+RoxygenNote: 7.3.3
+Suggests:
     knitr,
     rmarkdown,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    DBI,
+    duckdb,
+    mapgl
 VignetteBuilder: knitr
-Depends: 
+Depends:
     R (>= 2.10)
 LazyData: true
-Imports: 
+Imports:
+    base64enc,
     dplyr,
     ggplot2,
+    glue,
     gsl,
     h3,
     rnaturalearth,
     rnaturalearthdata,
     sf,
-    viridis    
-Remotes: 
+    viridis
+Remotes:
     h3=crazycapivara/h3-r
 Config/testthat/edition: 3
