@@ -11,6 +11,9 @@ build_obis_h3_duckdb(
   esn = 50L,
   s3_region = "us-east-1",
   s3_anonymous = TRUE,
+  memory_limit = NULL,
+  threads = NULL,
+  temp_dir = NULL,
   overwrite = TRUE
 )
 }
@@ -32,6 +35,17 @@ restrict to a region (recommended for a first/demo build).}
 \item{s3_region}{AWS region for \code{s3://} sources (default \code{"us-east-1"}).}
 
 \item{s3_anonymous}{use anonymous S3 access for public buckets (default TRUE).}
+
+\item{memory_limit}{optional DuckDB \code{memory_limit} (e.g. \code{"10GB"}). Strongly
+recommended when \code{src} is a parquet/S3 glob: a global OBIS scan will
+otherwise exhaust RAM and can wedge the host. Leave a few GB headroom below
+physical RAM.}
+
+\item{threads}{optional DuckDB thread cap (e.g. \code{2L}) to bound CPU/RAM.}
+
+\item{temp_dir}{optional directory for DuckDB to spill to disk when it
+exceeds \code{memory_limit}. Needs ample free space (a global build can spill
+many GB); point it at a roomy volume, not \code{/tmp}.}
 
 \item{overwrite}{overwrite an existing \code{path_duckdb} (default TRUE).}
 }

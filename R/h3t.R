@@ -37,6 +37,14 @@ H3T_RES_IDX   <- 1:7
 #' @param esn expected sample size for ES(n); default 50 (matches ES50).
 #' @param s3_region AWS region for `s3://` sources (default `"us-east-1"`).
 #' @param s3_anonymous use anonymous S3 access for public buckets (default TRUE).
+#' @param memory_limit optional DuckDB `memory_limit` (e.g. `"10GB"`). Strongly
+#'   recommended when `src` is a parquet/S3 glob: a global OBIS scan will
+#'   otherwise exhaust RAM and can wedge the host. Leave a few GB headroom below
+#'   physical RAM.
+#' @param threads optional DuckDB thread cap (e.g. `2L`) to bound CPU/RAM.
+#' @param temp_dir optional directory for DuckDB to spill to disk when it
+#'   exceeds `memory_limit`. Needs ample free space (a global build can spill
+#'   many GB); point it at a roomy volume, not `/tmp`.
 #' @param overwrite overwrite an existing `path_duckdb` (default TRUE).
 #'
 #' @return `path_duckdb`, invisibly.
@@ -49,6 +57,9 @@ build_obis_h3_duckdb <- function(
   esn          = 50L,
   s3_region    = "us-east-1",
   s3_anonymous = TRUE,
+  memory_limit = NULL,
+  threads      = NULL,
+  temp_dir     = NULL,
   overwrite    = TRUE) {
 
   stopifnot(requireNamespace("DBI", quietly = TRUE),
@@ -67,6 +78,18 @@ build_obis_h3_duckdb <- function(
 
   DBI::dbExecute(con, "INSTALL h3 FROM community; LOAD h3;")
   DBI::dbExecute(con, "INSTALL spatial; LOAD spatial;")
+
+  # resource guards — large parquet/S3 scans must spill, not OOM the host.
+  # preserve_insertion_order=false lets big aggregations release memory.
+  DBI::dbExecute(con, "SET preserve_insertion_order = false;")
+  if (!is.null(memory_limit))
+    DBI::dbExecute(con, glue::glue("SET memory_limit = '{memory_limit}';"))
+  if (!is.null(threads))
+    DBI::dbExecute(con, glue::glue("SET threads = {as.integer(threads)};"))
+  if (!is.null(temp_dir)) {
+    dir.create(temp_dir, showWarnings = FALSE, recursive = TRUE)
+    DBI::dbExecute(con, glue::glue("SET temp_directory = '{temp_dir}';"))
+  }
 
   # source relation: a registered data.frame or a read_parquet() expression ----
   is_df <- is.data.frame(src)
