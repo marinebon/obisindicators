@@ -1,26 +1,27 @@
 ---
-title: "obisindicators"
+title: "H3 grids and deckgl"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{obisindicators}
+  %\VignetteIndexEntry{H3 grids and deckgl}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
-editor_options: 
+editor_options:
   chunk_output_type: console
 ---
 
 ```{r, include = FALSE}
+# code-only walkthrough (deckgl/h3 demo); see vignette("obisindicators") for the
+# rendered indicator maps.
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment  = "#>",
-  warning  = FALSE, 
-  message  = FALSE)
+  warning  = FALSE,
+  message  = FALSE,
+  eval     = FALSE)
 ```
 
 ```{r setup}
-# library(obisindicators)
-devtools::document() # update DESCRIPTION, NAMESPACE based on roxygen comments
-devtools::load_all() # load the local version of obisindicators
+library(obisindicators)
 library(dplyr)
 ```
 
