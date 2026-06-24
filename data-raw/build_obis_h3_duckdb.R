@@ -35,7 +35,7 @@ source(file.path(pkg_root, "R", "h3t.R"))
 
 dir_obis      <- Sys.getenv("OBIS_DIR",      "/share/data/obis")
 stamp         <- format(Sys.Date(), "v%Y%m%d")
-mem_limit     <- Sys.getenv("OBIS_MEMORY",   "4GB")   # conservative; raise on bigger box
+mem_limit     <- Sys.getenv("OBIS_MEMORY",   "7GB")   # stays under 8GB docker hard cap
 n_threads     <- as.integer(Sys.getenv("OBIS_THREADS", "2"))
 tmp_dir       <- Sys.getenv("OBIS_TEMP_DIR", file.path(dir_obis, "tmp"))
 max_tmp       <- Sys.getenv("OBIS_MAX_TEMP", "20GB")  # cap disk spill to prevent crash

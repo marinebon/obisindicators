@@ -114,9 +114,18 @@ build_obis_h3_duckdb <- function(
     }
     globs    <- paste(sprintf("'%s'", src), collapse = ", ")
     from_rel <- glue::glue("read_parquet([{globs}], union_by_name = true)")
-    # probe columns to know what taxa/records are available
+    # Probe schema from ONE file only — probing the full glob opens metadata for
+    # every parquet (6 900+ files for global OBIS) and can exhaust memory before
+    # a single data row is read. Union_by_name is only needed at scan time.
+    probe_src <- if (any(grepl("\\*", src))) {
+      expanded <- Sys.glob(src)
+      if (length(expanded) == 0) src[1] else expanded[1]
+    } else {
+      src[1]
+    }
+    probe_rel <- glue::glue("read_parquet('{probe_src}')")
     cols <- names(DBI::dbGetQuery(
-      con, glue::glue("SELECT * FROM {from_rel} LIMIT 0")))
+      con, glue::glue("SELECT * FROM {probe_rel} LIMIT 0")))
     records_expr <- if ("records" %in% cols) "SUM(records)" else "COUNT(*)"
   }
 
