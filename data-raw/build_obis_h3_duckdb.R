@@ -81,13 +81,19 @@ if (has_local || force_s3) {
 
   symlink_to(path_global)
 
-  # restart service + flush Varnish cache
+  # restart h3t + flush Varnish — only works when docker is accessible from the
+  # build environment (skip silently when running inside a container).
   server_dir <- "/share/github/MarineSensitivity/server"
-  if (dir.exists(server_dir)) {
-    system(glue("docker compose -f {server_dir}/docker-compose.yml restart h3t"))
+  docker_bin <- Sys.which("docker")
+  if (dir.exists(server_dir) && nzchar(docker_bin)) {
+    system(glue("{docker_bin} compose -f {server_dir}/docker-compose.yml restart h3t"))
     system(paste0(
-      "docker compose -f ", server_dir, "/docker-compose.yml exec -T h3tcache ",
+      docker_bin, " compose -f ", server_dir, "/docker-compose.yml exec -T h3tcache ",
       "varnishadm 'ban req.url ~ \"^/h3t/\"'"))
+    message("h3t restarted and Varnish cache flushed.")
+  } else {
+    message("docker not found in PATH — restart h3t manually:\n",
+            "  docker compose -f ", server_dir, "/docker-compose.yml restart h3t")
   }
 
   # clean up spill files
