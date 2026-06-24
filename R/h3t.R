@@ -279,6 +279,9 @@ build_obis_h3_duckdb <- function(
 #'   `list(class = "Aves")` or `list(phylum = c("Mollusca", "Cnidaria"))`.
 #' @param years optional `c(min, max)` year range (either may be `NA`).
 #' @param esn expected sample size for ES(n); default 50.
+#' @param res_max cap on the H3 resolution (1-7). Lower = coarser/bigger
+#'   hexagons at a given map zoom (the "base zoom level" control); the store's
+#'   finest resolution is 7. Default 7 (track zoom up to the finest).
 #' @param res_placeholder the resolution placeholder; default `"{{res}}"`.
 #'
 #' @return a single-line-friendly SQL string.
@@ -289,11 +292,14 @@ obis_h3t_sql <- function(
   taxon           = NULL,
   years           = NULL,
   esn             = 50L,
+  res_max         = 7L,
   res_placeholder = "{{res}}") {
 
   stopifnot(requireNamespace("glue", quietly = TRUE))
   indicator <- match.arg(indicator)
   r         <- res_placeholder
+  rcap      <- max(1L, min(7L, as.integer(res_max)))
+  eff       <- glue::glue("LEAST({r}, {rcap})")   # capped display resolution
   filt      <- .h3t_where_clause(taxon, years)
   has_filt  <- nzchar(filt)
 
@@ -301,15 +307,15 @@ obis_h3t_sql <- function(
     # fast path: precomputed all-taxa indicators
     col <- switch(indicator, es = "es", sp = "sp", shannon = "shannon", n = "n")
     return(as.character(glue::glue(
-      "SELECT cell_id, {col} AS value, n FROM idx_h3 WHERE res = LEAST({r}, 7)")))
+      "SELECT cell_id, {col} AS value, n FROM idx_h3 WHERE res = {eff}")))
   }
 
   # filtered path: live indicator over the species-level store. pick the tier
-  # (3/5/7) matching the tile res and roll cells up to {{res}}.
-  tier <- glue::glue("CASE WHEN {r} <= 3 THEN 3 WHEN {r} <= 5 THEN 5 ELSE 7 END")
+  # (3/5/7) matching the capped tile res and roll cells up to it.
+  tier <- glue::glue("CASE WHEN {eff} <= 3 THEN 3 WHEN {eff} <= 5 THEN 5 ELSE 7 END")
   src  <- glue::glue("
     src AS (
-      SELECT CAST(h3_cell_to_parent(cell_id, LEAST({r}, {tier})) AS BIGINT) AS cell_id,
+      SELECT CAST(h3_cell_to_parent(cell_id, {eff}) AS BIGINT) AS cell_id,
              species, SUM(records) AS ni
       FROM occ_h3
       WHERE res = {tier}

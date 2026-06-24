@@ -9,6 +9,7 @@ obis_h3t_sql(
   taxon = NULL,
   years = NULL,
   esn = 50L,
+  res_max = 7L,
   res_placeholder = "{{res}}"
 )
 }
@@ -23,6 +24,10 @@ obis_h3t_sql(
 \item{years}{optional \code{c(min, max)} year range (either may be \code{NA}).}
 
 \item{esn}{expected sample size for ES(n); default 50.}
+
+\item{res_max}{cap on the H3 resolution (1-7). Lower = coarser/bigger
+hexagons at a given map zoom (the "base zoom level" control); the store's
+finest resolution is 7. Default 7 (track zoom up to the finest).}
 
 \item{res_placeholder}{the resolution placeholder; default \code{"{{res}}"}.}
 }
