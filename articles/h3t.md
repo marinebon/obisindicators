@@ -96,10 +96,10 @@ obis_h3t_sql("es")
 # species richness for seabirds since 2000 — computed on the fly
 cat(obis_h3t_sql("sp", taxon = list(class = "Aves"), years = c(2000, NA)))
 #> WITH src AS (
-#>   SELECT CAST(h3_cell_to_parent(cell_id, LEAST({{res}}, CASE WHEN {{res}} <= 3 THEN 3 WHEN {{res}} <= 5 THEN 5 ELSE 7 END)) AS BIGINT) AS cell_id,
+#>   SELECT CAST(h3_cell_to_parent(cell_id, LEAST({{res}}, 7)) AS BIGINT) AS cell_id,
 #>          species, SUM(records) AS ni
 #>   FROM occ_h3
-#>   WHERE res = CASE WHEN {{res}} <= 3 THEN 3 WHEN {{res}} <= 5 THEN 5 ELSE 7 END
+#>   WHERE res = CASE WHEN LEAST({{res}}, 7) <= 3 THEN 3 WHEN LEAST({{res}}, 7) <= 5 THEN 5 ELSE 7 END
 #>     AND "class" = 'Aves'
 #>         AND date_year >= 2000
 #>   GROUP BY 1, 2)

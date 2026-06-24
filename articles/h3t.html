@@ -149,10 +149,10 @@ indicator live from the species store.</p>
 <span><span class="co"># species richness for seabirds since 2000 — computed on the fly</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="fu"><a href="../reference/obis_h3t_sql.html">obis_h3t_sql</a></span><span class="op">(</span><span class="st">"sp"</span>, taxon <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>class <span class="op">=</span> <span class="st">"Aves"</span><span class="op">)</span>, years <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2000</span>, <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; WITH src AS (</span></span>
-<span><span class="co">#&gt;   SELECT CAST(h3_cell_to_parent(cell_id, LEAST({{res}}, CASE WHEN {{res}} &lt;= 3 THEN 3 WHEN {{res}} &lt;= 5 THEN 5 ELSE 7 END)) AS BIGINT) AS cell_id,</span></span>
+<span><span class="co">#&gt;   SELECT CAST(h3_cell_to_parent(cell_id, LEAST({{res}}, 7)) AS BIGINT) AS cell_id,</span></span>
 <span><span class="co">#&gt;          species, SUM(records) AS ni</span></span>
 <span><span class="co">#&gt;   FROM occ_h3</span></span>
-<span><span class="co">#&gt;   WHERE res = CASE WHEN {{res}} &lt;= 3 THEN 3 WHEN {{res}} &lt;= 5 THEN 5 ELSE 7 END</span></span>
+<span><span class="co">#&gt;   WHERE res = CASE WHEN LEAST({{res}}, 7) &lt;= 3 THEN 3 WHEN LEAST({{res}}, 7) &lt;= 5 THEN 5 ELSE 7 END</span></span>
 <span><span class="co">#&gt;     AND "class" = 'Aves'</span></span>
 <span><span class="co">#&gt;         AND date_year &gt;= 2000</span></span>
 <span><span class="co">#&gt;   GROUP BY 1, 2)</span></span>
