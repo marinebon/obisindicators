@@ -1,15 +1,19 @@
 # Build the authoritative OBIS H3 DuckDB store consumed by the MST `h3t` tile
 # service (MarineSensitivity/server/h3t).
 #
-# DEFAULT = a cheap, local demo from the shipped South Atlantic data (no S3,
-# ~10 s, trivial RAM) — the safe first step to validate the live h3t service.
+# Auto-detects what to build:
+#   * if a local OBIS parquet mirror exists at $OBIS_DIR/occurrence/*.parquet
+#     -> GLOBAL build from those files (no S3 at build time);
+#   * otherwise -> a cheap LOCAL demo from the shipped South Atlantic data.
 #
-# The S3 builds below are RESOURCE-HEAVY and OFF by default. The OBIS open-data
-# bucket is one parquet file per dataset (NOT spatially partitioned), so any
-# build that globs `*.parquet` scans the ENTIRE global dataset (hundreds of GB)
-# regardless of `region_bbox`. On a small box that exhausts RAM/disk and can
-# wedge the host. Only run them with memory_limit + temp_dir + threads, on a
-# box with ample RAM and free disk.
+# Populate the mirror once with (frees you from re-streaming S3 each build):
+#   aws s3 sync --no-sign-request \
+#     s3://obis-open-data/occurrence/ /share/data/obis/occurrence/
+#
+# Resource caps (DuckDB memory_limit / threads / disk-spill temp_dir) keep the
+# global build within bounds on a modest box — OBIS open-data is one parquet per
+# dataset (not spatially partitioned), so a global aggregation must spill, not
+# hold everything in RAM. Tune via env for the host.
 #
 # see also: build_obis_h3_duckdb() in R/h3t.R, and vignette("h3t").
 
@@ -27,50 +31,45 @@ pkg_root <- if (length(.file) == 1) {
 source(file.path(pkg_root, "R", "h3t.R"))
 
 dir_obis <- Sys.getenv("OBIS_DIR", "/share/data/obis")
+dir_occ  <- file.path(dir_obis, "occurrence")        # local parquet mirror
 stamp    <- format(Sys.Date(), "v%Y%m%d")
 dir.create(dir_obis, showWarnings = FALSE, recursive = TRUE)
 
-# ---- DEFAULT: demo store from shipped South Atlantic data (local, fast) ----
-# ~1M rows, no S3. occ_SAtlantic lacks taxonomic columns, so taxon filtering is
-# limited to `species`; richness / Shannon / ES50 / #records all work.
-load(file.path(pkg_root, "data", "occ_SAtlantic.rda"))   # -> occ_SAtlantic
-path_demo <- file.path(dir_obis, glue("obis_h3_satlantic_{stamp}.duckdb"))
-build_obis_h3_duckdb(occ_SAtlantic, path_demo)
+# resource caps (safe defaults for a ~16 GB box; override via env)
+mem_limit <- Sys.getenv("OBIS_MEMORY_LIMIT", "4GB")
+threads   <- as.integer(Sys.getenv("OBIS_THREADS", "2"))
+temp_dir  <- file.path(dir_obis, "tmp")
 
-# activate it for the service (atomic-ish symlink), then start h3t + h3tcache:
+n_local <- length(Sys.glob(file.path(dir_occ, "*.parquet")))
+
+if (n_local > 0) {
+  # ---- GLOBAL build from the local parquet mirror -------------------------
+  message(glue("building GLOBAL store from {n_local} parquet files in {dir_occ}"))
+  message(glue("  caps: memory_limit={mem_limit}, threads={threads}, ",
+               "temp_dir={temp_dir}"))
+  path_out <- file.path(dir_obis, glue("obis_h3_global_{stamp}.duckdb"))
+  build_obis_h3_duckdb(
+    src          = file.path(dir_occ, "*.parquet"),
+    path_duckdb  = path_out,
+    memory_limit = mem_limit,
+    threads      = threads,
+    temp_dir     = temp_dir)
+} else {
+  # ---- DEMO fallback: shipped South Atlantic data (local, no S3) ----------
+  # ~1M rows, ~15 s. occ_SAtlantic lacks taxonomic columns, so taxon filtering
+  # is limited to `species`; richness / Shannon / ES50 / #records all work.
+  message(glue("no parquet in {dir_occ}; building South Atlantic DEMO store"))
+  load(file.path(pkg_root, "data", "occ_SAtlantic.rda"))   # -> occ_SAtlantic
+  path_out <- file.path(dir_obis, glue("obis_h3_satlantic_{stamp}.duckdb"))
+  build_obis_h3_duckdb(occ_SAtlantic, path_out)
+}
+
+# ---- activate for the h3t service (atomic-ish symlink) --------------------
 link <- file.path(dir_obis, "obis_h3.duckdb")
-unlink(link); file.symlink(path_demo, link)
-message("symlinked ", link, " -> ", path_demo)
-#   cd /share/github/MarineSensitivity/server
-#   docker compose up -d --build h3t h3tcache
-#   curl -s http://localhost:8889/h3t/health | jq .
-
-# ===========================================================================
-# S3 BUILDS — OFF by default. DO NOT run on msens1 (t2.xlarge, 16 GB RAM,
-# /share ~16 GB free) without freeing/adding disk and ideally resizing to a
-# high-RAM instance first. Always pass memory_limit + temp_dir + threads.
-# ===========================================================================
-
-# ---- OPTION A: a few specific OBIS datasets (cheap, real taxa) -------------
-# Reads ONLY the listed files (full phylum/class/aphiaid), not the whole bucket.
-# Find dataset UUIDs via the obis-open-data bucket listing / https://obis.org.
-if (FALSE) {
-  uuids <- c("00017595-e015-4ec6-bf8a-b013e0dca521")  # example; add a handful
-  src   <- sprintf("s3://obis-open-data/occurrence/%s.parquet", uuids)
-  build_obis_h3_duckdb(
-    src, file.path(dir_obis, glue("obis_h3_sample_{stamp}.duckdb")),
-    memory_limit = "10GB", threads = 2L, temp_dir = file.path(dir_obis, "tmp"))
-}
-
-# ---- OPTION B: global build (needs a big box + lots of free disk) ---------
-if (FALSE) {
-  build_obis_h3_duckdb(
-    src          = "s3://obis-open-data/occurrence/*.parquet",
-    path_duckdb  = file.path(dir_obis, glue("obis_h3_global_{stamp}.duckdb")),
-    memory_limit = "10GB", threads = 2L,
-    temp_dir     = file.path(dir_obis, "tmp"))   # can spill many GB
-  # release swap + cache flush (clients pass &release={stamp}):
-  #   ln -sf .../obis_h3_global_{stamp}.duckdb /share/data/obis/obis_h3.duckdb
-  #   docker compose restart h3t
-  #   docker compose exec h3tcache varnishadm 'ban req.url ~ "^/h3t/"'
-}
+unlink(link); file.symlink(path_out, link)
+message("symlinked ", link, " -> ", path_out)
+cat("\nNext, on the server:\n",
+    "  cd /share/github/MarineSensitivity/server\n",
+    "  docker compose restart h3t\n",
+    "  docker compose exec h3tcache varnishadm 'ban req.url ~ \"^/h3t/\"'\n",
+    "  curl -s http://localhost:8889/h3t/health | jq .\n", sep = "")
