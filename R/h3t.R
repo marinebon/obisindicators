@@ -100,7 +100,9 @@ build_obis_h3_duckdb <- function(
   # source relation: a registered data.frame or a read_parquet() expression ----
   is_df <- is.data.frame(src)
   if (is_df) {
-    cols <- names(src)
+    cols            <- names(src)
+    has_interpreted <- FALSE
+    col_pfx         <- ""
     duckdb::duckdb_register(con, "occ_src_df", src)
     on.exit(duckdb::duckdb_unregister(con, "occ_src_df"), add = TRUE)
     from_rel     <- "occ_src_df"
@@ -113,10 +115,12 @@ build_obis_h3_duckdb <- function(
         DBI::dbExecute(con, "SET s3_access_key_id=''; SET s3_secret_access_key='';")
     }
     globs    <- paste(sprintf("'%s'", src), collapse = ", ")
-    from_rel <- glue::glue("read_parquet([{globs}], union_by_name = true)")
-    # Probe schema from ONE file only — probing the full glob opens metadata for
-    # every parquet (6 900+ files for global OBIS) and can exhaust memory before
-    # a single data row is read. Union_by_name is only needed at scan time.
+    # No union_by_name: reading schema from all files at once can exhaust RAM
+    # on large datasets (6 900+ OBIS parquets). Struct fields are always
+    # accessed by name, so positional matching across files is safe as long as
+    # the top-level column order is consistent (true for OBIS open-data).
+    from_rel <- glue::glue("read_parquet([{globs}])")
+    # Probe schema from ONE sample file — not the full glob.
     probe_src <- if (any(grepl("\\*", src))) {
       expanded <- Sys.glob(src)
       if (length(expanded) == 0) src[1] else expanded[1]
@@ -124,9 +128,20 @@ build_obis_h3_duckdb <- function(
       src[1]
     }
     probe_rel <- glue::glue("read_parquet('{probe_src}')")
-    cols <- names(DBI::dbGetQuery(
+    top_cols  <- names(DBI::dbGetQuery(
       con, glue::glue("SELECT * FROM {probe_rel} LIMIT 0")))
-    records_expr <- if ("records" %in% cols) "SUM(records)" else "COUNT(*)"
+    # OBIS open-data parquet nests all DwC fields inside an 'interpreted'
+    # struct; dropped/absence remain top-level boolean flags.
+    has_interpreted <- "interpreted" %in% top_cols
+    if (has_interpreted) {
+      cols    <- names(DBI::dbGetQuery(
+        con, glue::glue("SELECT interpreted.* FROM {probe_rel} LIMIT 0")))
+      col_pfx <- "interpreted."
+    } else {
+      cols    <- top_cols
+      col_pfx <- ""
+    }
+    records_expr <- if ("records" %in% tolower(cols)) "SUM(records)" else "COUNT(*)"
   }
 
   # DuckDB matches identifiers case-insensitively, but R name matching is not;
@@ -138,20 +153,26 @@ build_obis_h3_duckdb <- function(
   has <- function(x) !is.na(col_match(x))
   col_or_null <- function(x, type = "VARCHAR") {
     m <- col_match(x)
-    if (!is.na(m)) sprintf('"%s"', m) else sprintf("NULL::%s", type)
+    if (!is.na(m)) paste0(col_pfx, sprintf('"%s"', m)) else sprintf("NULL::%s", type)
   }
 
-  # optional filters present in OBIS open-data parquet
-  where <- c('species IS NOT NULL',
-             'decimalLatitude IS NOT NULL', 'decimalLongitude IS NOT NULL')
-  if (has("dropped")) where <- c(where, 'dropped IS NOT TRUE')
-  if (has("absence")) where <- c(where, 'absence IS NOT TRUE')
+  # Filter conditions — DwC fields use col_pfx; dropped/absence are always
+  # top-level (whether in flat or nested OBIS struct format).
+  where <- c(
+    paste0(col_pfx, 'species IS NOT NULL'),
+    paste0(col_pfx, 'decimalLatitude IS NOT NULL'),
+    paste0(col_pfx, 'decimalLongitude IS NOT NULL'))
+  if (has_interpreted) {
+    where <- c(where, 'dropped IS NOT TRUE', 'absence IS NOT TRUE')
+  } else {
+    if (has("dropped")) where <- c(where, 'dropped IS NOT TRUE')
+    if (has("absence")) where <- c(where, 'absence IS NOT TRUE')
+  }
   if (!is.null(region_bbox)) {
     stopifnot(length(region_bbox) == 4)
-    where <- c(where, glue::glue(
-      'decimalLongitude BETWEEN {region_bbox[1]} AND {region_bbox[3]}'),
-      glue::glue(
-      'decimalLatitude  BETWEEN {region_bbox[2]} AND {region_bbox[4]}'))
+    where <- c(where,
+      glue::glue('{col_pfx}decimalLongitude BETWEEN {region_bbox[1]} AND {region_bbox[3]}'),
+      glue::glue('{col_pfx}decimalLatitude  BETWEEN {region_bbox[2]} AND {region_bbox[4]}'))
   }
   where_sql <- paste(where, collapse = "\n    AND ")
 
@@ -160,14 +181,14 @@ build_obis_h3_duckdb <- function(
   DBI::dbExecute(con, glue::glue("
     CREATE TABLE occ_h3_base AS
     SELECT
-      CAST(h3_latlng_to_cell(decimalLatitude, decimalLongitude, {H3T_RES_BASE}) AS BIGINT) AS cell_id,
+      CAST(h3_latlng_to_cell({col_pfx}decimalLatitude, {col_pfx}decimalLongitude, {H3T_RES_BASE}) AS BIGINT) AS cell_id,
       CAST({col_or_null('aphiaid', 'BIGINT')} AS BIGINT) AS aphiaid,
       {col_or_null('phylum')} AS phylum,
       {col_or_null('class')}  AS class,
       {col_or_null('order')}  AS \"order\",
       {col_or_null('family')} AS family,
       {col_or_null('genus')}  AS genus,
-      species,
+      {col_pfx}species AS species,
       CAST({col_or_null('date_year', 'SMALLINT')} AS SMALLINT) AS date_year,
       {records_expr} AS records
     FROM {from_rel}
