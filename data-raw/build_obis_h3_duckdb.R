@@ -33,11 +33,12 @@ pkg_root <- if (length(.file) == 1) {
 }
 source(file.path(pkg_root, "R", "h3t.R"))
 
-dir_obis  <- Sys.getenv("OBIS_DIR",      "/share/data/obis")
-stamp     <- format(Sys.Date(), "v%Y%m%d")
-mem_limit <- Sys.getenv("OBIS_MEMORY",   "10GB")
-n_threads <- as.integer(Sys.getenv("OBIS_THREADS", "2"))
-tmp_dir   <- Sys.getenv("OBIS_TEMP_DIR", file.path(dir_obis, "tmp"))
+dir_obis      <- Sys.getenv("OBIS_DIR",      "/share/data/obis")
+stamp         <- format(Sys.Date(), "v%Y%m%d")
+mem_limit     <- Sys.getenv("OBIS_MEMORY",   "4GB")   # conservative; raise on bigger box
+n_threads     <- as.integer(Sys.getenv("OBIS_THREADS", "2"))
+tmp_dir       <- Sys.getenv("OBIS_TEMP_DIR", file.path(dir_obis, "tmp"))
+max_tmp       <- Sys.getenv("OBIS_MAX_TEMP", "20GB")  # cap disk spill to prevent crash
 dir.create(dir_obis, showWarnings = FALSE, recursive = TRUE)
 
 symlink_to <- function(target, link = file.path(dir_obis, "obis_h3.duckdb")) {
@@ -71,11 +72,12 @@ if (has_local || force_s3) {
 
   path_global <- file.path(dir_obis, glue("obis_h3_global_{stamp}.duckdb"))
   build_obis_h3_duckdb(
-    src          = src_global,
-    path_duckdb  = path_global,
-    memory_limit = mem_limit,
-    threads      = n_threads,
-    temp_dir     = tmp_dir)
+    src              = src_global,
+    path_duckdb      = path_global,
+    memory_limit     = mem_limit,
+    threads          = n_threads,
+    temp_dir         = tmp_dir,
+    max_temp_dir_size = max_tmp)
 
   symlink_to(path_global)
 

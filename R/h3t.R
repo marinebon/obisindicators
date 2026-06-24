@@ -45,6 +45,9 @@ H3T_RES_IDX   <- 1:7
 #' @param temp_dir optional directory for DuckDB to spill to disk when it
 #'   exceeds `memory_limit`. Needs ample free space (a global build can spill
 #'   many GB); point it at a roomy volume, not `/tmp`.
+#' @param max_temp_dir_size optional cap on DuckDB disk spill (e.g. `"20GB"`).
+#'   Prevents a runaway aggregation from filling the volume and crashing the
+#'   host. Set to comfortably below available free disk.
 #' @param overwrite overwrite an existing `path_duckdb` (default TRUE).
 #'
 #' @return `path_duckdb`, invisibly.
@@ -57,10 +60,11 @@ build_obis_h3_duckdb <- function(
   esn          = 50L,
   s3_region    = "us-east-1",
   s3_anonymous = TRUE,
-  memory_limit = NULL,
-  threads      = NULL,
-  temp_dir     = NULL,
-  overwrite    = TRUE) {
+  memory_limit     = NULL,
+  threads          = NULL,
+  temp_dir         = NULL,
+  max_temp_dir_size = NULL,
+  overwrite        = TRUE) {
 
   stopifnot(requireNamespace("DBI", quietly = TRUE),
             requireNamespace("duckdb", quietly = TRUE),
@@ -90,6 +94,8 @@ build_obis_h3_duckdb <- function(
     dir.create(temp_dir, showWarnings = FALSE, recursive = TRUE)
     DBI::dbExecute(con, glue::glue("SET temp_directory = '{temp_dir}';"))
   }
+  if (!is.null(max_temp_dir_size))
+    DBI::dbExecute(con, glue::glue("SET max_temp_directory_size = '{max_temp_dir_size}';"  ))
 
   # source relation: a registered data.frame or a read_parquet() expression ----
   is_df <- is.data.frame(src)
