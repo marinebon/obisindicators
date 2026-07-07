@@ -5,6 +5,11 @@
 # allowed taxonomic ranks for filtering, in descending breadth ----
 H3T_RANKS <- c("phylum", "class", "order", "family", "genus", "species")
 
+# ranks that get a precomputed idx_h3_taxon layer (fast single-taxon maps).
+# kept coarse: finer ranks (family/genus/species) would explode storage, so a
+# filter on those (or on multiple values / a year range) uses the live occ_h3 path.
+H3T_IDX_RANKS <- c("phylum", "class", "order")
+
 # the species-level resolution tiers stored in occ_h3 (finest = base) ----
 H3T_RES_TIERS <- c(3L, 5L, 7L)
 H3T_RES_BASE  <- 7L
@@ -17,9 +22,14 @@ H3T_RES_IDX   <- 1:7
 #'
 #' - `idx_h3(res, cell_id, n, sp, shannon, simpson, es)` — precomputed
 #'   all-taxa indicators for resolutions 1-7 (fast default tile layers).
+#' - `idx_h3_taxon(rank, taxon, res, cell_id, n, sp, shannon, simpson, es)` —
+#'   precomputed per-taxon indicators for ranks phylum/class/order, so a
+#'   single-taxon map is as fast as the all-taxa layer. Clustered by
+#'   `(rank, taxon, res)` for zonemap pruning.
 #' - `occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus,
 #'   species, date_year, records)` — species-level counts at resolution tiers
-#'   3/5/7 for on-the-fly taxon/year-filtered queries.
+#'   3/5/7 for on-the-fly taxon/year-filtered queries. Clustered by
+#'   `(res, taxonomy)` so a taxon-filtered scan prunes to a few row groups.
 #'
 #' The indicator math (ES50, Shannon, Simpson, richness) is the SQL translation
 #' of [calc_indicators()] (`esn` = 50 by default), validated by the package
@@ -214,6 +224,17 @@ build_obis_h3_duckdb <- function(
       GROUP BY ALL;"))
   }
 
+  # cluster occ_h3 by (res, taxonomy) so a taxon-filtered scan touches only the
+  # relevant row groups (DuckDB zonemap pruning) rather than the whole table;
+  # also speeds the res=7 reads by the idx builds below.
+  message("clustering occ_h3 by (res, taxonomy) ...")
+  DBI::dbExecute(con, '
+    CREATE TABLE occ_h3_clustered AS
+      SELECT * FROM occ_h3
+      ORDER BY res, phylum, class, "order", family, genus, species;')
+  DBI::dbExecute(con, "DROP TABLE occ_h3;")
+  DBI::dbExecute(con, "ALTER TABLE occ_h3_clustered RENAME TO occ_h3;")
+
   # 3. precomputed all-taxa indicators for res 1-7 ----
   message("computing idx_h3 indicators for res ",
           paste(range(H3T_RES_IDX), collapse = "-"), " ...")
@@ -224,6 +245,23 @@ build_obis_h3_duckdb <- function(
   for (r in H3T_RES_IDX) {
     DBI::dbExecute(con, .h3t_idx_sql(r, esn))
   }
+
+  # 4. precomputed per-taxon indicators (fast single-taxon filtered maps) ----
+  message("computing idx_h3_taxon indicators for ranks: ",
+          paste(H3T_IDX_RANKS, collapse = ", "))
+  DBI::dbExecute(con, "
+    CREATE TABLE idx_h3_taxon (
+      rank VARCHAR, taxon VARCHAR, res UTINYINT, cell_id BIGINT,
+      n BIGINT, sp BIGINT, shannon DOUBLE, simpson DOUBLE, es DOUBLE);")
+  for (rank in H3T_IDX_RANKS)
+    for (r in H3T_RES_IDX)
+      DBI::dbExecute(con, .h3t_idx_taxon_sql(rank, r, esn))
+  # cluster by the lookup key so a (rank, taxon, res) filter prunes to a small scan
+  DBI::dbExecute(con, "
+    CREATE TABLE idx_h3_taxon_c AS
+      SELECT * FROM idx_h3_taxon ORDER BY rank, taxon, res;")
+  DBI::dbExecute(con, "DROP TABLE idx_h3_taxon;")
+  DBI::dbExecute(con, "ALTER TABLE idx_h3_taxon_c RENAME TO idx_h3_taxon;")
 
   DBI::dbExecute(con, "DROP TABLE occ_h3_base;")
   DBI::dbExecute(con, "CHECKPOINT;")
@@ -261,16 +299,53 @@ build_obis_h3_duckdb <- function(
     FROM per GROUP BY cell_id;")
 }
 
+# SQL to compute per-taxon indicators at resolution `r` for one `rank` column
+# (e.g. "class") and INSERT into idx_h3_taxon. Same ES(esn)/Shannon/Simpson/
+# richness math as .h3t_idx_sql(), with the rank's value carried as an extra
+# grouping key so each (taxon, cell) gets its own indicators.
+.h3t_idx_taxon_sql <- function(rank, r, esn = 50L) {
+  col <- sprintf('"%s"', rank)  # quote reserved words (e.g. "order")
+  glue::glue("
+    INSERT INTO idx_h3_taxon
+    WITH src AS (
+      SELECT {col} AS taxon,
+             CAST(h3_cell_to_parent(cell_id, {r}) AS BIGINT) AS cell_id,
+             species, SUM(records) AS ni
+      FROM occ_h3 WHERE res = {H3T_RES_BASE} AND {col} IS NOT NULL
+      GROUP BY 1, 2, 3),
+    tot AS (
+      SELECT taxon, cell_id, SUM(ni) AS n FROM src GROUP BY taxon, cell_id),
+    per AS (
+      SELECT s.taxon, s.cell_id, s.ni, t.n,
+        CASE
+          WHEN t.n - s.ni >= {esn} THEN 1 - exp(
+                 lgamma(t.n - s.ni + 1) + lgamma(t.n - {esn} + 1)
+               - lgamma(t.n - s.ni - {esn} + 1) - lgamma(t.n + 1))
+          WHEN t.n >= {esn} THEN 1
+          ELSE NULL END AS esi
+      FROM src s JOIN tot t USING (taxon, cell_id))
+    SELECT '{rank}' AS rank, taxon, {r} AS res, cell_id,
+      ANY_VALUE(n)                                       AS n,
+      COUNT(*)                                           AS sp,
+      -SUM((ni::DOUBLE / n) * ln(ni::DOUBLE / n))        AS shannon,
+      SUM((ni::DOUBLE / n) * (ni::DOUBLE / n))           AS simpson,
+      SUM(esi)                                           AS es
+    FROM per GROUP BY taxon, cell_id;")
+}
+
 #' Build an h3t tile SQL query for an OBIS biodiversity indicator
 #'
 #' Generates the read-only `SELECT` (projecting exactly `cell_id, value, n`)
 #' that the `h3t` service base64-decodes, validates, and executes per tile.
 #' `{{res}}` is substituted server-side with the tile's H3 resolution.
 #'
-#' With no `taxon`/`years` filter the query reads the precomputed `idx_h3`
-#' layer (fast). With a filter it computes the indicator on the fly from the
-#' species-level `occ_h3` store, selecting the resolution tier that matches the
-#' tile zoom.
+#' Query routing (fastest first):
+#' - no `taxon`/`years` filter → precomputed all-taxa `idx_h3` layer.
+#' - a single value of one precomputed rank (phylum/class/order) with no
+#'   `years` → precomputed `idx_h3_taxon` layer (just as fast).
+#' - anything else (finer rank, multiple values, or a year range) → live
+#'   indicator computed on the fly from the species-level `occ_h3` store,
+#'   selecting the resolution tier that matches the tile zoom.
 #'
 #' @param indicator one of `"es"` (ES50), `"sp"` (richness), `"shannon"`,
 #'   `"n"` (# records).
@@ -303,11 +378,23 @@ obis_h3t_sql <- function(
   filt      <- .h3t_where_clause(taxon, years)
   has_filt  <- nzchar(filt)
 
+  col <- switch(indicator, es = "es", sp = "sp", shannon = "shannon", n = "n")
+
   if (!has_filt) {
     # fast path: precomputed all-taxa indicators
-    col <- switch(indicator, es = "es", sp = "sp", shannon = "shannon", n = "n")
     return(as.character(glue::glue(
       "SELECT cell_id, {col} AS value, n FROM idx_h3 WHERE res = {eff}")))
+  }
+
+  # fast path 2: a single value of one precomputed rank, with no year filter,
+  # reads the precomputed per-taxon layer (as fast as the all-taxa path).
+  if (is.null(years) && length(taxon) == 1L && length(taxon[[1]]) == 1L &&
+      isTRUE(names(taxon) %in% H3T_IDX_RANKS)) {
+    rank <- names(taxon)
+    val  <- .h3t_sql_quote(taxon[[1]])
+    return(as.character(glue::glue(
+      "SELECT cell_id, {col} AS value, n FROM idx_h3_taxon ",
+      "WHERE rank = '{rank}' AND taxon = {val} AND res = {eff}")))
   }
 
   # filtered path: live indicator over the species-level store. pick the tier

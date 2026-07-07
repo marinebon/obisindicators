@@ -49,6 +49,58 @@ test_that("h3t SQL indicators match calc_indicators()", {
   expect_equal(m$es.r,      m$es.sql,      tolerance = 1e-3)   # lgamma float
 })
 
+test_that("idx_h3_taxon matches the same math restricted to one taxon", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("glue")
+  skip_if_not_installed("gsl")
+
+  h3_ok <- tryCatch({
+    c0 <- DBI::dbConnect(duckdb::duckdb())
+    on.exit(DBI::dbDisconnect(c0, shutdown = TRUE), add = TRUE)
+    DBI::dbExecute(c0, "INSTALL h3 FROM community; LOAD h3;")
+    TRUE
+  }, error = function(e) FALSE)
+  skip_if(!h3_ok, "duckdb h3 community extension unavailable")
+
+  # occ_SAtlantic ships species-only; synthesize a `class` column (each species
+  # in exactly one class, as taxonomy requires) so the per-taxon path is exercised
+  set.seed(42)
+  occ <- occ_SAtlantic[sample(nrow(occ_SAtlantic), 1e5), ]
+  sp  <- sort(unique(occ$species))
+  occ$class <- paste0("Class", (match(occ$species, sp) %% 6L) + 1L)
+
+  db <- tempfile(fileext = ".duckdb")
+  build_obis_h3_duckdb(occ, db, overwrite = TRUE)
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db, read_only = TRUE)
+  on.exit({ DBI::dbDisconnect(con, shutdown = TRUE); unlink(db) }, add = TRUE)
+  DBI::dbExecute(con, "LOAD h3;")
+
+  res <- 3L
+  top_class <- DBI::dbGetQuery(con,
+    'SELECT "class" AS class FROM occ_h3
+      WHERE res = 7 AND "class" IS NOT NULL
+      GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 1')$class
+  expect_gt(length(top_class), 0)                     # fixture has classes
+
+  ref <- calc_indicators(DBI::dbGetQuery(con, glue::glue(
+    "SELECT h3_h3_to_string(CAST(h3_cell_to_parent(cell_id, {res}) AS BIGINT)) AS cell,
+            species, SUM(records) AS records
+     FROM occ_h3 WHERE res = 7 AND \"class\" = '{top_class}' GROUP BY 1, 2")), esn = 50)
+  sql <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT h3_h3_to_string(cell_id) AS cell, n, sp, shannon, simpson, es
+     FROM idx_h3_taxon WHERE rank = 'class' AND taxon = '{top_class}' AND res = {res}"))
+
+  m <- merge(ref, sql, by = "cell", suffixes = c(".r", ".sql"))
+  expect_gt(nrow(m), 0)
+  expect_equal(nrow(m), nrow(sql))                             # same cell set
+  expect_identical(as.numeric(m$n.r),  as.numeric(m$n.sql))   # exact
+  expect_identical(as.numeric(m$sp.r), as.numeric(m$sp.sql))  # exact
+  expect_equal(m$shannon.r, m$shannon.sql, tolerance = 1e-8)
+  expect_equal(m$simpson.r, m$simpson.sql, tolerance = 1e-8)
+  expect_equal(m$es.r,      m$es.sql,      tolerance = 1e-3)
+})
+
 test_that("obis_h3t_sql() projects exactly cell_id, value, n and substitutes {{res}}", {
   skip_if_not_installed("glue")
 
@@ -65,6 +117,15 @@ test_that("obis_h3t_sql() projects exactly cell_id, value, n and substitutes {{r
   expect_match(s, '"class" = \'Aves\'')
   expect_match(s, "date_year >= 2000")
   expect_match(s, "date_year <= 2020")
+
+  # single precomputed rank + value + no years -> precomputed per-taxon layer
+  s_tx <- obis_h3t_sql("es", taxon = list(class = "Aves"))
+  expect_match(s_tx, "idx_h3_taxon")
+  expect_match(s_tx, "rank = 'class'")
+  expect_match(s_tx, "taxon = 'Aves'")
+  expect_false(grepl("occ_h3", s_tx))                 # no live aggregation
+  # a finer (non-precomputed) rank falls back to the live species-level store
+  expect_match(obis_h3t_sql("es", taxon = list(genus = "Gadus")), "occ_h3")
 
   # injection attempt is single-quote-escaped, not interpolated raw
   s2 <- obis_h3t_sql("n", taxon = list(genus = "a' OR '1'='1"))

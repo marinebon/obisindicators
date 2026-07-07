@@ -35,14 +35,19 @@ finest resolution is 7. Default 7 (track zoom up to the finest).}
 a single-line-friendly SQL string.
 }
 \description{
-Generates the read-only \code{SELECT} (projecting exactly \code{cell_id, value, n})
+Generates the read-only \code{SELECT} (projecting exactly \verb{cell_id, value, n})
 that the \code{h3t} service base64-decodes, validates, and executes per tile.
 \code{{{res}}} is substituted server-side with the tile's H3 resolution.
 }
 \details{
-With no \code{taxon}/\code{years} filter the query reads the precomputed \code{idx_h3}
-layer (fast). With a filter it computes the indicator on the fly from the
-species-level \code{occ_h3} store, selecting the resolution tier that matches the
-tile zoom.
+Query routing (fastest first):
+\itemize{
+\item no \code{taxon}/\code{years} filter → precomputed all-taxa \code{idx_h3} layer.
+\item a single value of one precomputed rank (phylum/class/order) with no
+\code{years} → precomputed \code{idx_h3_taxon} layer (just as fast).
+\item anything else (finer rank, multiple values, or a year range) → live
+indicator computed on the fly from the species-level \code{occ_h3} store,
+selecting the resolution tier that matches the tile zoom.
+}
 }
 \concept{h3t}
