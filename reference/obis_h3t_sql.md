@@ -55,7 +55,13 @@ a single-line-friendly SQL string.
 
 ## Details
 
-With no `taxon`/`years` filter the query reads the precomputed `idx_h3`
-layer (fast). With a filter it computes the indicator on the fly from
-the species-level `occ_h3` store, selecting the resolution tier that
-matches the tile zoom.
+Query routing (fastest first):
+
+- no `taxon`/`years` filter → precomputed all-taxa `idx_h3` layer.
+
+- a single value of one precomputed rank (phylum/class/order) with no
+  `years` → precomputed `idx_h3_taxon` layer (just as fast).
+
+- anything else (finer rank, multiple values, or a year range) → live
+  indicator computed on the fly from the species-level `occ_h3` store,
+  selecting the resolution tier that matches the tile zoom.

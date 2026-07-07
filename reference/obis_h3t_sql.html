@@ -103,11 +103,13 @@ finest resolution is 7. Default 7 (track zoom up to the finest).</p></dd>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>With no <code>taxon</code>/<code>years</code> filter the query reads the precomputed <code>idx_h3</code>
-layer (fast). With a filter it computes the indicator on the fly from the
-species-level <code>occ_h3</code> store, selecting the resolution tier that matches the
-tile zoom.</p>
-    </div>
+    <p>Query routing (fastest first):</p><ul><li><p>no <code>taxon</code>/<code>years</code> filter → precomputed all-taxa <code>idx_h3</code> layer.</p></li>
+<li><p>a single value of one precomputed rank (phylum/class/order) with no
+<code>years</code> → precomputed <code>idx_h3_taxon</code> layer (just as fast).</p></li>
+<li><p>anything else (finer rank, multiple values, or a year range) → live
+indicator computed on the fly from the species-level <code>occ_h3</code> store,
+selecting the resolution tier that matches the tile zoom.</p></li>
+</ul></div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

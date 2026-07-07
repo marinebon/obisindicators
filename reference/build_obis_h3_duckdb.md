@@ -4,13 +4,6 @@ Reads OBIS occurrences, bins them to H3 cells, and writes an
 authoritative DuckDB file with two layers consumed by the `h3t` tile
 service:
 
-- `idx_h3(res, cell_id, n, sp, shannon, simpson, es)` — precomputed
-  all-taxa indicators for resolutions 1-7 (fast default tile layers).
-
-- `occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus, species, date_year, records)`
-  — species-level counts at resolution tiers 3/5/7 for on-the-fly
-  taxon/year-filtered queries.
-
 ## Usage
 
 ``` r
@@ -24,6 +17,7 @@ build_obis_h3_duckdb(
   memory_limit = NULL,
   threads = NULL,
   temp_dir = NULL,
+  max_temp_dir_size = NULL,
   overwrite = TRUE
 )
 ```
@@ -78,6 +72,12 @@ build_obis_h3_duckdb(
   `memory_limit`. Needs ample free space (a global build can spill many
   GB); point it at a roomy volume, not `/tmp`.
 
+- max_temp_dir_size:
+
+  optional cap on DuckDB disk spill (e.g. `"20GB"`). Prevents a runaway
+  aggregation from filling the volume and crashing the host. Set to
+  comfortably below available free disk.
+
 - overwrite:
 
   overwrite an existing `path_duckdb` (default TRUE).
@@ -87,6 +87,19 @@ build_obis_h3_duckdb(
 `path_duckdb`, invisibly.
 
 ## Details
+
+- `idx_h3(res, cell_id, n, sp, shannon, simpson, es)` — precomputed
+  all-taxa indicators for resolutions 1-7 (fast default tile layers).
+
+- `idx_h3_taxon(rank, taxon, res, cell_id, n, sp, shannon, simpson, es)`
+  — precomputed per-taxon indicators for ranks phylum/class/order, so a
+  single-taxon map is as fast as the all-taxa layer. Clustered by
+  `(rank, taxon, res)` for zonemap pruning.
+
+- `occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus, species, date_year, records)`
+  — species-level counts at resolution tiers 3/5/7 for on-the-fly
+  taxon/year-filtered queries. Clustered by `(res, taxonomy)` so a
+  taxon-filtered scan prunes to a few row groups.
 
 The indicator math (ES50, Shannon, Simpson, richness) is the SQL
 translation of
