@@ -12,15 +12,22 @@
 #
 # Usage:
 #   Rscript migrate_add_idx_h3_taxon.R <in.duckdb> <out.duckdb> [--cluster-occ]
+# Flags:
+#   --cluster-occ       also sort occ_h3 by (res, taxonomy) so a taxon-filtered
+#                       LIVE query prunes row-groups (zonemaps). Rewrites all rows.
+#   --only-cluster-occ  ONLY cluster occ_h3; skip the idx_h3_taxon build (use on a
+#                       store that already has idx_h3_taxon, to avoid rebuilding it).
 # Env (optional caps): DUCKDB_MEMORY_LIMIT (8GB), DUCKDB_THREADS (4),
 #   DUCKDB_TEMP_DIR (<dir(out)>/duckdb_tmp)
 
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 2)
-  stop("usage: migrate_add_idx_h3_taxon.R <in.duckdb> <out.duckdb> [--cluster-occ]")
-in_db       <- args[1]
-out_db      <- args[2]
-cluster_occ <- "--cluster-occ" %in% args
+  stop("usage: migrate_add_idx_h3_taxon.R <in.duckdb> <out.duckdb> ",
+       "[--cluster-occ] [--only-cluster-occ]")
+in_db        <- args[1]
+out_db       <- args[2]
+only_cluster <- "--only-cluster-occ" %in% args   # cluster occ_h3, skip idx build
+cluster_occ  <- only_cluster || "--cluster-occ" %in% args
 stopifnot(file.exists(in_db))
 if (file.exists(out_db)) stop("out.duckdb already exists: ", out_db)
 
@@ -84,23 +91,29 @@ have <- DBI::dbGetQuery(con, "
   WHERE table_schema = 'main' AND table_name = 'occ_h3'")$n
 if (have < 1) stop("store has no occ_h3 table; nothing to aggregate: ", out_db)
 
-message("building idx_h3_taxon for ranks: ", paste(RANKS, collapse = ", "))
-DBI::dbExecute(con, "DROP TABLE IF EXISTS idx_h3_taxon;")
-DBI::dbExecute(con, "
-  CREATE TABLE idx_h3_taxon (
-    rank VARCHAR, taxon VARCHAR, res UTINYINT, cell_id BIGINT,
-    n BIGINT, sp BIGINT, shannon DOUBLE, simpson DOUBLE, es DOUBLE);")
-for (rank in RANKS)
-  for (r in RES) {
-    message("  ", rank, " res ", r)
-    DBI::dbExecute(con, idx_taxon_sql(rank, r))
-  }
-# cluster by the lookup key so a (rank, taxon, res) filter prunes to a small scan
-DBI::dbExecute(con, "
-  CREATE TABLE idx_h3_taxon_c AS
-    SELECT * FROM idx_h3_taxon ORDER BY rank, taxon, res;")
-DBI::dbExecute(con, "DROP TABLE idx_h3_taxon;")
-DBI::dbExecute(con, "ALTER TABLE idx_h3_taxon_c RENAME TO idx_h3_taxon;")
+if (only_cluster) {
+  if (!DBI::dbExistsTable(con, "idx_h3_taxon"))
+    warning("--only-cluster-occ: idx_h3_taxon not present in ", in_db)
+  message("--only-cluster-occ: skipping idx_h3_taxon build")
+} else {
+  message("building idx_h3_taxon for ranks: ", paste(RANKS, collapse = ", "))
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS idx_h3_taxon;")
+  DBI::dbExecute(con, "
+    CREATE TABLE idx_h3_taxon (
+      rank VARCHAR, taxon VARCHAR, res UTINYINT, cell_id BIGINT,
+      n BIGINT, sp BIGINT, shannon DOUBLE, simpson DOUBLE, es DOUBLE);")
+  for (rank in RANKS)
+    for (r in RES) {
+      message("  ", rank, " res ", r)
+      DBI::dbExecute(con, idx_taxon_sql(rank, r))
+    }
+  # cluster by the lookup key so a (rank, taxon, res) filter prunes to a small scan
+  DBI::dbExecute(con, "
+    CREATE TABLE idx_h3_taxon_c AS
+      SELECT * FROM idx_h3_taxon ORDER BY rank, taxon, res;")
+  DBI::dbExecute(con, "DROP TABLE idx_h3_taxon;")
+  DBI::dbExecute(con, "ALTER TABLE idx_h3_taxon_c RENAME TO idx_h3_taxon;")
+}
 
 if (cluster_occ) {
   message("clustering occ_h3 by (res, taxonomy) — rewrites all rows ...")
@@ -113,7 +126,11 @@ if (cluster_occ) {
 }
 
 DBI::dbExecute(con, "CHECKPOINT;")
-s <- DBI::dbGetQuery(con,
-  "SELECT COUNT(*) AS rows, COUNT(DISTINCT taxon) AS taxa FROM idx_h3_taxon")
-message(sprintf("done: idx_h3_taxon = %s rows across %s taxa -> %s",
-                format(s$rows, big.mark = ","), s$taxa, out_db))
+if (DBI::dbExistsTable(con, "idx_h3_taxon")) {
+  s <- DBI::dbGetQuery(con,
+    "SELECT COUNT(*) AS n_rows, COUNT(DISTINCT taxon) AS n_taxa FROM idx_h3_taxon")
+  message(sprintf("idx_h3_taxon = %s rows across %s taxa",
+                  format(s$n_rows, big.mark = ","), s$n_taxa))
+}
+message(sprintf("done -> %s%s", out_db,
+                if (cluster_occ) " (occ_h3 clustered)" else ""))
