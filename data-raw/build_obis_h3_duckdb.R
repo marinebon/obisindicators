@@ -47,6 +47,38 @@ symlink_to <- function(target, link = file.path(dir_obis, "obis_h3.duckdb")) {
   message("symlink: ", link, " -> ", target)
 }
 
+# bake the WoRMS `taxon` table (from build_taxon_parquet.R) into a freshly built
+# store so the h3t service / API can resolve arbitrary-rank children taxa
+# (see R/taxon.R). No-op with a hint when the parquet is absent — the existing
+# global store can be upgraded separately via data-raw/migrate_add_taxon.R.
+taxon_pq <- Sys.getenv("OBIS_TAXON_PARQUET",
+                       file.path(dirname(dir_obis), "derived", "taxon.parquet"))
+bake_taxon <- function(path_duckdb) {
+  if (!file.exists(taxon_pq)) {
+    message("no taxon.parquet at ", taxon_pq,
+            " — skipping taxon bake (run build_taxon_parquet.R then ",
+            "migrate_add_taxon.R to add children-taxa support).")
+    return(invisible())
+  }
+  message("baking taxon into ", path_duckdb, " from ", taxon_pq, " ...")
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = path_duckdb, read_only = FALSE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS taxon;")
+  DBI::dbExecute(con, glue("
+    CREATE TABLE taxon AS
+      SELECT CAST(taxonID AS BIGINT) AS taxonID,
+             CAST(parentNameUsageID AS BIGINT) AS parentNameUsageID,
+             CAST(acceptedNameUsageID AS BIGINT) AS acceptedNameUsageID,
+             scientificName, taxonRank, taxonomicStatus
+      FROM read_parquet('{taxon_pq}') WHERE taxonID IS NOT NULL;"))
+  DBI::dbExecute(con, "CREATE INDEX taxon_parent_idx  ON taxon(parentNameUsageID);")
+  DBI::dbExecute(con, "CREATE INDEX taxon_taxonid_idx ON taxon(taxonID);")
+  DBI::dbExecute(con, "CHECKPOINT;")
+  message("  taxon baked: ",
+          format(DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM taxon")$n,
+                 big.mark = ","), " rows")
+}
+
 # ---- 1. Demo store from shipped South Atlantic data (always) ---------------
 load(file.path(pkg_root, "data", "occ_SAtlantic.rda"))
 path_demo <- file.path(dir_obis, glue("obis_h3_satlantic_{stamp}.duckdb"))
@@ -79,6 +111,7 @@ if (has_local || force_s3) {
     temp_dir         = tmp_dir,
     max_temp_dir_size = max_tmp)
 
+  bake_taxon(path_global)   # add WoRMS taxon table for children-taxa queries
   symlink_to(path_global)
 
   # restart h3t + flush Varnish — only works when docker is accessible from the

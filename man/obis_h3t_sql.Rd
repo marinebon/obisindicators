@@ -7,6 +7,7 @@
 obis_h3t_sql(
   indicator = c("es", "sp", "shannon", "n"),
   taxon = NULL,
+  aphiaid = NULL,
   years = NULL,
   esn = 50L,
   res_max = 7L,
@@ -20,6 +21,10 @@ obis_h3t_sql(
 \item{taxon}{optional named list/vector restricting taxa, names among
 \code{phylum}, \code{class}, \code{order}, \code{family}, \code{genus}, \code{species}, e.g.
 \code{list(class = "Aves")} or \code{list(phylum = c("Mollusca", "Cnidaria"))}.}
+
+\item{aphiaid}{optional integer WoRMS AphiaID(s). Filters \code{occ_h3} to every
+descendant taxon of these ids (any rank), resolved from the baked \code{taxon}
+table. Takes precedence over \code{taxon}; combines with \code{years}.}
 
 \item{years}{optional \code{c(min, max)} year range (either may be \code{NA}).}
 
@@ -42,9 +47,12 @@ that the \code{h3t} service base64-decodes, validates, and executes per tile.
 \details{
 Query routing (fastest first):
 \itemize{
-\item no \code{taxon}/\code{years} filter → precomputed all-taxa \code{idx_h3} layer.
+\item no \code{taxon}/\code{aphiaid}/\code{years} filter → precomputed all-taxa \code{idx_h3} layer.
 \item a single value of one precomputed rank (phylum/class/order) with no
 \code{years} → precomputed \code{idx_h3_taxon} layer (just as fast).
+\item an \code{aphiaid} filter → live indicator over \code{occ_h3}, filtered to the
+AphiaID subtree resolved from the baked \code{taxon} table via a recursive CTE
+(arbitrary rank, e.g. Infraorder Cetacea); see \code{\link[=obis_taxon_children]{obis_taxon_children()}}.
 \item anything else (finer rank, multiple values, or a year range) → live
 indicator computed on the fly from the species-level \code{occ_h3} store,
 selecting the resolution tier that matches the tile zoom.

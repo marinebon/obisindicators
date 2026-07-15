@@ -7,14 +7,16 @@
 make_hex_res(hex_res = 2)
 }
 \arguments{
-\item{hex_res}{resolution of H3 hexagons; see \href{https://h3geo.org/docs/core-library/restable/}{Table of Cell Areas for H3 Resolutions | H3}}
+\item{hex_res}{resolution of H3 hexagons;
+see \href{https://h3geo.org/docs/core-library/restable/}{Table of Cell Areas for H3 Resolutions | H3}}
 }
 \value{
 spatial feature \code{sf} object
 }
 \description{
-TODO: + sf feature or extent to minimize
+Make hexagon feature
 }
 \examples{
-hexes <- make_hex_res(0)
+   hexes <- make_hex_res(0)
 }
+\concept{visualize}

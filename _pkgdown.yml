@@ -11,6 +11,8 @@ articles:
   - temporal_subsets
   - h3
   - h3t
+  - taxon_children
+  - scaling
 
 reference:
 - title: "Read"
@@ -26,6 +28,10 @@ reference:
   contents:
   - make_hex_res
   - has_concept("h3t")
+- title: "Taxonomy & effort proxy"
+  desc: "Resolve children taxa (any rank) and the sightings-per-unit-effort (SPUE) proxy."
+  contents:
+  - has_concept("taxon")
 - title: "Visualize"
   desc: "Functions for visualizing indicators."
   contents:

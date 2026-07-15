@@ -15,8 +15,7 @@ obis_h3t_url(
 \arguments{
 \item{base_url}{tile URL template, e.g.
 \code{"https://h3tcache.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t"}, or the
-stats endpoint \code{".../h3t/stats"}. For \code{mapgl::add_h3t_source()} use the
-\code{h3tiles://} scheme.}
+stats endpoint \code{".../h3t/stats"}.}
 
 \item{sql}{the SQL from \code{\link[=obis_h3t_sql]{obis_h3t_sql()}} (or pass \code{...} to build it).}
 

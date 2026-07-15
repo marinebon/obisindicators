@@ -340,9 +340,12 @@ build_obis_h3_duckdb <- function(
 #' `{{res}}` is substituted server-side with the tile's H3 resolution.
 #'
 #' Query routing (fastest first):
-#' - no `taxon`/`years` filter → precomputed all-taxa `idx_h3` layer.
+#' - no `taxon`/`aphiaid`/`years` filter → precomputed all-taxa `idx_h3` layer.
 #' - a single value of one precomputed rank (phylum/class/order) with no
 #'   `years` → precomputed `idx_h3_taxon` layer (just as fast).
+#' - an `aphiaid` filter → live indicator over `occ_h3`, filtered to the
+#'   AphiaID subtree resolved from the baked `taxon` table via a recursive CTE
+#'   (arbitrary rank, e.g. Infraorder Cetacea); see [obis_taxon_children()].
 #' - anything else (finer rank, multiple values, or a year range) → live
 #'   indicator computed on the fly from the species-level `occ_h3` store,
 #'   selecting the resolution tier that matches the tile zoom.
@@ -352,6 +355,9 @@ build_obis_h3_duckdb <- function(
 #' @param taxon optional named list/vector restricting taxa, names among
 #'   `phylum`, `class`, `order`, `family`, `genus`, `species`, e.g.
 #'   `list(class = "Aves")` or `list(phylum = c("Mollusca", "Cnidaria"))`.
+#' @param aphiaid optional integer WoRMS AphiaID(s). Filters `occ_h3` to every
+#'   descendant taxon of these ids (any rank), resolved from the baked `taxon`
+#'   table. Takes precedence over `taxon`; combines with `years`.
 #' @param years optional `c(min, max)` year range (either may be `NA`).
 #' @param esn expected sample size for ES(n); default 50.
 #' @param res_max cap on the H3 resolution (1-7). Lower = coarser/bigger
@@ -365,6 +371,7 @@ build_obis_h3_duckdb <- function(
 obis_h3t_sql <- function(
   indicator       = c("es", "sp", "shannon", "n"),
   taxon           = NULL,
+  aphiaid         = NULL,
   years           = NULL,
   esn             = 50L,
   res_max         = 7L,
@@ -378,6 +385,20 @@ obis_h3t_sql <- function(
   filt      <- .h3t_where_clause(taxon, years)
   has_filt  <- nzchar(filt)
 
+  # arbitrary-rank children filter: resolve the AphiaID subtree from the baked
+  # `taxon` table (recursive CTE) and filter occ_h3.aphiaid by it on the live
+  # path. Takes precedence over a rank/preset `taxon` filter; combines with years.
+  with_kw <- "WITH"
+  if (!is.null(aphiaid)) {
+    taxon_cte <- .h3t_taxon_tree_cte(aphiaid)
+    yr        <- .h3t_where_clause(taxon = NULL, years = years)  # "AND date_year..."
+    filt      <- paste0(
+      "AND aphiaid IN (SELECT taxonID FROM taxon_tree)",
+      if (nzchar(yr)) paste0("\n        ", yr) else "")
+    has_filt  <- TRUE
+    with_kw   <- glue::glue("WITH RECURSIVE {taxon_cte},")
+  }
+
   col <- switch(indicator, es = "es", sp = "sp", shannon = "shannon", n = "n")
 
   if (!has_filt) {
@@ -388,8 +409,8 @@ obis_h3t_sql <- function(
 
   # fast path 2: a single value of one precomputed rank, with no year filter,
   # reads the precomputed per-taxon layer (as fast as the all-taxa path).
-  if (is.null(years) && length(taxon) == 1L && length(taxon[[1]]) == 1L &&
-      isTRUE(names(taxon) %in% H3T_IDX_RANKS)) {
+  if (is.null(aphiaid) && is.null(years) && length(taxon) == 1L &&
+      length(taxon[[1]]) == 1L && isTRUE(names(taxon) %in% H3T_IDX_RANKS)) {
     rank <- names(taxon)
     val  <- .h3t_sql_quote(taxon[[1]])
     return(as.character(glue::glue(
@@ -411,20 +432,20 @@ obis_h3t_sql <- function(
 
   body <- switch(indicator,
     n = glue::glue("
-      WITH {src}
+      {with_kw} {src}
       SELECT cell_id, SUM(ni) AS value, SUM(ni) AS n FROM src GROUP BY cell_id"),
     sp = glue::glue("
-      WITH {src}
+      {with_kw} {src}
       SELECT cell_id, COUNT(*) AS value, SUM(ni) AS n FROM src GROUP BY cell_id"),
     shannon = glue::glue("
-      WITH {src},
+      {with_kw} {src},
       tot AS (SELECT cell_id, SUM(ni) AS n FROM src GROUP BY cell_id)
       SELECT s.cell_id AS cell_id,
              -SUM((s.ni::DOUBLE / t.n) * ln(s.ni::DOUBLE / t.n)) AS value,
              ANY_VALUE(t.n) AS n
       FROM src s JOIN tot t USING (cell_id) GROUP BY s.cell_id"),
     es = glue::glue("
-      WITH {src},
+      {with_kw} {src},
       tot AS (SELECT cell_id, SUM(ni) AS n FROM src GROUP BY cell_id),
       per AS (
         SELECT s.cell_id, s.ni, t.n,
