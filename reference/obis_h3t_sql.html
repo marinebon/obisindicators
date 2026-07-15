@@ -28,6 +28,8 @@ that the h3t service base64-decodes, validates, and executes per tile.
     <li><a class="dropdown-item" href="../articles/temporal_subsets.html">Temporal Subsets</a></li>
     <li><a class="dropdown-item" href="../articles/h3.html">H3 grids and deckgl</a></li>
     <li><a class="dropdown-item" href="../articles/h3t.html">Serving OBIS indicators as H3 hexagon tiles (h3t)</a></li>
+    <li><a class="dropdown-item" href="../articles/taxon_children.html">Children taxa &amp; an effort proxy (SPUE) from the OBIS snapshot</a></li>
+    <li><a class="dropdown-item" href="../articles/scaling.html">Scaling OBIS observations across H3 resolutions</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -57,6 +59,7 @@ that the <code>h3t</code> service base64-decodes, validates, and executes per ti
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">obis_h3t_sql</span><span class="op">(</span></span>
 <span>  indicator <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"es"</span>, <span class="st">"sp"</span>, <span class="st">"shannon"</span>, <span class="st">"n"</span><span class="op">)</span>,</span>
 <span>  taxon <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  aphiaid <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  years <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  esn <span class="op">=</span> <span class="fl">50L</span>,</span>
 <span>  res_max <span class="op">=</span> <span class="fl">7L</span>,</span>
@@ -77,6 +80,12 @@ that the <code>h3t</code> service base64-decodes, validates, and executes per ti
 <dd><p>optional named list/vector restricting taxa, names among
 <code>phylum</code>, <code>class</code>, <code>order</code>, <code>family</code>, <code>genus</code>, <code>species</code>, e.g.
 <code>list(class = "Aves")</code> or <code>list(phylum = c("Mollusca", "Cnidaria"))</code>.</p></dd>
+
+
+<dt id="arg-aphiaid">aphiaid<a class="anchor" aria-label="anchor" href="#arg-aphiaid"></a></dt>
+<dd><p>optional integer WoRMS AphiaID(s). Filters <code>occ_h3</code> to every
+descendant taxon of these ids (any rank), resolved from the baked <code>taxon</code>
+table. Takes precedence over <code>taxon</code>; combines with <code>years</code>.</p></dd>
 
 
 <dt id="arg-years">years<a class="anchor" aria-label="anchor" href="#arg-years"></a></dt>
@@ -103,9 +112,12 @@ finest resolution is 7. Default 7 (track zoom up to the finest).</p></dd>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Query routing (fastest first):</p><ul><li><p>no <code>taxon</code>/<code>years</code> filter → precomputed all-taxa <code>idx_h3</code> layer.</p></li>
+    <p>Query routing (fastest first):</p><ul><li><p>no <code>taxon</code>/<code>aphiaid</code>/<code>years</code> filter → precomputed all-taxa <code>idx_h3</code> layer.</p></li>
 <li><p>a single value of one precomputed rank (phylum/class/order) with no
 <code>years</code> → precomputed <code>idx_h3_taxon</code> layer (just as fast).</p></li>
+<li><p>an <code>aphiaid</code> filter → live indicator over <code>occ_h3</code>, filtered to the
+AphiaID subtree resolved from the baked <code>taxon</code> table via a recursive CTE
+(arbitrary rank, e.g. Infraorder Cetacea); see <code><a href="obis_taxon_children.html">obis_taxon_children()</a></code>.</p></li>
 <li><p>anything else (finer rank, multiple values, or a year range) → live
 indicator computed on the fly from the species-level <code>occ_h3</code> store,
 selecting the resolution tier that matches the tile zoom.</p></li>

@@ -22,9 +22,7 @@ obis_h3t_url(
 
   tile URL template, e.g.
   `"https://h3tcache.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t"`, or the
-  stats endpoint `".../h3t/stats"`. For
-  [`mapgl::add_h3t_source()`](https://walker-data.com/mapgl/reference/add_h3t_source.html)
-  use the `h3tiles://` scheme.
+  stats endpoint `".../h3t/stats"`.
 
 - sql:
 

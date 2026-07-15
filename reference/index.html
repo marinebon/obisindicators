@@ -24,6 +24,8 @@
     <li><a class="dropdown-item" href="../articles/temporal_subsets.html">Temporal Subsets</a></li>
     <li><a class="dropdown-item" href="../articles/h3.html">H3 grids and deckgl</a></li>
     <li><a class="dropdown-item" href="../articles/h3t.html">Serving OBIS indicators as H3 hexagon tiles (h3t)</a></li>
+    <li><a class="dropdown-item" href="../articles/taxon_children.html">Children taxa &amp; an effort proxy (SPUE) from the OBIS snapshot</a></li>
+    <li><a class="dropdown-item" href="../articles/scaling.html">Scaling OBIS observations across H3 resolutions</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -104,6 +106,43 @@
         </dt>
         <dd>Assemble an h3t tile (or stats) URL for an OBIS indicator</dd>
       </dl></div><div class="section level2">
+      <h2 id="taxonomy-effort-proxy">Taxonomy &amp; effort proxy<a class="anchor" aria-label="anchor" href="#taxonomy-effort-proxy"></a></h2>
+
+      <div class="section-desc"><p>Resolve children taxa (any rank) and the sightings-per-unit-effort (SPUE) proxy.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="calc_spue.html">calc_spue()</a></code>
+
+        </dt>
+        <dd>Sightings-per-unit-effort (SPUE) effort proxy, per H3 cell (R reference)</dd>
+
+        <dt>
+
+          <code><a href="obis_spue_sql.html">obis_spue_sql()</a></code>
+
+        </dt>
+        <dd>Build an h3t tile SQL query for the SPUE effort proxy</dd>
+
+        <dt>
+
+          <code><a href="obis_taxon_children.html">obis_taxon_children()</a></code>
+
+        </dt>
+        <dd>Resolve the descendant taxa of a WoRMS AphiaID</dd>
+
+        <dt>
+
+          <code><a href="obis_taxon_subtree_sql.html">obis_taxon_subtree_sql()</a></code>
+
+        </dt>
+        <dd>Standalone SQL for the AphiaID subtree (descendant taxonIDs)</dd>
+      </dl></div><div class="section level2">
       <h2 id="visualize">Visualize<a class="anchor" aria-label="anchor" href="#visualize"></a></h2>
 
       <div class="section-desc"><p>Functions for visualizing indicators.</p></div>
@@ -119,6 +158,13 @@
 
         </dt>
         <dd>Statically map indicators using ggplot</dd>
+
+        <dt>
+
+          <code><a href="make_hex_res.html">make_hex_res()</a></code>
+
+        </dt>
+        <dd>Make hexagon feature</dd>
       </dl></div><div class="section level2">
       <h2 id="data">Data<a class="anchor" aria-label="anchor" href="#data"></a></h2>
 

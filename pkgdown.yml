@@ -7,8 +7,10 @@ articles:
   obisindicators: obisindicators.html
   regional_diversity: regional_diversity.html
   resolution: resolution.html
+  scaling: scaling.html
+  taxon_children: taxon_children.html
   temporal_subsets: temporal_subsets.html
-last_built: 2026-07-15T15:46Z
+last_built: 2026-07-15T16:44Z
 urls:
   reference: http://marinebon.org/obisindicators/reference
   article: http://marinebon.org/obisindicators/articles

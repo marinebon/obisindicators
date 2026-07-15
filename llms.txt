@@ -117,12 +117,29 @@ Build an H3 grid, and serve indicators as H3 hexagon tiles.
 - [`obis_h3t_url()`](http://marinebon.org/obisindicators/reference/obis_h3t_url.md)
   : Assemble an h3t tile (or stats) URL for an OBIS indicator
 
+## Taxonomy & effort proxy
+
+Resolve children taxa (any rank) and the sightings-per-unit-effort
+(SPUE) proxy.
+
+- [`calc_spue()`](http://marinebon.org/obisindicators/reference/calc_spue.md)
+  : Sightings-per-unit-effort (SPUE) effort proxy, per H3 cell (R
+  reference)
+- [`obis_spue_sql()`](http://marinebon.org/obisindicators/reference/obis_spue_sql.md)
+  : Build an h3t tile SQL query for the SPUE effort proxy
+- [`obis_taxon_children()`](http://marinebon.org/obisindicators/reference/obis_taxon_children.md)
+  : Resolve the descendant taxa of a WoRMS AphiaID
+- [`obis_taxon_subtree_sql()`](http://marinebon.org/obisindicators/reference/obis_taxon_subtree_sql.md)
+  : Standalone SQL for the AphiaID subtree (descendant taxonIDs)
+
 ## Visualize
 
 Functions for visualizing indicators.
 
 - [`gmap_indicator()`](http://marinebon.org/obisindicators/reference/gmap_indicator.md)
   : Statically map indicators using ggplot
+- [`make_hex_res()`](http://marinebon.org/obisindicators/reference/make_hex_res.md)
+  : Make hexagon feature
 
 ## Data
 
@@ -166,3 +183,7 @@ Locally available datasets for running examples.
   deckgl](http://marinebon.org/obisindicators/articles/h3.md):
 - [Serving OBIS indicators as H3 hexagon tiles
   (h3t)](http://marinebon.org/obisindicators/articles/h3t.md):
+- [Children taxa & an effort proxy (SPUE) from the OBIS
+  snapshot](http://marinebon.org/obisindicators/articles/taxon_children.md):
+- [Scaling OBIS observations across H3
+  resolutions](http://marinebon.org/obisindicators/articles/scaling.md):

@@ -11,3 +11,7 @@
   deckgl](http://marinebon.org/obisindicators/articles/h3.md):
 - [Serving OBIS indicators as H3 hexagon tiles
   (h3t)](http://marinebon.org/obisindicators/articles/h3t.md):
+- [Children taxa & an effort proxy (SPUE) from the OBIS
+  snapshot](http://marinebon.org/obisindicators/articles/taxon_children.md):
+- [Scaling OBIS observations across H3
+  resolutions](http://marinebon.org/obisindicators/articles/scaling.md):

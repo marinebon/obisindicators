@@ -11,6 +11,7 @@ tile's H3 resolution.
 obis_h3t_sql(
   indicator = c("es", "sp", "shannon", "n"),
   taxon = NULL,
+  aphiaid = NULL,
   years = NULL,
   esn = 50L,
   res_max = 7L,
@@ -30,6 +31,12 @@ obis_h3t_sql(
   optional named list/vector restricting taxa, names among `phylum`,
   `class`, `order`, `family`, `genus`, `species`, e.g.
   `list(class = "Aves")` or `list(phylum = c("Mollusca", "Cnidaria"))`.
+
+- aphiaid:
+
+  optional integer WoRMS AphiaID(s). Filters `occ_h3` to every
+  descendant taxon of these ids (any rank), resolved from the baked
+  `taxon` table. Takes precedence over `taxon`; combines with `years`.
 
 - years:
 
@@ -57,10 +64,16 @@ a single-line-friendly SQL string.
 
 Query routing (fastest first):
 
-- no `taxon`/`years` filter → precomputed all-taxa `idx_h3` layer.
+- no `taxon`/`aphiaid`/`years` filter → precomputed all-taxa `idx_h3`
+  layer.
 
 - a single value of one precomputed rank (phylum/class/order) with no
   `years` → precomputed `idx_h3_taxon` layer (just as fast).
+
+- an `aphiaid` filter → live indicator over `occ_h3`, filtered to the
+  AphiaID subtree resolved from the baked `taxon` table via a recursive
+  CTE (arbitrary rank, e.g. Infraorder Cetacea); see
+  [`obis_taxon_children()`](http://marinebon.org/obisindicators/reference/obis_taxon_children.md).
 
 - anything else (finer rank, multiple values, or a year range) → live
   indicator computed on the fly from the species-level `occ_h3` store,

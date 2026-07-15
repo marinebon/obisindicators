@@ -1,6 +1,6 @@
 # Make hexagon feature
 
-TODO: + sf feature or extent to minimize
+Make hexagon feature
 
 ## Usage
 
@@ -22,5 +22,5 @@ spatial feature `sf` object
 ## Examples
 
 ``` r
-hexes <- make_hex_res(0)
+   hexes <- make_hex_res(0)
 ```
