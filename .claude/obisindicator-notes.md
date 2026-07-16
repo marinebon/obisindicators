@@ -53,3 +53,7 @@ Notes for you
 - taxon.parquet is parked at /share/data/derived/taxon.parquet so the build driver's bake_taxon() auto-includes it on the next global rebuild.
 
 The scaling vignette's caveat showed up for real in the SPUE output (bright value=1 cells backed by n=1) — worth a look when you and Matt discuss the effort-proxy paper.
+
+```bash
+claude --resume bb685ee1-87f4-48c2-a372-9c16c70dce72
+```
