@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -44,8 +44,27 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.0" id="obisindicators-030">obisindicators 0.3.0<a class="anchor" aria-label="anchor" href="#obisindicators-030"></a></h2>
+<ul><li>
+<strong>Spatial (bbox) tile pruning</strong> — live <code>occ_h3</code> / <code>idx_h3</code> tile maps (any-rank <code>aphiaid</code> children, SPUE, finer/multi-value/year filters, and the all-taxa layer) are now pruned per tile instead of aggregating the whole globe for every tile, so they stay fast when zoomed in to fine H3 resolutions:
+<ul><li>
+<code><a href="../reference/build_obis_h3_duckdb.html">build_obis_h3_duckdb()</a></code> now materializes cell-centroid <code>lat</code>/<code>lng</code> columns on <code>occ_h3</code> and <code>idx_h3</code> and clusters both <strong>spatially</strong> by <code>(res, lat, lng)</code> (superseding <code>occ_h3</code>’s old <code>(res, taxonomy)</code> clustering). Zonemaps then prune row groups to a tile’s extent. <strong>Store schema change</strong> — rebuild, or migrate an existing store with <code>data-raw/migrate_add_spatial_cluster.R</code>.</li>
+<li>
+<code><a href="../reference/obis_h3t_sql.html">obis_h3t_sql()</a></code> / <code><a href="../reference/obis_spue_sql.html">obis_spue_sql()</a></code> gain a <code>bbox_placeholder</code> argument (default <code>"{{bbox}}"</code>, spliced into the scan <code>WHERE</code>) that the <code>h3t</code> tile service substitutes per tile with a <code>lat</code>/<code>lng</code> predicate. Pass <code>""</code> to disable for direct execution (e.g. the <code>/h3</code> API and stats queries).</li>
+<li>The math is unchanged and still pinned to <code><a href="../reference/calc_indicators.html">calc_indicators()</a></code> / <code><a href="../reference/calc_spue.html">calc_spue()</a></code>; a new <code>test-h3t-bbox.R</code> asserts the prune is <strong>result-preserving</strong> (a bbox-pruned scan + the server’s outer centroid filter returns exactly the same cells and values as the unpruned scan).</li>
+</ul></li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.0" id="obisindicators-020">obisindicators 0.2.0<a class="anchor" aria-label="anchor" href="#obisindicators-020"></a></h2>
-<ul><li>Added an <strong>H3 tiling (h3t)</strong> workflow to serve indicators as on-demand H3 hexagon map tiles (see <code><a href="../articles/h3t.html">vignette("h3t")</a></code>):
+<ul><li>Added <strong>WoRMS taxonomy children resolution</strong> and an <strong>effort proxy (SPUE)</strong> so OBIS can be filtered by any WoRMS AphiaID at any rank from the local snapshot (see <code><a href="../articles/taxon_children.html">vignette("taxon_children")</a></code>, <code><a href="../articles/scaling.html">vignette("scaling")</a></code>):
+<ul><li>
+<code><a href="../reference/obis_taxon_children.html">obis_taxon_children()</a></code> / <code><a href="../reference/obis_taxon_subtree_sql.html">obis_taxon_subtree_sql()</a></code> recursively walk a <code>taxon</code> table (baked into the store; <code>data-raw/build_taxon_parquet.R</code> + <code>data-raw/migrate_add_taxon.R</code>) to return every descendant taxon.</li>
+<li>
+<code>obis_h3t_sql(aphiaid=)</code> serves arbitrary-rank children maps by filtering <code>occ_h3.aphiaid</code> to the resolved subtree via a <code>WITH RECURSIVE</code> CTE.</li>
+<li>
+<code><a href="../reference/calc_spue.html">calc_spue()</a></code> (R reference) + <code><a href="../reference/obis_spue_sql.html">obis_spue_sql()</a></code> compute the presence-only effort proxy <code>records(target subtree) / records(effort subtree)</code> per cell, pinned by <code>test-spue-parity.R</code>.</li>
+</ul></li>
+<li>Added an <strong>H3 tiling (h3t)</strong> workflow to serve indicators as on-demand H3 hexagon map tiles (see <code><a href="../articles/h3t.html">vignette("h3t")</a></code>):
 <ul><li>
 <code><a href="../reference/build_obis_h3_duckdb.html">build_obis_h3_duckdb()</a></code> builds an authoritative DuckDB store from OBIS open-data parquet — a precomputed all-taxa indicator layer (<code>idx_h3</code>, res 1–7) plus a species-level store (<code>occ_h3</code>, tiers 3/5/7) for on-the-fly taxon/year-filtered queries. The ES50/Shannon/Simpson/richness math is the SQL translation of <code><a href="../reference/calc_indicators.html">calc_indicators()</a></code>, pinned by a new parity test.</li>
 <li>

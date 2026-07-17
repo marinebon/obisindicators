@@ -91,7 +91,7 @@ library(obisindicators)
 
 # default ES50 (all taxa) — precomputed, fast
 obis_h3t_sql("es")
-#> [1] "SELECT cell_id, es AS value, n FROM idx_h3 WHERE res = LEAST({{res}}, 7)"
+#> [1] "SELECT cell_id, es AS value, n FROM idx_h3 WHERE res = LEAST({{res}}, 7) {{bbox}}"
 
 # species richness for seabirds since 2000 — computed on the fly
 cat(obis_h3t_sql("sp", taxon = list(class = "Aves"), years = c(2000, NA)))
@@ -102,6 +102,7 @@ cat(obis_h3t_sql("sp", taxon = list(class = "Aves"), years = c(2000, NA)))
 #>   WHERE res = CASE WHEN LEAST({{res}}, 7) <= 3 THEN 3 WHEN LEAST({{res}}, 7) <= 5 THEN 5 ELSE 7 END
 #>     AND "class" = 'Aves'
 #>         AND date_year >= 2000
+#>     {{bbox}}
 #>   GROUP BY 1, 2)
 #> SELECT cell_id, COUNT(*) AS value, SUM(ni) AS n FROM src GROUP BY cell_id
 ```
@@ -116,7 +117,7 @@ obis_h3t_url(
   base_url  = "h3tiles://h3tcache.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t",
   indicator = "es",
   release   = "v20260623")
-#> [1] "h3tiles://h3tcache.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t?q=U0VMRUNUIGNlbGxfaWQsIGVzIEFTIHZhbHVlLCBuIEZST00gaWR4X2gzIFdIRVJFIHJlcyA9IExFQVNUKHt7cmVzfX0sIDcp&release=v20260623"
+#> [1] "h3tiles://h3tcache.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t?q=U0VMRUNUIGNlbGxfaWQsIGVzIEFTIHZhbHVlLCBuIEZST00gaWR4X2gzIFdIRVJFIHJlcyA9IExFQVNUKHt7cmVzfX0sIDcpIHt7YmJveH19&release=v20260623"
 ```
 
 Inspect the value distribution (for color-ramp breaks) at the stats

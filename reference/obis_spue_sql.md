@@ -16,7 +16,8 @@ obis_spue_sql(
   num_aphiaid,
   den_aphiaid,
   res_max = 7L,
-  res_placeholder = "{{res}}"
+  res_placeholder = "{{res}}",
+  bbox_placeholder = "{{bbox}}"
 )
 ```
 
@@ -39,6 +40,13 @@ obis_spue_sql(
 - res_placeholder:
 
   resolution placeholder; default `"{{res}}"`.
+
+- bbox_placeholder:
+
+  spatial-prune placeholder spliced into the `occ_h3` scan; default
+  `"{{bbox}}"` (the `h3t` server substitutes a per-tile `lat`/`lng`
+  predicate). Pass `""` to disable for direct execution — see
+  [`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md).
 
 ## Value
 

@@ -15,7 +15,8 @@ obis_h3t_sql(
   years = NULL,
   esn = 50L,
   res_max = 7L,
-  res_placeholder = "{{res}}"
+  res_placeholder = "{{res}}",
+  bbox_placeholder = "{{bbox}}"
 )
 ```
 
@@ -55,6 +56,18 @@ obis_h3t_sql(
 - res_placeholder:
 
   the resolution placeholder; default `"{{res}}"`.
+
+- bbox_placeholder:
+
+  a spatial-prune placeholder spliced into the `idx_h3` / live `occ_h3`
+  scan (default `"{{bbox}}"`). The `h3t` tile server substitutes it per
+  tile with an `AND lat/lng BETWEEN ...` predicate on the store's
+  precomputed `lat`/`lng` columns, so DuckDB prunes row groups to the
+  tile instead of aggregating the whole globe (see
+  [`build_obis_h3_duckdb()`](http://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
+  spatial clustering). Pass `""` to disable — required when executing
+  the SQL directly (no server substitution), e.g. the `/h3` API and
+  stats queries.
 
 ## Value
 
