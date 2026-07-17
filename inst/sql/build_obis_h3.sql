@@ -45,13 +45,14 @@ SELECT 3, CAST(h3_cell_to_parent(cell_id, 3) AS BIGINT), aphiaid, phylum, class,
        "order", family, genus, species, date_year, SUM(records)
 FROM occ_h3_base GROUP BY ALL;
 
--- 2b. materialize cell centroid (lat/lng) and cluster occ_h3 SPATIALLY by
--- (res, lat, lng) so a per-tile {{bbox}} predicate on lat/lng prunes row groups
--- to the tile (zonemaps live on stored columns). Makes live aphiaid/taxon tile
--- maps fast at fine zoom; supersedes the old (res, taxonomy) clustering.
+-- 2b. materialize the coarse H3-parent prune key `hex_prune` and cluster occ_h3
+-- by (res, hex_prune, cell_id). The h3t server derives each tile's covering
+-- res-3 cells from z/x/y and prunes with `hex_prune IN (...)` (zonemaps live on
+-- stored columns). Makes live aphiaid/taxon tile maps fast at fine zoom;
+-- supersedes the old (res, taxonomy) clustering. LEAST(res,3): res-3 cell -> self.
 CREATE TABLE occ_h3_clustered AS
-  SELECT *, h3_cell_to_lat(cell_id) AS lat, h3_cell_to_lng(cell_id) AS lng
-  FROM occ_h3 ORDER BY res, lat, lng;
+  SELECT *, CAST(h3_cell_to_parent(cell_id, LEAST(res, 3)) AS BIGINT) AS hex_prune
+  FROM occ_h3 ORDER BY res, hex_prune, cell_id;
 DROP TABLE occ_h3;
 ALTER TABLE occ_h3_clustered RENAME TO occ_h3;
 
@@ -84,11 +85,12 @@ SELECT {r} AS res, cell_id,
   SUM(esi)                                    AS es
 FROM per GROUP BY cell_id;
 
--- 3b. materialize lat/lng and cluster idx_h3 SPATIALLY (res, lat, lng) so the
--- all-taxa tile path is bbox-pruned per tile too (same rationale as occ_h3).
+-- 3b. materialize hex_prune and cluster idx_h3 (res, hex_prune, cell_id) so the
+-- all-taxa tile path is pruned per tile too (same rationale as occ_h3). LEAST()
+-- guards res 1-2 rows (coarser than the res-3 prune key -> hex_prune = self).
 CREATE TABLE idx_h3_c AS
-  SELECT *, h3_cell_to_lat(cell_id) AS lat, h3_cell_to_lng(cell_id) AS lng
-  FROM idx_h3 ORDER BY res, lat, lng;
+  SELECT *, CAST(h3_cell_to_parent(cell_id, LEAST(res, 3)) AS BIGINT) AS hex_prune
+  FROM idx_h3 ORDER BY res, hex_prune, cell_id;
 DROP TABLE idx_h3;
 ALTER TABLE idx_h3_c RENAME TO idx_h3;
 

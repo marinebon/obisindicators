@@ -137,11 +137,9 @@ calc_spue <- function(df, num_aphiaid, den_aphiaid) {
 #' @param den_aphiaid effort-taxon AphiaID(s) (denominator subtree); typically a
 #'   higher-order taxon such as the target's parent class.
 #' @param res_max cap on H3 resolution (1-7); see [obis_h3t_sql()].
-#' @param res_placeholder resolution placeholder; default `"{{res}}"`.
-#' @param bbox_placeholder spatial-prune placeholder spliced into the `occ_h3`
-#'   scan; default `"{{bbox}}"` (the `h3t` server substitutes a per-tile
-#'   `lat`/`lng` predicate). Pass `""` to disable for direct execution — see
-#'   [obis_h3t_sql()].
+#' @param res_placeholder resolution placeholder; default `"{{res}}"`. The h3t
+#'   tile server prunes each tile automatically via `hex_prune` (see
+#'   [obis_h3t_sql()]), so the emitted SQL carries no client-side bbox.
 #'
 #' @return a SQL string.
 #' @concept taxon
@@ -150,12 +148,10 @@ obis_spue_sql <- function(
   num_aphiaid,
   den_aphiaid,
   res_max          = 7L,
-  res_placeholder  = "{{res}}",
-  bbox_placeholder = "{{bbox}}") {
+  res_placeholder  = "{{res}}") {
 
   stopifnot(requireNamespace("glue", quietly = TRUE))
   r    <- res_placeholder
-  bp   <- bbox_placeholder                 # spliced as a var so glue keeps "{{bbox}}"
   rcap <- max(1L, min(7L, as.integer(res_max)))
   eff  <- glue::glue("LEAST({r}, {rcap})")
   tier <- glue::glue("CASE WHEN {eff} <= 3 THEN 3 WHEN {eff} <= 5 THEN 5 ELSE 7 END")
@@ -176,7 +172,6 @@ obis_spue_sql <- function(
       FROM occ_h3
       WHERE res = {tier}
         AND aphiaid IN (SELECT taxonID FROM den_tree)
-        {bp}
       GROUP BY 1)
     SELECT cell_id,
            n_num::DOUBLE / NULLIF(n_den, 0) AS value,

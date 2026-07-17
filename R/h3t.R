@@ -15,25 +15,37 @@ H3T_RES_TIERS <- c(3L, 5L, 7L)
 H3T_RES_BASE  <- 7L
 H3T_RES_IDX   <- 1:7
 
+# coarse H3 resolution for the spatial-prune key `hex_prune`
+# (= h3_cell_to_parent(cell_id, LEAST(res, H3T_PRUNE_RES))). occ_h3 / idx_h3 are
+# clustered by (res, hex_prune, cell_id), and the h3t tile server prunes each
+# tile by `hex_prune IN (<the tile's covering res-H3T_PRUNE_RES cells>)`, derived
+# from z/x/y. This value is a **parity constant**: the server must compute the
+# covering cells at the SAME resolution (see MarineSensitivity/server/h3t and
+# CalCOFI/api-h3t-py `config.PRUNE_RES`). res-3 cells (~edge 60 km) give a small
+# covering set per tile and 2D row-group pruning at fine zoom.
+H3T_PRUNE_RES <- 3L
+
 #' Build the OBIS H3 DuckDB store
 #'
 #' Reads OBIS occurrences, bins them to H3 cells, and writes an authoritative
 #' DuckDB file with two layers consumed by the `h3t` tile service:
 #'
-#' - `idx_h3(res, cell_id, n, sp, shannon, simpson, es, lat, lng)` — precomputed
+#' - `idx_h3(res, cell_id, n, sp, shannon, simpson, es, hex_prune)` — precomputed
 #'   all-taxa indicators for resolutions 1-7 (fast default tile layers).
-#'   Clustered by `(res, lat, lng)` so a per-tile bbox predicate prunes.
+#'   Clustered by `(res, hex_prune, cell_id)` so the tile server prunes per tile.
 #' - `idx_h3_taxon(rank, taxon, res, cell_id, n, sp, shannon, simpson, es)` —
 #'   precomputed per-taxon indicators for ranks phylum/class/order, so a
 #'   single-taxon map is as fast as the all-taxa layer. Clustered by
 #'   `(rank, taxon, res)` for zonemap pruning.
 #' - `occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus,
-#'   species, date_year, records, lat, lng)` — species-level counts at
+#'   species, date_year, records, hex_prune)` — species-level counts at
 #'   resolution tiers 3/5/7 for on-the-fly taxon/year/aphiaid-filtered queries.
-#'   Clustered **spatially** by `(res, lat, lng)` so a per-tile bbox predicate on
-#'   `lat`/`lng` prunes the scan to a few row groups (the `{{bbox}}` placeholder
-#'   of [obis_h3t_sql()]); this is what makes live aphiaid/taxon tile maps fast
-#'   at fine zoom.
+#'   Clustered by `(res, hex_prune, cell_id)`, where `hex_prune` is the coarse
+#'   H3 parent (`h3_cell_to_parent(cell_id, LEAST(res, H3T_PRUNE_RES))`). The h3t
+#'   tile server derives each tile's covering res-`H3T_PRUNE_RES` cells from
+#'   `z/x/y` and prunes the scan with `hex_prune IN (...)` — no client-side
+#'   bbox needed; this is what makes live aphiaid/taxon tile maps fast at fine
+#'   zoom.
 #'
 #' The indicator math (ES50, Shannon, Simpson, richness) is the SQL translation
 #' of [calc_indicators()] (`esn` = 50 by default), validated by the package
@@ -228,23 +240,23 @@ build_obis_h3_duckdb <- function(
       GROUP BY ALL;"))
   }
 
-  # add the cell centroid (lat/lng) and cluster occ_h3 SPATIALLY by (res, lat,
-  # lng). a per-tile bbox predicate on the stored lat/lng (the `{{bbox}}`
-  # placeholder in obis_h3t_sql()) then prunes DuckDB row groups to the tile,
-  # instead of aggregating the whole res tier per tile — the fix that makes live
-  # aphiaid/taxon maps fast at fine zoom. supersedes the old (res, taxonomy)
-  # clustering: the common taxon maps are precomputed in idx_h3/idx_h3_taxon, and
-  # the aphiaid filter never pruned on taxonomy anyway (aphiaid isn't the sort
-  # key). zonemaps live on stored columns, so lat/lng must be materialized here —
-  # a filter on h3_cell_to_lat(cell_id) (an expression) can't prune.
-  message("adding lat/lng + clustering occ_h3 spatially (res, lat, lng) ...")
-  DBI::dbExecute(con, "
+  # materialize the coarse H3 parent `hex_prune` and cluster occ_h3 by
+  # (res, hex_prune, cell_id). the h3t tile server derives each tile's covering
+  # res-H3T_PRUNE_RES cells from z/x/y and prunes with `hex_prune IN (...)`,
+  # scanning only the tile's row groups instead of the whole res tier per tile —
+  # the fix that makes live aphiaid/taxon maps fast at fine zoom. supersedes the
+  # old (res, taxonomy) clustering: the common taxon maps are precomputed in
+  # idx_h3/idx_h3_taxon, and the aphiaid filter never pruned on taxonomy anyway.
+  # zonemaps live on stored columns, so the coarse parent is materialized here —
+  # an inline h3_cell_to_parent(cell_id, R) (an expression) can't prune.
+  message("adding hex_prune (res-", H3T_PRUNE_RES,
+          " parent) + clustering occ_h3 (res, hex_prune, cell_id) ...")
+  DBI::dbExecute(con, glue::glue("
     CREATE TABLE occ_h3_clustered AS
       SELECT *,
-             h3_cell_to_lat(cell_id) AS lat,
-             h3_cell_to_lng(cell_id) AS lng
+             CAST(h3_cell_to_parent(cell_id, LEAST(res, {H3T_PRUNE_RES})) AS BIGINT) AS hex_prune
       FROM occ_h3
-      ORDER BY res, lat, lng;")
+      ORDER BY res, hex_prune, cell_id;"))
   DBI::dbExecute(con, "DROP TABLE occ_h3;")
   DBI::dbExecute(con, "ALTER TABLE occ_h3_clustered RENAME TO occ_h3;")
 
@@ -258,16 +270,18 @@ build_obis_h3_duckdb <- function(
   for (r in H3T_RES_IDX) {
     DBI::dbExecute(con, .h3t_idx_sql(r, esn))
   }
-  # add lat/lng + cluster idx_h3 SPATIALLY (res, lat, lng) so the all-taxa tile
-  # path is bbox-pruned per tile too (same rationale as occ_h3 above).
-  message("adding lat/lng + clustering idx_h3 spatially (res, lat, lng) ...")
-  DBI::dbExecute(con, "
+  # add hex_prune + cluster idx_h3 by (res, hex_prune, cell_id) so the all-taxa
+  # tile path is pruned per tile too (same rationale as occ_h3 above). LEAST()
+  # guards res 1-2 rows (coarser than H3T_PRUNE_RES): hex_prune = the cell
+  # itself there; the server only injects the prune for tiles at res >=
+  # H3T_PRUNE_RES, so those coarse rows are never matched against it.
+  message("adding hex_prune + clustering idx_h3 (res, hex_prune, cell_id) ...")
+  DBI::dbExecute(con, glue::glue("
     CREATE TABLE idx_h3_c AS
       SELECT *,
-             h3_cell_to_lat(cell_id) AS lat,
-             h3_cell_to_lng(cell_id) AS lng
+             CAST(h3_cell_to_parent(cell_id, LEAST(res, {H3T_PRUNE_RES})) AS BIGINT) AS hex_prune
       FROM idx_h3
-      ORDER BY res, lat, lng;")
+      ORDER BY res, hex_prune, cell_id;"))
   DBI::dbExecute(con, "DROP TABLE idx_h3;")
   DBI::dbExecute(con, "ALTER TABLE idx_h3_c RENAME TO idx_h3;")
 
@@ -389,13 +403,11 @@ build_obis_h3_duckdb <- function(
 #'   hexagons at a given map zoom (the "base zoom level" control); the store's
 #'   finest resolution is 7. Default 7 (track zoom up to the finest).
 #' @param res_placeholder the resolution placeholder; default `"{{res}}"`.
-#' @param bbox_placeholder a spatial-prune placeholder spliced into the
-#'   `idx_h3` / live `occ_h3` scan (default `"{{bbox}}"`). The `h3t` tile
-#'   server substitutes it per tile with an `AND lat/lng BETWEEN ...` predicate
-#'   on the store's precomputed `lat`/`lng` columns, so DuckDB prunes row groups
-#'   to the tile instead of aggregating the whole globe (see [build_obis_h3_duckdb()]
-#'   spatial clustering). Pass `""` to disable — required when executing the SQL
-#'   directly (no server substitution), e.g. the `/h3` API and stats queries.
+#'
+#' The h3t tile server prunes each tile automatically: it derives the tile's
+#' covering coarse H3 cells from `z/x/y` and injects `hex_prune IN (...)` into
+#' the `idx_h3` / `occ_h3` scan (see [build_obis_h3_duckdb()] and `H3T_PRUNE_RES`),
+#' so the emitted SQL is a plain per-resolution `SELECT` — no client-side bbox.
 #'
 #' @return a single-line-friendly SQL string.
 #' @concept h3t
@@ -407,14 +419,11 @@ obis_h3t_sql <- function(
   years            = NULL,
   esn              = 50L,
   res_max          = 7L,
-  res_placeholder  = "{{res}}",
-  bbox_placeholder = "{{bbox}}") {
+  res_placeholder  = "{{res}}") {
 
   stopifnot(requireNamespace("glue", quietly = TRUE))
   indicator <- match.arg(indicator)
   r         <- res_placeholder
-  bp        <- bbox_placeholder                   # spliced as a var so glue
-                                                  # leaves the "{{bbox}}" token intact
   rcap      <- max(1L, min(7L, as.integer(res_max)))
   eff       <- glue::glue("LEAST({r}, {rcap})")   # capped display resolution
   filt      <- .h3t_where_clause(taxon, years)
@@ -437,9 +446,9 @@ obis_h3t_sql <- function(
   col <- switch(indicator, es = "es", sp = "sp", shannon = "shannon", n = "n")
 
   if (!has_filt) {
-    # fast path: precomputed all-taxa indicators (bbox-pruned per tile)
+    # fast path: precomputed all-taxa indicators (server prunes per tile)
     return(as.character(glue::glue(
-      "SELECT cell_id, {col} AS value, n FROM idx_h3 WHERE res = {eff} {bp}")))
+      "SELECT cell_id, {col} AS value, n FROM idx_h3 WHERE res = {eff}")))
   }
 
   # fast path 2: a single value of one precomputed rank, with no year filter,
@@ -463,7 +472,6 @@ obis_h3t_sql <- function(
       FROM occ_h3
       WHERE res = {tier}
         {filt}
-        {bp}
       GROUP BY 1, 2)")
 
   body <- switch(indicator,

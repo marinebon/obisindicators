@@ -47,8 +47,7 @@ test_that("obis_h3t_sql(aphiaid=) filters occ_h3 to the subtree", {
   fx <- make_taxon_fixture(); con <- fx$con
   on.exit({ DBI::dbDisconnect(con, shutdown = TRUE); unlink(fx$db) }, add = TRUE)
 
-  # bbox_placeholder = "" -> executed directly here (no h3t server to substitute it)
-  sql <- obis_h3t_sql("n", aphiaid = 1000, res_placeholder = "7", bbox_placeholder = "")
+  sql <- obis_h3t_sql("n", aphiaid = 1000, res_placeholder = "7")
   DBI::dbExecute(con, glue::glue("CREATE OR REPLACE TEMP TABLE _res AS {sql}"))
   got <- DBI::dbGetQuery(con,
     "SELECT h3_h3_to_string(cell_id) AS cell, value FROM _res")
