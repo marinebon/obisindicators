@@ -9,7 +9,7 @@ DuckDB file with two layers consumed by the h3t tile service:"></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -136,19 +136,21 @@ host. Set to comfortably below available free disk.</p></dd>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
 
-<ul><li><p><code>idx_h3(res, cell_id, n, sp, shannon, simpson, es, lat, lng)</code> — precomputed
+<ul><li><p><code>idx_h3(res, cell_id, n, sp, shannon, simpson, es, hex_prune)</code> — precomputed
 all-taxa indicators for resolutions 1-7 (fast default tile layers).
-Clustered by <code>(res, lat, lng)</code> so a per-tile bbox predicate prunes.</p></li>
+Clustered by <code>(res, hex_prune, cell_id)</code> so the tile server prunes per tile.</p></li>
 <li><p><code>idx_h3_taxon(rank, taxon, res, cell_id, n, sp, shannon, simpson, es)</code> —
 precomputed per-taxon indicators for ranks phylum/class/order, so a
 single-taxon map is as fast as the all-taxa layer. Clustered by
 <code>(rank, taxon, res)</code> for zonemap pruning.</p></li>
-<li><p><code>occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus, species, date_year, records, lat, lng)</code> — species-level counts at
+<li><p><code>occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus, species, date_year, records, hex_prune)</code> — species-level counts at
 resolution tiers 3/5/7 for on-the-fly taxon/year/aphiaid-filtered queries.
-Clustered <strong>spatially</strong> by <code>(res, lat, lng)</code> so a per-tile bbox predicate on
-<code>lat</code>/<code>lng</code> prunes the scan to a few row groups (the <code>{{bbox}}</code> placeholder
-of <code><a href="obis_h3t_sql.html">obis_h3t_sql()</a></code>); this is what makes live aphiaid/taxon tile maps fast
-at fine zoom.</p></li>
+Clustered by <code>(res, hex_prune, cell_id)</code>, where <code>hex_prune</code> is the coarse
+H3 parent (<code>h3_cell_to_parent(cell_id, LEAST(res, H3T_PRUNE_RES))</code>). The h3t
+tile server derives each tile's covering res-<code>H3T_PRUNE_RES</code> cells from
+<code>z/x/y</code> and prunes the scan with <code>hex_prune IN (...)</code> — no client-side
+bbox needed; this is what makes live aphiaid/taxon tile maps fast at fine
+zoom.</p></li>
 </ul><p>The indicator math (ES50, Shannon, Simpson, richness) is the SQL translation
 of <code><a href="calc_indicators.html">calc_indicators()</a></code> (<code>esn</code> = 50 by default), validated by the package
 tests.</p>

@@ -15,7 +15,7 @@ as the h3t service requires. See calc_spue() for the pinned R reference."></head
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,8 +66,7 @@ as the <code>h3t</code> service requires. See <code><a href="calc_spue.html">cal
 <span>  <span class="va">num_aphiaid</span>,</span>
 <span>  <span class="va">den_aphiaid</span>,</span>
 <span>  res_max <span class="op">=</span> <span class="fl">7L</span>,</span>
-<span>  res_placeholder <span class="op">=</span> <span class="st">"{{res}}"</span>,</span>
-<span>  bbox_placeholder <span class="op">=</span> <span class="st">"{{bbox}}"</span></span>
+<span>  res_placeholder <span class="op">=</span> <span class="st">"{{res}}"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -89,14 +88,9 @@ higher-order taxon such as the target's parent class.</p></dd>
 
 
 <dt id="arg-res-placeholder">res_placeholder<a class="anchor" aria-label="anchor" href="#arg-res-placeholder"></a></dt>
-<dd><p>resolution placeholder; default <code>"{{res}}"</code>.</p></dd>
-
-
-<dt id="arg-bbox-placeholder">bbox_placeholder<a class="anchor" aria-label="anchor" href="#arg-bbox-placeholder"></a></dt>
-<dd><p>spatial-prune placeholder spliced into the <code>occ_h3</code>
-scan; default <code>"{{bbox}}"</code> (the <code>h3t</code> server substitutes a per-tile
-<code>lat</code>/<code>lng</code> predicate). Pass <code>""</code> to disable for direct execution — see
-<code><a href="obis_h3t_sql.html">obis_h3t_sql()</a></code>.</p></dd>
+<dd><p>resolution placeholder; default <code>"{{res}}"</code>. The h3t
+tile server prunes each tile automatically via <code>hex_prune</code> (see
+<code><a href="obis_h3t_sql.html">obis_h3t_sql()</a></code>), so the emitted SQL carries no client-side bbox.</p></dd>
 
 </dl></div>
     <div class="section level2">

@@ -1,33 +1,59 @@
 # Changelog
 
-## obisindicators 0.3.0
+## obisindicators 0.4.0
 
-- **Spatial (bbox) tile pruning** — live `occ_h3` / `idx_h3` tile maps
-  (any-rank `aphiaid` children, SPUE, finer/multi-value/year filters,
-  and the all-taxa layer) are now pruned per tile instead of aggregating
-  the whole globe for every tile, so they stay fast when zoomed in to
-  fine H3 resolutions:
+- **Automatic per-tile spatial pruning via `hex_prune`** (supersedes
+  0.3.0’s client-side `{{bbox}}` placeholder). The tile bbox is fully
+  determined by the `z/x/y` tile address, so the client no longer states
+  it — the `h3t` server derives each tile’s covering coarse H3 cells
+  from `z/x/y` and injects the prune itself:
   - [`build_obis_h3_duckdb()`](http://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
-    now materializes cell-centroid `lat`/`lng` columns on `occ_h3` and
-    `idx_h3` and clusters both **spatially** by `(res, lat, lng)`
-    (superseding `occ_h3`’s old `(res, taxonomy)` clustering). Zonemaps
-    then prune row groups to a tile’s extent. **Store schema change** —
-    rebuild, or migrate an existing store with
-    `data-raw/migrate_add_spatial_cluster.R`.
+    now materializes a coarse H3-parent column
+    `hex_prune = h3_cell_to_parent(cell_id, LEAST(res, H3T_PRUNE_RES))`
+    (res 3) on `occ_h3` and `idx_h3` and clusters both by
+    `(res, hex_prune, cell_id)`. This replaces the interim `lat`/`lng`
+    clustering — pruning on the H3 index is 2D (tighter than a latitude
+    band), needs no extra float columns, and the covering ids are
+    canonical H3 (they match across the R build and the server with no
+    version drift). **Store schema change** — rebuild, or migrate with
+    `data-raw/migrate_add_spatial_cluster.R` (drops `lat`/`lng`, adds
+    `hex_prune`).
   - [`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
     /
     [`obis_spue_sql()`](http://marinebon.org/obisindicators/reference/obis_spue_sql.md)
-    gain a `bbox_placeholder` argument (default `"{{bbox}}"`, spliced
-    into the scan `WHERE`) that the `h3t` tile service substitutes per
-    tile with a `lat`/`lng` predicate. Pass `""` to disable for direct
-    execution (e.g. the `/h3` API and stats queries).
+    now emit **plain per-resolution SELECTs** — the `bbox_placeholder`
+    argument is **removed**. The server (`MarineSensitivity/server/h3t`,
+    `CalCOFI/api-h3t-py`) rewrites the query to add
+    `hex_prune IN (<covering cells>)` to any scan of a table carrying
+    that column; stores without it are untouched.
   - The math is unchanged and still pinned to
     [`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)
     /
     [`calc_spue()`](http://marinebon.org/obisindicators/reference/calc_spue.md);
-    a new `test-h3t-bbox.R` asserts the prune is **result-preserving**
-    (a bbox-pruned scan + the server’s outer centroid filter returns
+    `test-h3t-prune.R` asserts the prune is **result-preserving** (a
+    `hex_prune`-pruned scan + the server’s outer centroid filter returns
     exactly the same cells and values as the unpruned scan).
+
+## obisindicators 0.3.0
+
+- **Spatial (bbox) tile pruning** *(interim — the `{{bbox}}` placeholder
+  and `lat`/`lng` clustering here were replaced by the `hex_prune`
+  approach in 0.4.0; kept for history)*. Live `occ_h3` / `idx_h3` tile
+  maps were pruned per tile instead of aggregating the whole globe for
+  every tile:
+  - [`build_obis_h3_duckdb()`](http://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
+    materialized cell-centroid `lat`/`lng` columns on `occ_h3` and
+    `idx_h3` and clustered both by `(res, lat, lng)`.
+  - [`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
+    /
+    [`obis_spue_sql()`](http://marinebon.org/obisindicators/reference/obis_spue_sql.md)
+    gained a `bbox_placeholder` argument (default `"{{bbox}}"`) that the
+    `h3t` service substituted per tile with a `lat`/`lng` predicate.
+  - The math stayed pinned to
+    [`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)
+    /
+    [`calc_spue()`](http://marinebon.org/obisindicators/reference/calc_spue.md);
+    the prune was asserted result-preserving.
 
 ## obisindicators 0.2.0
 

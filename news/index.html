@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -44,14 +44,25 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.4.0" id="obisindicators-040">obisindicators 0.4.0<a class="anchor" aria-label="anchor" href="#obisindicators-040"></a></h2>
+<ul><li>
+<strong>Automatic per-tile spatial pruning via <code>hex_prune</code></strong> (supersedes 0.3.0’s client-side <code>{{bbox}}</code> placeholder). The tile bbox is fully determined by the <code>z/x/y</code> tile address, so the client no longer states it — the <code>h3t</code> server derives each tile’s covering coarse H3 cells from <code>z/x/y</code> and injects the prune itself:
+<ul><li>
+<code><a href="../reference/build_obis_h3_duckdb.html">build_obis_h3_duckdb()</a></code> now materializes a coarse H3-parent column <code>hex_prune = h3_cell_to_parent(cell_id, LEAST(res, H3T_PRUNE_RES))</code> (res 3) on <code>occ_h3</code> and <code>idx_h3</code> and clusters both by <code>(res, hex_prune, cell_id)</code>. This replaces the interim <code>lat</code>/<code>lng</code> clustering — pruning on the H3 index is 2D (tighter than a latitude band), needs no extra float columns, and the covering ids are canonical H3 (they match across the R build and the server with no version drift). <strong>Store schema change</strong> — rebuild, or migrate with <code>data-raw/migrate_add_spatial_cluster.R</code> (drops <code>lat</code>/<code>lng</code>, adds <code>hex_prune</code>).</li>
+<li>
+<code><a href="../reference/obis_h3t_sql.html">obis_h3t_sql()</a></code> / <code><a href="../reference/obis_spue_sql.html">obis_spue_sql()</a></code> now emit <strong>plain per-resolution SELECTs</strong> — the <code>bbox_placeholder</code> argument is <strong>removed</strong>. The server (<code>MarineSensitivity/server/h3t</code>, <code>CalCOFI/api-h3t-py</code>) rewrites the query to add <code>hex_prune IN (&lt;covering cells&gt;)</code> to any scan of a table carrying that column; stores without it are untouched.</li>
+<li>The math is unchanged and still pinned to <code><a href="../reference/calc_indicators.html">calc_indicators()</a></code> / <code><a href="../reference/calc_spue.html">calc_spue()</a></code>; <code>test-h3t-prune.R</code> asserts the prune is <strong>result-preserving</strong> (a <code>hex_prune</code>-pruned scan + the server’s outer centroid filter returns exactly the same cells and values as the unpruned scan).</li>
+</ul></li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.0" id="obisindicators-030">obisindicators 0.3.0<a class="anchor" aria-label="anchor" href="#obisindicators-030"></a></h2>
 <ul><li>
-<strong>Spatial (bbox) tile pruning</strong> — live <code>occ_h3</code> / <code>idx_h3</code> tile maps (any-rank <code>aphiaid</code> children, SPUE, finer/multi-value/year filters, and the all-taxa layer) are now pruned per tile instead of aggregating the whole globe for every tile, so they stay fast when zoomed in to fine H3 resolutions:
+<strong>Spatial (bbox) tile pruning</strong> <em>(interim — the <code>{{bbox}}</code> placeholder and <code>lat</code>/<code>lng</code> clustering here were replaced by the <code>hex_prune</code> approach in 0.4.0; kept for history)</em>. Live <code>occ_h3</code> / <code>idx_h3</code> tile maps were pruned per tile instead of aggregating the whole globe for every tile:
 <ul><li>
-<code><a href="../reference/build_obis_h3_duckdb.html">build_obis_h3_duckdb()</a></code> now materializes cell-centroid <code>lat</code>/<code>lng</code> columns on <code>occ_h3</code> and <code>idx_h3</code> and clusters both <strong>spatially</strong> by <code>(res, lat, lng)</code> (superseding <code>occ_h3</code>’s old <code>(res, taxonomy)</code> clustering). Zonemaps then prune row groups to a tile’s extent. <strong>Store schema change</strong> — rebuild, or migrate an existing store with <code>data-raw/migrate_add_spatial_cluster.R</code>.</li>
+<code><a href="../reference/build_obis_h3_duckdb.html">build_obis_h3_duckdb()</a></code> materialized cell-centroid <code>lat</code>/<code>lng</code> columns on <code>occ_h3</code> and <code>idx_h3</code> and clustered both by <code>(res, lat, lng)</code>.</li>
 <li>
-<code><a href="../reference/obis_h3t_sql.html">obis_h3t_sql()</a></code> / <code><a href="../reference/obis_spue_sql.html">obis_spue_sql()</a></code> gain a <code>bbox_placeholder</code> argument (default <code>"{{bbox}}"</code>, spliced into the scan <code>WHERE</code>) that the <code>h3t</code> tile service substitutes per tile with a <code>lat</code>/<code>lng</code> predicate. Pass <code>""</code> to disable for direct execution (e.g. the <code>/h3</code> API and stats queries).</li>
-<li>The math is unchanged and still pinned to <code><a href="../reference/calc_indicators.html">calc_indicators()</a></code> / <code><a href="../reference/calc_spue.html">calc_spue()</a></code>; a new <code>test-h3t-bbox.R</code> asserts the prune is <strong>result-preserving</strong> (a bbox-pruned scan + the server’s outer centroid filter returns exactly the same cells and values as the unpruned scan).</li>
+<code><a href="../reference/obis_h3t_sql.html">obis_h3t_sql()</a></code> / <code><a href="../reference/obis_spue_sql.html">obis_spue_sql()</a></code> gained a <code>bbox_placeholder</code> argument (default <code>"{{bbox}}"</code>) that the <code>h3t</code> service substituted per tile with a <code>lat</code>/<code>lng</code> predicate.</li>
+<li>The math stayed pinned to <code><a href="../reference/calc_indicators.html">calc_indicators()</a></code> / <code><a href="../reference/calc_spue.html">calc_spue()</a></code>; the prune was asserted result-preserving.</li>
 </ul></li>
 </ul></div>
     <div class="section level2">

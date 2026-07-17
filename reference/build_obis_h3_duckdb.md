@@ -88,23 +88,25 @@ build_obis_h3_duckdb(
 
 ## Details
 
-- `idx_h3(res, cell_id, n, sp, shannon, simpson, es, lat, lng)` —
+- `idx_h3(res, cell_id, n, sp, shannon, simpson, es, hex_prune)` —
   precomputed all-taxa indicators for resolutions 1-7 (fast default tile
-  layers). Clustered by `(res, lat, lng)` so a per-tile bbox predicate
-  prunes.
+  layers). Clustered by `(res, hex_prune, cell_id)` so the tile server
+  prunes per tile.
 
 - `idx_h3_taxon(rank, taxon, res, cell_id, n, sp, shannon, simpson, es)`
   — precomputed per-taxon indicators for ranks phylum/class/order, so a
   single-taxon map is as fast as the all-taxa layer. Clustered by
   `(rank, taxon, res)` for zonemap pruning.
 
-- `occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus, species, date_year, records, lat, lng)`
+- `occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus, species, date_year, records, hex_prune)`
   — species-level counts at resolution tiers 3/5/7 for on-the-fly
-  taxon/year/aphiaid-filtered queries. Clustered **spatially** by
-  `(res, lat, lng)` so a per-tile bbox predicate on `lat`/`lng` prunes
-  the scan to a few row groups (the `{{bbox}}` placeholder of
-  [`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md));
-  this is what makes live aphiaid/taxon tile maps fast at fine zoom.
+  taxon/year/aphiaid-filtered queries. Clustered by
+  `(res, hex_prune, cell_id)`, where `hex_prune` is the coarse H3 parent
+  (`h3_cell_to_parent(cell_id, LEAST(res, H3T_PRUNE_RES))`). The h3t
+  tile server derives each tile's covering res-`H3T_PRUNE_RES` cells
+  from `z/x/y` and prunes the scan with `hex_prune IN (...)` — no
+  client-side bbox needed; this is what makes live aphiaid/taxon tile
+  maps fast at fine zoom.
 
 The indicator math (ES50, Shannon, Simpson, richness) is the SQL
 translation of
