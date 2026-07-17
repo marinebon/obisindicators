@@ -11,7 +11,8 @@ obis_h3t_sql(
   years = NULL,
   esn = 50L,
   res_max = 7L,
-  res_placeholder = "{{res}}"
+  res_placeholder = "{{res}}",
+  bbox_placeholder = "{{bbox}}"
 )
 }
 \arguments{
@@ -35,6 +36,14 @@ hexagons at a given map zoom (the "base zoom level" control); the store's
 finest resolution is 7. Default 7 (track zoom up to the finest).}
 
 \item{res_placeholder}{the resolution placeholder; default \code{"{{res}}"}.}
+
+\item{bbox_placeholder}{a spatial-prune placeholder spliced into the
+\code{idx_h3} / live \code{occ_h3} scan (default \code{"{{bbox}}"}). The \code{h3t} tile
+server substitutes it per tile with an \verb{AND lat/lng BETWEEN ...} predicate
+on the store's precomputed \code{lat}/\code{lng} columns, so DuckDB prunes row groups
+to the tile instead of aggregating the whole globe (see \code{\link[=build_obis_h3_duckdb]{build_obis_h3_duckdb()}}
+spatial clustering). Pass \code{""} to disable — required when executing the SQL
+directly (no server substitution), e.g. the \verb{/h3} API and stats queries.}
 }
 \value{
 a single-line-friendly SQL string.

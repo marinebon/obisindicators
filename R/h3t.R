@@ -20,16 +20,20 @@ H3T_RES_IDX   <- 1:7
 #' Reads OBIS occurrences, bins them to H3 cells, and writes an authoritative
 #' DuckDB file with two layers consumed by the `h3t` tile service:
 #'
-#' - `idx_h3(res, cell_id, n, sp, shannon, simpson, es)` — precomputed
+#' - `idx_h3(res, cell_id, n, sp, shannon, simpson, es, lat, lng)` — precomputed
 #'   all-taxa indicators for resolutions 1-7 (fast default tile layers).
+#'   Clustered by `(res, lat, lng)` so a per-tile bbox predicate prunes.
 #' - `idx_h3_taxon(rank, taxon, res, cell_id, n, sp, shannon, simpson, es)` —
 #'   precomputed per-taxon indicators for ranks phylum/class/order, so a
 #'   single-taxon map is as fast as the all-taxa layer. Clustered by
 #'   `(rank, taxon, res)` for zonemap pruning.
 #' - `occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus,
-#'   species, date_year, records)` — species-level counts at resolution tiers
-#'   3/5/7 for on-the-fly taxon/year-filtered queries. Clustered by
-#'   `(res, taxonomy)` so a taxon-filtered scan prunes to a few row groups.
+#'   species, date_year, records, lat, lng)` — species-level counts at
+#'   resolution tiers 3/5/7 for on-the-fly taxon/year/aphiaid-filtered queries.
+#'   Clustered **spatially** by `(res, lat, lng)` so a per-tile bbox predicate on
+#'   `lat`/`lng` prunes the scan to a few row groups (the `{{bbox}}` placeholder
+#'   of [obis_h3t_sql()]); this is what makes live aphiaid/taxon tile maps fast
+#'   at fine zoom.
 #'
 #' The indicator math (ES50, Shannon, Simpson, richness) is the SQL translation
 #' of [calc_indicators()] (`esn` = 50 by default), validated by the package
@@ -224,14 +228,23 @@ build_obis_h3_duckdb <- function(
       GROUP BY ALL;"))
   }
 
-  # cluster occ_h3 by (res, taxonomy) so a taxon-filtered scan touches only the
-  # relevant row groups (DuckDB zonemap pruning) rather than the whole table;
-  # also speeds the res=7 reads by the idx builds below.
-  message("clustering occ_h3 by (res, taxonomy) ...")
-  DBI::dbExecute(con, '
+  # add the cell centroid (lat/lng) and cluster occ_h3 SPATIALLY by (res, lat,
+  # lng). a per-tile bbox predicate on the stored lat/lng (the `{{bbox}}`
+  # placeholder in obis_h3t_sql()) then prunes DuckDB row groups to the tile,
+  # instead of aggregating the whole res tier per tile — the fix that makes live
+  # aphiaid/taxon maps fast at fine zoom. supersedes the old (res, taxonomy)
+  # clustering: the common taxon maps are precomputed in idx_h3/idx_h3_taxon, and
+  # the aphiaid filter never pruned on taxonomy anyway (aphiaid isn't the sort
+  # key). zonemaps live on stored columns, so lat/lng must be materialized here —
+  # a filter on h3_cell_to_lat(cell_id) (an expression) can't prune.
+  message("adding lat/lng + clustering occ_h3 spatially (res, lat, lng) ...")
+  DBI::dbExecute(con, "
     CREATE TABLE occ_h3_clustered AS
-      SELECT * FROM occ_h3
-      ORDER BY res, phylum, class, "order", family, genus, species;')
+      SELECT *,
+             h3_cell_to_lat(cell_id) AS lat,
+             h3_cell_to_lng(cell_id) AS lng
+      FROM occ_h3
+      ORDER BY res, lat, lng;")
   DBI::dbExecute(con, "DROP TABLE occ_h3;")
   DBI::dbExecute(con, "ALTER TABLE occ_h3_clustered RENAME TO occ_h3;")
 
@@ -245,6 +258,18 @@ build_obis_h3_duckdb <- function(
   for (r in H3T_RES_IDX) {
     DBI::dbExecute(con, .h3t_idx_sql(r, esn))
   }
+  # add lat/lng + cluster idx_h3 SPATIALLY (res, lat, lng) so the all-taxa tile
+  # path is bbox-pruned per tile too (same rationale as occ_h3 above).
+  message("adding lat/lng + clustering idx_h3 spatially (res, lat, lng) ...")
+  DBI::dbExecute(con, "
+    CREATE TABLE idx_h3_c AS
+      SELECT *,
+             h3_cell_to_lat(cell_id) AS lat,
+             h3_cell_to_lng(cell_id) AS lng
+      FROM idx_h3
+      ORDER BY res, lat, lng;")
+  DBI::dbExecute(con, "DROP TABLE idx_h3;")
+  DBI::dbExecute(con, "ALTER TABLE idx_h3_c RENAME TO idx_h3;")
 
   # 4. precomputed per-taxon indicators (fast single-taxon filtered maps) ----
   message("computing idx_h3_taxon indicators for ranks: ",
@@ -364,22 +389,32 @@ build_obis_h3_duckdb <- function(
 #'   hexagons at a given map zoom (the "base zoom level" control); the store's
 #'   finest resolution is 7. Default 7 (track zoom up to the finest).
 #' @param res_placeholder the resolution placeholder; default `"{{res}}"`.
+#' @param bbox_placeholder a spatial-prune placeholder spliced into the
+#'   `idx_h3` / live `occ_h3` scan (default `"{{bbox}}"`). The `h3t` tile
+#'   server substitutes it per tile with an `AND lat/lng BETWEEN ...` predicate
+#'   on the store's precomputed `lat`/`lng` columns, so DuckDB prunes row groups
+#'   to the tile instead of aggregating the whole globe (see [build_obis_h3_duckdb()]
+#'   spatial clustering). Pass `""` to disable — required when executing the SQL
+#'   directly (no server substitution), e.g. the `/h3` API and stats queries.
 #'
 #' @return a single-line-friendly SQL string.
 #' @concept h3t
 #' @export
 obis_h3t_sql <- function(
-  indicator       = c("es", "sp", "shannon", "n"),
-  taxon           = NULL,
-  aphiaid         = NULL,
-  years           = NULL,
-  esn             = 50L,
-  res_max         = 7L,
-  res_placeholder = "{{res}}") {
+  indicator        = c("es", "sp", "shannon", "n"),
+  taxon            = NULL,
+  aphiaid          = NULL,
+  years            = NULL,
+  esn              = 50L,
+  res_max          = 7L,
+  res_placeholder  = "{{res}}",
+  bbox_placeholder = "{{bbox}}") {
 
   stopifnot(requireNamespace("glue", quietly = TRUE))
   indicator <- match.arg(indicator)
   r         <- res_placeholder
+  bp        <- bbox_placeholder                   # spliced as a var so glue
+                                                  # leaves the "{{bbox}}" token intact
   rcap      <- max(1L, min(7L, as.integer(res_max)))
   eff       <- glue::glue("LEAST({r}, {rcap})")   # capped display resolution
   filt      <- .h3t_where_clause(taxon, years)
@@ -402,9 +437,9 @@ obis_h3t_sql <- function(
   col <- switch(indicator, es = "es", sp = "sp", shannon = "shannon", n = "n")
 
   if (!has_filt) {
-    # fast path: precomputed all-taxa indicators
+    # fast path: precomputed all-taxa indicators (bbox-pruned per tile)
     return(as.character(glue::glue(
-      "SELECT cell_id, {col} AS value, n FROM idx_h3 WHERE res = {eff}")))
+      "SELECT cell_id, {col} AS value, n FROM idx_h3 WHERE res = {eff} {bp}")))
   }
 
   # fast path 2: a single value of one precomputed rank, with no year filter,
@@ -428,6 +463,7 @@ obis_h3t_sql <- function(
       FROM occ_h3
       WHERE res = {tier}
         {filt}
+        {bp}
       GROUP BY 1, 2)")
 
   body <- switch(indicator,

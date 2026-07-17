@@ -18,7 +18,8 @@ test_that("obis_spue_sql() matches calc_spue()", {
     "SELECT h3_h3_to_string(cell_id) AS cell, aphiaid, records FROM occ_h3")
   ref <- calc_spue(occ, num_ids, den_ids)
 
-  sql <- obis_spue_sql(1111, 1000, res_placeholder = "7")
+  # bbox_placeholder = "" -> executed directly here (no h3t server to substitute it)
+  sql <- obis_spue_sql(1111, 1000, res_placeholder = "7", bbox_placeholder = "")
   DBI::dbExecute(con, glue::glue("CREATE OR REPLACE TEMP TABLE _spue AS {sql}"))
   got <- DBI::dbGetQuery(con,
     "SELECT h3_h3_to_string(cell_id) AS cell, value, n FROM _spue")

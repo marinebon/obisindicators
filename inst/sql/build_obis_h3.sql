@@ -45,6 +45,16 @@ SELECT 3, CAST(h3_cell_to_parent(cell_id, 3) AS BIGINT), aphiaid, phylum, class,
        "order", family, genus, species, date_year, SUM(records)
 FROM occ_h3_base GROUP BY ALL;
 
+-- 2b. materialize cell centroid (lat/lng) and cluster occ_h3 SPATIALLY by
+-- (res, lat, lng) so a per-tile {{bbox}} predicate on lat/lng prunes row groups
+-- to the tile (zonemaps live on stored columns). Makes live aphiaid/taxon tile
+-- maps fast at fine zoom; supersedes the old (res, taxonomy) clustering.
+CREATE TABLE occ_h3_clustered AS
+  SELECT *, h3_cell_to_lat(cell_id) AS lat, h3_cell_to_lng(cell_id) AS lng
+  FROM occ_h3 ORDER BY res, lat, lng;
+DROP TABLE occ_h3;
+ALTER TABLE occ_h3_clustered RENAME TO occ_h3;
+
 -- 3. precomputed all-taxa indicators for res 1..7 (repeat per resolution {r})
 CREATE TABLE idx_h3 (
   res UTINYINT, cell_id BIGINT, n BIGINT, sp BIGINT,
@@ -73,6 +83,14 @@ SELECT {r} AS res, cell_id,
   SUM((ni::DOUBLE / n) * (ni::DOUBLE / n))    AS simpson,
   SUM(esi)                                    AS es
 FROM per GROUP BY cell_id;
+
+-- 3b. materialize lat/lng and cluster idx_h3 SPATIALLY (res, lat, lng) so the
+-- all-taxa tile path is bbox-pruned per tile too (same rationale as occ_h3).
+CREATE TABLE idx_h3_c AS
+  SELECT *, h3_cell_to_lat(cell_id) AS lat, h3_cell_to_lng(cell_id) AS lng
+  FROM idx_h3 ORDER BY res, lat, lng;
+DROP TABLE idx_h3;
+ALTER TABLE idx_h3_c RENAME TO idx_h3;
 
 DROP TABLE occ_h3_base;
 CHECKPOINT;

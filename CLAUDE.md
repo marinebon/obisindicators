@@ -44,17 +44,36 @@ four spots: `calc_indicators()` (`R/analyze.R`), `.h3t_idx_sql`,
 H3 res 7, and writes three layers:
 
 - `idx_h3` — precomputed **all-taxa** indicators, res 1–7 (fastest tile path).
+  Carries `lat`/`lng` and is clustered **spatially** by `(res, lat, lng)`.
 - `idx_h3_taxon` — precomputed **per-taxon** indicators for coarse ranks only
   (phylum/class/order — `H3T_IDX_RANKS`); finer ranks would explode storage.
+  Clustered by `(rank, taxon, res)` (no spatial prune — it's already small).
 - `occ_h3` — **species-level** counts at resolution tiers 3/5/7
-  (`H3T_RES_TIERS`), clustered by `(res, taxonomy)` for zonemap pruning; used
-  for live taxon/year-filtered queries.
+  (`H3T_RES_TIERS`), carrying `lat`/`lng` and clustered **spatially** by
+  `(res, lat, lng)`; used for live taxon/year/aphiaid-filtered queries.
+
+**Spatial (bbox) tile pruning (the `{{bbox}}` placeholder).** Zonemaps live on
+stored columns, so `occ_h3`/`idx_h3` materialize the cell-centroid `lat`/`lng`
+and are physically ordered `(res, lat, lng)`. `obis_h3t_sql()`/`obis_spue_sql()`
+splice a `{{bbox}}` placeholder into those scans' `WHERE`; the `h3t` server
+substitutes it per tile (`tiles.substitute_bbox`) with a `lat`/`lng BETWEEN`
+predicate, so DuckDB prunes row groups to the tile instead of aggregating the
+whole globe **per tile** (the fix for slow fine-zoom live maps). The server's
+inner buffer (`edge*3`) is deliberately larger than the outer centroid buffer
+(`edge*1.5`) so the prune is a **superset** of the outer filter and thus
+result-preserving (asserted by `test-h3t-bbox.R`). Pass `bbox_placeholder=""`
+when executing the SQL directly (no server to substitute it): the `/h3` API and
+stats path do this. **Changing the `lat`/`lng` prune columns or the buffer means
+keeping `build_obis_h3_duckdb()`, `obis_h3t_sql()`/`obis_spue_sql()`,
+`tiles.substitute_bbox` (both `server/h3t` and `CalCOFI/api-h3t-py`), and
+`test-h3t-bbox.R` in agreement.**
 
 `obis_h3t_sql(indicator, taxon, aphiaid, years, ...)` composes the read-only
-`SELECT` (projecting exactly `cell_id, value, n`, with a `{{res}}` placeholder the
-server substitutes per tile). It **routes to the fastest layer**: no filter →
-`idx_h3`; single coarse-rank value, no years → `idx_h3_taxon`; an `aphiaid` filter
-→ live `occ_h3` filtered to the WoRMS subtree (see below); anything else
+`SELECT` (projecting exactly `cell_id, value, n`, with `{{res}}`/`{{bbox}}`
+placeholders the server substitutes per tile). It **routes to the fastest
+layer**: no filter → `idx_h3`; single coarse-rank value, no years →
+`idx_h3_taxon` (no `{{bbox}}` — no spatial prune); an `aphiaid` filter → live
+`occ_h3` filtered to the WoRMS subtree (see below); anything else
 finer/multi-value/year-ranged → live aggregation over `occ_h3`. `obis_h3t_url()`
 base64-encodes that SQL into the tile URL's `?q=`. The consuming service is
 `MarineSensitivity/server/h3t` (a vendored [h3t tile factory](https://github.com/CalCOFI/api-h3t-py)),
@@ -128,6 +147,12 @@ Rscript data-raw/migrate_add_idx_h3_taxon.R <in.duckdb> <out.duckdb> [--cluster-
 # bake it into a store so aphiaid children/SPUE queries work (writes a new file)
 Rscript data-raw/build_taxon_parquet.R [taxon.txt] [taxon.parquet]
 Rscript data-raw/migrate_add_taxon.R <in.duckdb> <out.duckdb> [taxon.parquet]
+
+# add lat/lng + spatial (res, lat, lng) clustering to occ_h3/idx_h3 in an
+# EXISTING store so the h3t {{bbox}} placeholder prunes each tile (no S3 re-read,
+# writes a new file). rebuilds needn't run this — build_obis_h3_duckdb() bakes
+# lat/lng natively.
+Rscript data-raw/migrate_add_spatial_cluster.R <in.duckdb> <out.duckdb>
 ```
 
 - CI: `.github/workflows/run_tests.yml` runs `testthat::test_local()` on every

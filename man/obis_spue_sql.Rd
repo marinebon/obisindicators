@@ -8,7 +8,8 @@ obis_spue_sql(
   num_aphiaid,
   den_aphiaid,
   res_max = 7L,
-  res_placeholder = "{{res}}"
+  res_placeholder = "{{res}}",
+  bbox_placeholder = "{{bbox}}"
 )
 }
 \arguments{
@@ -20,6 +21,11 @@ higher-order taxon such as the target's parent class.}
 \item{res_max}{cap on H3 resolution (1-7); see \code{\link[=obis_h3t_sql]{obis_h3t_sql()}}.}
 
 \item{res_placeholder}{resolution placeholder; default \code{"{{res}}"}.}
+
+\item{bbox_placeholder}{spatial-prune placeholder spliced into the \code{occ_h3}
+scan; default \code{"{{bbox}}"} (the \code{h3t} server substitutes a per-tile
+\code{lat}/\code{lng} predicate). Pass \code{""} to disable for direct execution — see
+\code{\link[=obis_h3t_sql]{obis_h3t_sql()}}.}
 }
 \value{
 a SQL string.

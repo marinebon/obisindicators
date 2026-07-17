@@ -63,15 +63,19 @@ DuckDB file with two layers consumed by the \code{h3t} tile service:
 }
 \details{
 \itemize{
-\item \code{idx_h3(res, cell_id, n, sp, shannon, simpson, es)} — precomputed
+\item \code{idx_h3(res, cell_id, n, sp, shannon, simpson, es, lat, lng)} — precomputed
 all-taxa indicators for resolutions 1-7 (fast default tile layers).
+Clustered by \verb{(res, lat, lng)} so a per-tile bbox predicate prunes.
 \item \code{idx_h3_taxon(rank, taxon, res, cell_id, n, sp, shannon, simpson, es)} —
 precomputed per-taxon indicators for ranks phylum/class/order, so a
 single-taxon map is as fast as the all-taxa layer. Clustered by
 \verb{(rank, taxon, res)} for zonemap pruning.
-\item \code{occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus, species, date_year, records)} — species-level counts at resolution tiers
-3/5/7 for on-the-fly taxon/year-filtered queries. Clustered by
-\verb{(res, taxonomy)} so a taxon-filtered scan prunes to a few row groups.
+\item \code{occ_h3(res, cell_id, aphiaid, phylum, class, "order", family, genus, species, date_year, records, lat, lng)} — species-level counts at
+resolution tiers 3/5/7 for on-the-fly taxon/year/aphiaid-filtered queries.
+Clustered \strong{spatially} by \verb{(res, lat, lng)} so a per-tile bbox predicate on
+\code{lat}/\code{lng} prunes the scan to a few row groups (the \code{{{bbox}}} placeholder
+of \code{\link[=obis_h3t_sql]{obis_h3t_sql()}}); this is what makes live aphiaid/taxon tile maps fast
+at fine zoom.
 }
 
 The indicator math (ES50, Shannon, Simpson, richness) is the SQL translation
