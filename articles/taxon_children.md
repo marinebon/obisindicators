@@ -30,6 +30,10 @@ AphiaID. To support those we walk the full WoRMS hierarchy:
 ``` r
 
 library(obisindicators)
+```
+
+``` r
+
 library(DBI)
 library(duckdb)
 
@@ -74,10 +78,29 @@ base64-encodes it into a tile URL.
 
 sql <- obis_h3t_sql(indicator = "n", aphiaid = 2688)   # # records, all Cetacea
 cat(sql)
+#> WITH RECURSIVE taxon_tree AS (
+#> SELECT taxonID, parentNameUsageID
+#> FROM taxon
+#> WHERE taxonID IN (2688)
+#> UNION ALL
+#> SELECT t.taxonID, t.parentNameUsageID
+#> FROM taxon t
+#> JOIN taxon_tree tt ON t.parentNameUsageID = tt.taxonID
+#> WHERE t.parentNameUsageID IS NOT NULL), src AS (
+#>   SELECT CAST(h3_cell_to_parent(cell_id, LEAST({{res}}, 7)) AS BIGINT) AS cell_id,
+#>          species, SUM(records) AS ni
+#>   FROM occ_h3
+#>   WHERE res = CASE WHEN LEAST({{res}}, 7) <= 3 THEN 3 WHEN LEAST({{res}}, 7) <= 5 THEN 5 ELSE 7 END
+#>     AND aphiaid IN (SELECT taxonID FROM taxon_tree)
+#>   GROUP BY 1, 2)
+#> SELECT cell_id, SUM(ni) AS value, SUM(ni) AS n FROM src GROUP BY cell_id
 
 url <- obis_h3t_url(
   base_url  = "h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t",
   sql       = sql)
+```
+
+``` r
 
 library(mapgl)
 maplibre(center = c(-40, 20), zoom = 1.5) |>
@@ -114,10 +137,46 @@ is the pinned R reference (see `test-spue-parity.R`).
 # effort: Infraorder Cetacea = 2688 (its multi-species-survey footprint)
 spue_sql <- obis_spue_sql(num_aphiaid = 137111, den_aphiaid = 2688)
 cat(spue_sql)
+#> WITH RECURSIVE num_tree AS (
+#> SELECT taxonID, parentNameUsageID
+#> FROM taxon
+#> WHERE taxonID IN (137111)
+#> UNION ALL
+#> SELECT t.taxonID, t.parentNameUsageID
+#> FROM taxon t
+#> JOIN num_tree tt ON t.parentNameUsageID = tt.taxonID
+#> WHERE t.parentNameUsageID IS NOT NULL),
+#> den_tree AS (
+#> SELECT taxonID, parentNameUsageID
+#> FROM taxon
+#> WHERE taxonID IN (2688)
+#> UNION ALL
+#> SELECT t.taxonID, t.parentNameUsageID
+#> FROM taxon t
+#> JOIN den_tree tt ON t.parentNameUsageID = tt.taxonID
+#> WHERE t.parentNameUsageID IS NOT NULL),
+#> src AS (
+#>   SELECT CAST(h3_cell_to_parent(cell_id, LEAST({{res}}, 7)) AS BIGINT) AS cell_id,
+#>          -- COALESCE so an effort cell lacking the target reads 0, not NULL
+#>          -- (matches calc_spue(): sum of no records is 0). presence-only:
+#>          -- the target was absent *despite* effort here.
+#>          COALESCE(SUM(records) FILTER (WHERE aphiaid IN (SELECT taxonID FROM num_tree)), 0) AS n_num,
+#>          SUM(records) AS n_den
+#>   FROM occ_h3
+#>   WHERE res = CASE WHEN LEAST({{res}}, 7) <= 3 THEN 3 WHEN LEAST({{res}}, 7) <= 5 THEN 5 ELSE 7 END
+#>     AND aphiaid IN (SELECT taxonID FROM den_tree)
+#>   GROUP BY 1)
+#> SELECT cell_id,
+#>        n_num::DOUBLE / NULLIF(n_den, 0) AS value,
+#>        n_den AS n
+#> FROM src
 
 spue_url <- obis_h3t_url(
   base_url = "h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t",
   sql      = spue_sql)
+```
+
+``` r
 
 maplibre(center = c(-40, 20), zoom = 1.5) |>
   add_h3t_source(id = "spue", tiles = spue_url) |>

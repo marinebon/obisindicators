@@ -1,5 +1,32 @@
 # Changelog
 
+## obisindicators 0.4.1
+
+- **Vignettes now render their evaluable R chunks** on the pkgdown site
+  instead of showing code-only:
+  - [`vignette("h3")`](http://marinebon.org/obisindicators/articles/h3.md)
+    runs the full h3-grid →
+    [`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)
+    →
+    [`gmap_indicator()`](http://marinebon.org/obisindicators/reference/gmap_indicator.md)
+    pipeline on shipped `occ_1M` and renders the ES(50) map (only the
+    `deckgl` install/demo stays code-only).
+  - [`vignette("taxon_children")`](http://marinebon.org/obisindicators/articles/taxon_children.md)
+    now renders the generated `WITH RECURSIVE` tile SQL and tile URLs
+    from `obis_h3t_sql(aphiaid=)` /
+    [`obis_spue_sql()`](http://marinebon.org/obisindicators/reference/obis_spue_sql.md)
+    (pure builders, no store needed); only the DB-connection and `mapgl`
+    widget chunks stay code-only.
+  - [`vignette("h3t")`](http://marinebon.org/obisindicators/articles/h3t.md)
+    suppresses package-load messages so the evaluated
+    [`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
+    output is clean.
+  - Chunks that genuinely require the deployed S3 / DuckDB store / `h3t`
+    tile service
+    ([`vignette("scaling")`](http://marinebon.org/obisindicators/articles/scaling.md),
+    the build/deploy/map chunks) remain illustrative code, as they
+    cannot run in CI.
+
 ## obisindicators 0.4.0
 
 - **Automatic per-tile spatial pruning via `hex_prune`** (supersedes

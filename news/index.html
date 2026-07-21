@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -43,6 +43,19 @@
       <small>Source: <a href="https://github.com/marinebon/obisindicators/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.4.1" id="obisindicators-041">obisindicators 0.4.1<a class="anchor" aria-label="anchor" href="#obisindicators-041"></a></h2>
+<ul><li>
+<strong>Vignettes now render their evaluable R chunks</strong> on the pkgdown site instead of showing code-only:
+<ul><li>
+<code><a href="../articles/h3.html">vignette("h3")</a></code> runs the full h3-grid → <code><a href="../reference/calc_indicators.html">calc_indicators()</a></code> → <code><a href="../reference/gmap_indicator.html">gmap_indicator()</a></code> pipeline on shipped <code>occ_1M</code> and renders the ES(50) map (only the <code>deckgl</code> install/demo stays code-only).</li>
+<li>
+<code><a href="../articles/taxon_children.html">vignette("taxon_children")</a></code> now renders the generated <code>WITH RECURSIVE</code> tile SQL and tile URLs from <code>obis_h3t_sql(aphiaid=)</code> / <code><a href="../reference/obis_spue_sql.html">obis_spue_sql()</a></code> (pure builders, no store needed); only the DB-connection and <code>mapgl</code> widget chunks stay code-only.</li>
+<li>
+<code><a href="../articles/h3t.html">vignette("h3t")</a></code> suppresses package-load messages so the evaluated <code><a href="../reference/obis_h3t_sql.html">obis_h3t_sql()</a></code> output is clean.</li>
+<li>Chunks that genuinely require the deployed S3 / DuckDB store / <code>h3t</code> tile service (<code><a href="../articles/scaling.html">vignette("scaling")</a></code>, the build/deploy/map chunks) remain illustrative code, as they cannot run in CI.</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.4.0" id="obisindicators-040">obisindicators 0.4.0<a class="anchor" aria-label="anchor" href="#obisindicators-040"></a></h2>
 <ul><li>

@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -104,8 +104,9 @@ into a compact <code>taxon.parquet</code>.</li>
 alongside <code>occ_h3</code> / <code>idx_h3</code>.</li>
 </ul>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators" class="external-link">obisindicators</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dbi.r-dbi.org" class="external-link">DBI</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators" class="external-link">obisindicators</a></span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dbi.r-dbi.org" class="external-link">DBI</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r.duckdb.org/" class="external-link">duckdb</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">con</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dbi.r-dbi.org/reference/dbConnect.html" class="external-link">dbConnect</a></span><span class="op">(</span><span class="fu"><a href="https://r.duckdb.org/reference/duckdb.html" class="external-link">duckdb</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"/share/data/obis/obis_h3.duckdb"</span>, read_only <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
@@ -118,7 +119,7 @@ alongside <code>occ_h3</code> / <code>idx_h3</code>.</li>
 descendant, at any rank, via a recursive walk of
 <code>parentNameUsageID</code>. On the full WoRMS table (~1.5 M rows)
 this resolves in a fraction of a second.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Infraorder Cetacea = AphiaID 2688 (a rank that is NOT an occ_h3 column)</span></span>
 <span><span class="va">cet</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_taxon_children.html">obis_taxon_children</a></span><span class="op">(</span><span class="fl">2688</span>, <span class="va">con</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">cet</span><span class="op">)</span>                              <span class="co"># ~1,665 descendant taxa</span></span>
@@ -139,15 +140,31 @@ standalone read-only <code>SELECT</code>, handy for the API.</p>
 that filters <code>occ_h3</code> to the subtree via a recursive CTE (the
 <code>h3t</code> validator permits <code>WITH RECURSIVE</code>).
 <code><a href="../reference/obis_h3t_url.html">obis_h3t_url()</a></code> base64-encodes it into a tile URL.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sql</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_h3t_sql.html">obis_h3t_sql</a></span><span class="op">(</span>indicator <span class="op">=</span> <span class="st">"n"</span>, aphiaid <span class="op">=</span> <span class="fl">2688</span><span class="op">)</span>   <span class="co"># # records, all Cetacea</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="va">sql</span><span class="op">)</span></span>
+<span><span class="co">#&gt; WITH RECURSIVE taxon_tree AS (</span></span>
+<span><span class="co">#&gt; SELECT taxonID, parentNameUsageID</span></span>
+<span><span class="co">#&gt; FROM taxon</span></span>
+<span><span class="co">#&gt; WHERE taxonID IN (2688)</span></span>
+<span><span class="co">#&gt; UNION ALL</span></span>
+<span><span class="co">#&gt; SELECT t.taxonID, t.parentNameUsageID</span></span>
+<span><span class="co">#&gt; FROM taxon t</span></span>
+<span><span class="co">#&gt; JOIN taxon_tree tt ON t.parentNameUsageID = tt.taxonID</span></span>
+<span><span class="co">#&gt; WHERE t.parentNameUsageID IS NOT NULL), src AS (</span></span>
+<span><span class="co">#&gt;   SELECT CAST(h3_cell_to_parent(cell_id, LEAST({{res}}, 7)) AS BIGINT) AS cell_id,</span></span>
+<span><span class="co">#&gt;          species, SUM(records) AS ni</span></span>
+<span><span class="co">#&gt;   FROM occ_h3</span></span>
+<span><span class="co">#&gt;   WHERE res = CASE WHEN LEAST({{res}}, 7) &lt;= 3 THEN 3 WHEN LEAST({{res}}, 7) &lt;= 5 THEN 5 ELSE 7 END</span></span>
+<span><span class="co">#&gt;     AND aphiaid IN (SELECT taxonID FROM taxon_tree)</span></span>
+<span><span class="co">#&gt;   GROUP BY 1, 2)</span></span>
+<span><span class="co">#&gt; SELECT cell_id, SUM(ni) AS value, SUM(ni) AS n FROM src GROUP BY cell_id</span></span>
 <span></span>
 <span><span class="va">url</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_h3t_url.html">obis_h3t_url</a></span><span class="op">(</span></span>
 <span>  base_url  <span class="op">=</span> <span class="st">"h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t"</span>,</span>
-<span>  sql       <span class="op">=</span> <span class="va">sql</span><span class="op">)</span></span>
-<span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://walker-data.com/mapgl/" class="external-link">mapgl</a></span><span class="op">)</span></span>
+<span>  sql       <span class="op">=</span> <span class="va">sql</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://walker-data.com/mapgl/" class="external-link">mapgl</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://walker-data.com/mapgl/reference/maplibre.html" class="external-link">maplibre</a></span><span class="op">(</span>center <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">40</span>, <span class="fl">20</span><span class="op">)</span>, zoom <span class="op">=</span> <span class="fl">1.5</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://walker-data.com/mapgl/reference/add_h3t_source.html" class="external-link">add_h3t_source</a></span><span class="op">(</span>id <span class="op">=</span> <span class="st">"cet"</span>, tiles <span class="op">=</span> <span class="va">url</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://walker-data.com/mapgl/reference/add_fill_layer.html" class="external-link">add_fill_layer</a></span><span class="op">(</span></span>
@@ -171,17 +188,50 @@ target species?</p>
 recursive subtrees: numerator = target, denominator = effort).
 <code><a href="../reference/calc_spue.html">calc_spue()</a></code> is the pinned R reference (see
 <code>test-spue-parity.R</code>).</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># target: Tursiops truncatus (common bottlenose dolphin) = 137111</span></span>
 <span><span class="co"># effort: Infraorder Cetacea = 2688 (its multi-species-survey footprint)</span></span>
 <span><span class="va">spue_sql</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_spue_sql.html">obis_spue_sql</a></span><span class="op">(</span>num_aphiaid <span class="op">=</span> <span class="fl">137111</span>, den_aphiaid <span class="op">=</span> <span class="fl">2688</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="va">spue_sql</span><span class="op">)</span></span>
+<span><span class="co">#&gt; WITH RECURSIVE num_tree AS (</span></span>
+<span><span class="co">#&gt; SELECT taxonID, parentNameUsageID</span></span>
+<span><span class="co">#&gt; FROM taxon</span></span>
+<span><span class="co">#&gt; WHERE taxonID IN (137111)</span></span>
+<span><span class="co">#&gt; UNION ALL</span></span>
+<span><span class="co">#&gt; SELECT t.taxonID, t.parentNameUsageID</span></span>
+<span><span class="co">#&gt; FROM taxon t</span></span>
+<span><span class="co">#&gt; JOIN num_tree tt ON t.parentNameUsageID = tt.taxonID</span></span>
+<span><span class="co">#&gt; WHERE t.parentNameUsageID IS NOT NULL),</span></span>
+<span><span class="co">#&gt; den_tree AS (</span></span>
+<span><span class="co">#&gt; SELECT taxonID, parentNameUsageID</span></span>
+<span><span class="co">#&gt; FROM taxon</span></span>
+<span><span class="co">#&gt; WHERE taxonID IN (2688)</span></span>
+<span><span class="co">#&gt; UNION ALL</span></span>
+<span><span class="co">#&gt; SELECT t.taxonID, t.parentNameUsageID</span></span>
+<span><span class="co">#&gt; FROM taxon t</span></span>
+<span><span class="co">#&gt; JOIN den_tree tt ON t.parentNameUsageID = tt.taxonID</span></span>
+<span><span class="co">#&gt; WHERE t.parentNameUsageID IS NOT NULL),</span></span>
+<span><span class="co">#&gt; src AS (</span></span>
+<span><span class="co">#&gt;   SELECT CAST(h3_cell_to_parent(cell_id, LEAST({{res}}, 7)) AS BIGINT) AS cell_id,</span></span>
+<span><span class="co">#&gt;          -- COALESCE so an effort cell lacking the target reads 0, not NULL</span></span>
+<span><span class="co">#&gt;          -- (matches calc_spue(): sum of no records is 0). presence-only:</span></span>
+<span><span class="co">#&gt;          -- the target was absent *despite* effort here.</span></span>
+<span><span class="co">#&gt;          COALESCE(SUM(records) FILTER (WHERE aphiaid IN (SELECT taxonID FROM num_tree)), 0) AS n_num,</span></span>
+<span><span class="co">#&gt;          SUM(records) AS n_den</span></span>
+<span><span class="co">#&gt;   FROM occ_h3</span></span>
+<span><span class="co">#&gt;   WHERE res = CASE WHEN LEAST({{res}}, 7) &lt;= 3 THEN 3 WHEN LEAST({{res}}, 7) &lt;= 5 THEN 5 ELSE 7 END</span></span>
+<span><span class="co">#&gt;     AND aphiaid IN (SELECT taxonID FROM den_tree)</span></span>
+<span><span class="co">#&gt;   GROUP BY 1)</span></span>
+<span><span class="co">#&gt; SELECT cell_id,</span></span>
+<span><span class="co">#&gt;        n_num::DOUBLE / NULLIF(n_den, 0) AS value,</span></span>
+<span><span class="co">#&gt;        n_den AS n</span></span>
+<span><span class="co">#&gt; FROM src</span></span>
 <span></span>
 <span><span class="va">spue_url</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_h3t_url.html">obis_h3t_url</a></span><span class="op">(</span></span>
 <span>  base_url <span class="op">=</span> <span class="st">"h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t"</span>,</span>
-<span>  sql      <span class="op">=</span> <span class="va">spue_sql</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://walker-data.com/mapgl/reference/maplibre.html" class="external-link">maplibre</a></span><span class="op">(</span>center <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">40</span>, <span class="fl">20</span><span class="op">)</span>, zoom <span class="op">=</span> <span class="fl">1.5</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  sql      <span class="op">=</span> <span class="va">spue_sql</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://walker-data.com/mapgl/reference/maplibre.html" class="external-link">maplibre</a></span><span class="op">(</span>center <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">40</span>, <span class="fl">20</span><span class="op">)</span>, zoom <span class="op">=</span> <span class="fl">1.5</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://walker-data.com/mapgl/reference/add_h3t_source.html" class="external-link">add_h3t_source</a></span><span class="op">(</span>id <span class="op">=</span> <span class="st">"spue"</span>, tiles <span class="op">=</span> <span class="va">spue_url</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://walker-data.com/mapgl/reference/add_fill_layer.html" class="external-link">add_fill_layer</a></span><span class="op">(</span></span>
 <span>    id <span class="op">=</span> <span class="st">"spue_fill"</span>, source <span class="op">=</span> <span class="st">"spue"</span>, source_layer <span class="op">=</span> <span class="st">"spue"</span>,</span>
@@ -195,7 +245,7 @@ the effort taxon is the analyst’s call — the parent class or order is a
 sensible default, but a survey-defined group (e.g. Cetacea, seabirds) is
 often better. See <a href="scaling.html"><code>vignette("scaling")</code></a> for how the
 denominator’s sparsity behaves across H3 resolutions.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://dbi.r-dbi.org/reference/dbDisconnect.html" class="external-link">dbDisconnect</a></span><span class="op">(</span><span class="va">con</span>, shutdown <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

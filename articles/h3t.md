@@ -86,8 +86,6 @@ indicator live from the species store.
 ``` r
 
 library(obisindicators)
-#> Warning: replacing previous import 'h3::compact' by 'purrr::compact' when
-#> loading 'obisindicators'
 
 # default ES50 (all taxa) — precomputed, fast
 obis_h3t_sql("es")
