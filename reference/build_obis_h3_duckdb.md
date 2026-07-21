@@ -110,5 +110,5 @@ build_obis_h3_duckdb(
 
 The indicator math (ES50, Shannon, Simpson, richness) is the SQL
 translation of
-[`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)
+[`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md)
 (`esn` = 50 by default), validated by the package tests.

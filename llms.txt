@@ -101,20 +101,20 @@ Functions for reading data.
 
 Functions for calculating indicators.
 
-- [`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)
+- [`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md)
   : Calculate Biodiversity Indicators, including ES50 (Hurlbert index)
 
 ## H3 grid & tiles
 
 Build an H3 grid, and serve indicators as H3 hexagon tiles.
 
-- [`make_hex_res()`](http://marinebon.org/obisindicators/reference/make_hex_res.md)
+- [`make_hex_res()`](https://marinebon.org/obisindicators/reference/make_hex_res.md)
   : Make hexagon feature
-- [`build_obis_h3_duckdb()`](http://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
+- [`build_obis_h3_duckdb()`](https://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
   : Build the OBIS H3 DuckDB store
-- [`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
+- [`obis_h3t_sql()`](https://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
   : Build an h3t tile SQL query for an OBIS biodiversity indicator
-- [`obis_h3t_url()`](http://marinebon.org/obisindicators/reference/obis_h3t_url.md)
+- [`obis_h3t_url()`](https://marinebon.org/obisindicators/reference/obis_h3t_url.md)
   : Assemble an h3t tile (or stats) URL for an OBIS indicator
 
 ## Taxonomy & effort proxy
@@ -122,52 +122,52 @@ Build an H3 grid, and serve indicators as H3 hexagon tiles.
 Resolve children taxa (any rank) and the sightings-per-unit-effort
 (SPUE) proxy.
 
-- [`calc_spue()`](http://marinebon.org/obisindicators/reference/calc_spue.md)
+- [`calc_spue()`](https://marinebon.org/obisindicators/reference/calc_spue.md)
   : Sightings-per-unit-effort (SPUE) effort proxy, per H3 cell (R
   reference)
-- [`obis_spue_sql()`](http://marinebon.org/obisindicators/reference/obis_spue_sql.md)
+- [`obis_spue_sql()`](https://marinebon.org/obisindicators/reference/obis_spue_sql.md)
   : Build an h3t tile SQL query for the SPUE effort proxy
-- [`obis_taxon_children()`](http://marinebon.org/obisindicators/reference/obis_taxon_children.md)
+- [`obis_taxon_children()`](https://marinebon.org/obisindicators/reference/obis_taxon_children.md)
   : Resolve the descendant taxa of a WoRMS AphiaID
-- [`obis_taxon_subtree_sql()`](http://marinebon.org/obisindicators/reference/obis_taxon_subtree_sql.md)
+- [`obis_taxon_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_taxon_subtree_sql.md)
   : Standalone SQL for the AphiaID subtree (descendant taxonIDs)
 
 ## Visualize
 
 Functions for visualizing indicators.
 
-- [`gmap_indicator()`](http://marinebon.org/obisindicators/reference/gmap_indicator.md)
+- [`gmap_indicator()`](https://marinebon.org/obisindicators/reference/gmap_indicator.md)
   : Statically map indicators using ggplot
-- [`make_hex_res()`](http://marinebon.org/obisindicators/reference/make_hex_res.md)
+- [`make_hex_res()`](https://marinebon.org/obisindicators/reference/make_hex_res.md)
   : Make hexagon feature
 
 ## Data
 
 Locally available datasets for running examples.
 
-- [`occ_1960s`](http://marinebon.org/obisindicators/reference/occ_1960s.md)
+- [`occ_1960s`](https://marinebon.org/obisindicators/reference/occ_1960s.md)
   : OBIS occurrences, temporal sample for the 1960s, limited to 1M
   records
-- [`occ_1970s`](http://marinebon.org/obisindicators/reference/occ_1970s.md)
+- [`occ_1970s`](https://marinebon.org/obisindicators/reference/occ_1970s.md)
   : OBIS occurrences, temporal sample for the 1970s, limited to 1M
   records
-- [`occ_1980s`](http://marinebon.org/obisindicators/reference/occ_1980s.md)
+- [`occ_1980s`](https://marinebon.org/obisindicators/reference/occ_1980s.md)
   : OBIS occurrences, temporal sample for the 1980s, limited to 1M
   records
-- [`occ_1990s`](http://marinebon.org/obisindicators/reference/occ_1990s.md)
+- [`occ_1990s`](https://marinebon.org/obisindicators/reference/occ_1990s.md)
   : OBIS occurrences, temporal sample for the 1990s, limited to 1M
   records
-- [`occ_1M`](http://marinebon.org/obisindicators/reference/occ_1M.md) :
+- [`occ_1M`](https://marinebon.org/obisindicators/reference/occ_1M.md) :
   OBIS occurrences, global sample of 1 million records
-- [`occ_2000s`](http://marinebon.org/obisindicators/reference/occ_2000s.md)
+- [`occ_2000s`](https://marinebon.org/obisindicators/reference/occ_2000s.md)
   : OBIS occurrences, temporal sample for the 2000s, limited to 1M
   records
-- [`occ_2010s`](http://marinebon.org/obisindicators/reference/occ_2010s.md)
+- [`occ_2010s`](https://marinebon.org/obisindicators/reference/occ_2010s.md)
   : OBIS occurrences, temporal sample for the 2010s, limited to 1M
   records
-- [`occ_SAtlantic`](http://marinebon.org/obisindicators/reference/occ_SAtlantic.md)
+- [`occ_SAtlantic`](https://marinebon.org/obisindicators/reference/occ_SAtlantic.md)
   : OBIS occurrences, South Atlantic full regional sample
-- [`occ_fk`](http://marinebon.org/obisindicators/reference/occ_fk.md) :
+- [`occ_fk`](https://marinebon.org/obisindicators/reference/occ_fk.md) :
   OBIS occurrences, Florida Keys full regional sample
 
 # Articles
@@ -175,15 +175,15 @@ Locally available datasets for running examples.
 ### Examples
 
 - [Regional
-  Diversity](http://marinebon.org/obisindicators/articles/regional_diversity.md):
-- [resolution](http://marinebon.org/obisindicators/articles/resolution.md):
+  Diversity](https://marinebon.org/obisindicators/articles/regional_diversity.md):
+- [resolution](https://marinebon.org/obisindicators/articles/resolution.md):
 - [Temporal
-  Subsets](http://marinebon.org/obisindicators/articles/temporal_subsets.md):
+  Subsets](https://marinebon.org/obisindicators/articles/temporal_subsets.md):
 - [H3 grids and
-  deckgl](http://marinebon.org/obisindicators/articles/h3.md):
+  deckgl](https://marinebon.org/obisindicators/articles/h3.md):
 - [Serving OBIS indicators as H3 hexagon tiles
-  (h3t)](http://marinebon.org/obisindicators/articles/h3t.md):
+  (h3t)](https://marinebon.org/obisindicators/articles/h3t.md):
 - [Children taxa & an effort proxy (SPUE) from the OBIS
-  snapshot](http://marinebon.org/obisindicators/articles/taxon_children.md):
+  snapshot](https://marinebon.org/obisindicators/articles/taxon_children.md):
 - [Scaling OBIS observations across H3
-  resolutions](http://marinebon.org/obisindicators/articles/scaling.md):
+  resolutions](https://marinebon.org/obisindicators/articles/scaling.md):

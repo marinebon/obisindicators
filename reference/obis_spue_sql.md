@@ -6,7 +6,7 @@ to the effort taxon's footprint. Both subtrees are resolved with
 recursive CTEs over the baked `taxon` table, so this works for arbitrary
 ranks. Projects exactly `cell_id, value, n` (with `n` = effort record
 count), as the `h3t` service requires. See
-[`calc_spue()`](http://marinebon.org/obisindicators/reference/calc_spue.md)
+[`calc_spue()`](https://marinebon.org/obisindicators/reference/calc_spue.md)
 for the pinned R reference.
 
 ## Usage
@@ -34,13 +34,13 @@ obis_spue_sql(
 - res_max:
 
   cap on H3 resolution (1-7); see
-  [`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md).
+  [`obis_h3t_sql()`](https://marinebon.org/obisindicators/reference/obis_h3t_sql.md).
 
 - res_placeholder:
 
   resolution placeholder; default `"{{res}}"`. The h3t tile server
   prunes each tile automatically via `hex_prune` (see
-  [`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md)),
+  [`obis_h3t_sql()`](https://marinebon.org/obisindicators/reference/obis_h3t_sql.md)),
   so the emitted SQL carries no client-side bbox.
 
 ## Value

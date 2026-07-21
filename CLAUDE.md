@@ -17,13 +17,13 @@ numbers, record counts) binned onto [H3](https://h3geo.org) hexagons.
 There are **two computational paths that must agree**:
 
 1.  **In-memory / static** — for analysis and static maps.
-    [`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)
+    [`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md)
     (a dplyr pipeline) is the reference implementation of the math;
     occurrences are gridded with
-    [`make_hex_res()`](http://marinebon.org/obisindicators/reference/make_hex_res.md) +
+    [`make_hex_res()`](https://marinebon.org/obisindicators/reference/make_hex_res.md) +
     [`h3::geo_to_h3()`](https://rdrr.io/pkg/h3/man/geo_to_h3.html) and
     drawn with
-    [`gmap_indicator()`](http://marinebon.org/obisindicators/reference/gmap_indicator.md)
+    [`gmap_indicator()`](https://marinebon.org/obisindicators/reference/gmap_indicator.md)
     (ggplot + Robinson projection). This is what the `obisindicators`,
     `resolution`, `temporal_subsets`, and `regional_diversity` vignettes
     demonstrate against the shipped `occ_*` datasets.
@@ -31,22 +31,22 @@ There are **two computational paths that must agree**:
 2.  **DuckDB / served tiles (`h3t`)** — the same indicator math
     re-expressed in SQL so it can be precomputed into a DuckDB store and
     served as on-demand H3 map tiles. Lives in `R/h3t.R`. See
-    [`vignette("h3t")`](http://marinebon.org/obisindicators/articles/h3t.md).
+    [`vignette("h3t")`](https://marinebon.org/obisindicators/articles/h3t.md).
 
 ### The parity contract (do not break)
 
 The SQL in `R/h3t.R` (`.h3t_idx_sql`, `.h3t_idx_taxon_sql`, and the live
 paths in `obis_h3t_sql`) is a **translation of
-[`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)
+[`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md)
 with `esn = 50`**. `tests/testthat/test-h3t-parity.R` builds a small
 DuckDB store from shipped `occ_SAtlantic` and asserts the SQL output
 matches
-[`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)
+[`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md)
 cell-for-cell (exact for `n`/`sp`, tight tolerance for shannon/simpson,
 1e-3 for `es` due to `lgamma` float). **If you change the indicator
 formula in one place, change it in the other and keep this test green.**
 The ES(n) term appears in four spots:
-[`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)
+[`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md)
 (`R/analyze.R`), `.h3t_idx_sql`, `.h3t_idx_taxon_sql`, and the `es`
 branch of `obis_h3t_sql`.
 
@@ -85,7 +85,7 @@ exceeds `MAX_COVER_CELLS`; correctness is always held by the outer
 centroid filter (`wrap_tile_sql`), so pruning is a pure speed-up.
 `test-h3t-prune.R` asserts it is **result-preserving**. **Changing
 `H3T_PRUNE_RES` or the prune column means keeping
-[`build_obis_h3_duckdb()`](http://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md),
+[`build_obis_h3_duckdb()`](https://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md),
 `config.PRUNE_RES`, `prune.covering_cells`/`inject_prune` (both
 `server/h3t` and `CalCOFI/api-h3t-py`), and `test-h3t-prune.R` in
 agreement.** Clients emit plain SELECTs — no `bbox_placeholder`; the
@@ -100,7 +100,7 @@ years → `idx_h3_taxon` (no `hex_prune`, so never injected — already
 small); an `aphiaid` filter → live `occ_h3` filtered to the WoRMS
 subtree (see below); anything else finer/multi-value/year-ranged → live
 aggregation over `occ_h3`.
-[`obis_h3t_url()`](http://marinebon.org/obisindicators/reference/obis_h3t_url.md)
+[`obis_h3t_url()`](https://marinebon.org/obisindicators/reference/obis_h3t_url.md)
 base64-encodes that SQL into the tile URL’s `?q=`. The consuming service
 is `MarineSensitivity/server/h3t` (a vendored [h3t tile
 factory](https://github.com/CalCOFI/api-h3t-py)), rendered by
@@ -124,10 +124,10 @@ factory](https://github.com/CalCOFI/api-h3t-py)), rendered by
 - `obis_spue_sql(num_aphiaid, den_aphiaid)` — the effort proxy: per-cell
   `records(target subtree) / records(effort subtree)`, restricted to the
   effort taxon’s footprint (a presence-only SPUE).
-  [`calc_spue()`](http://marinebon.org/obisindicators/reference/calc_spue.md)
+  [`calc_spue()`](https://marinebon.org/obisindicators/reference/calc_spue.md)
   is its **pinned R reference** (`test-spue-parity.R`), same discipline
   as
-  [`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md).
+  [`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md).
 
 The `taxon` table is produced by `data-raw/build_taxon_parquet.R` (WoRMS
 DwC `taxon.txt` → `taxon.parquet`, stripping the `urn:lsid:…:taxname:`
@@ -148,7 +148,7 @@ the injection guard for the id-list.
   as the parity test does.
 - **OBIS open-data parquet nests DwC fields in an `interpreted`
   struct**; `dropped`/`absence` stay top-level.
-  [`build_obis_h3_duckdb()`](http://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
+  [`build_obis_h3_duckdb()`](https://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
   probes the schema from **one** sample file (not the whole glob — 6900+
   files would OOM) and handles both flat and nested layouts. Column
   matching is case-insensitive (`col_match`).
@@ -208,15 +208,15 @@ Rscript data-raw/migrate_add_spatial_cluster.R <in.duckdb> <out.duckdb>
 ## File map
 
 - `R/analyze.R` —
-  [`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)
+  [`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md)
   (the indicator math reference).
 - `R/h3.R` —
-  [`make_hex_res()`](http://marinebon.org/obisindicators/reference/make_hex_res.md)
+  [`make_hex_res()`](https://marinebon.org/obisindicators/reference/make_hex_res.md)
   (build an H3 hex grid `sf`, dateline-wrapped).
 - `R/h3t.R` — the entire DuckDB build + tile-SQL/URL layer.
 - `R/taxon.R` — WoRMS children resolution + the SPUE effort proxy.
 - `R/visualize.R` —
-  [`gmap_indicator()`](http://marinebon.org/obisindicators/reference/gmap_indicator.md)
+  [`gmap_indicator()`](https://marinebon.org/obisindicators/reference/gmap_indicator.md)
   static ggplot maps.
 - `R/data.R` — roxygen docs for the shipped `occ_*` datasets.
 - roxygen `@concept` tags

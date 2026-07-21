@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,7 +59,13 @@
 
 
 
-
+<script src="h3t_files/htmlwidgets-1.6.4/htmlwidgets.js"></script><link href="h3t_files/maplibre-gl-5.24.0/maplibre-gl.css" rel="stylesheet">
+<script src="h3t_files/maplibre-gl-5.24.0/maplibre-gl.js"></script><link href="h3t_files/mapbox-gl-draw-1.5.1/mapbox-gl-draw.css" rel="stylesheet">
+<script src="h3t_files/mapbox-gl-draw-1.5.1/mapbox-gl-draw.js"></script><script src="h3t_files/freehand-mode-1.0.0/freehand-mode.js"></script><script src="h3t_files/rectangle-mode-1.0.0/rectangle-mode.js"></script><script src="h3t_files/radius-mode-1.0.0/radius-mode.js"></script><script src="h3t_files/bezier-mode-1.1.0/bezier-mode.js"></script><link href="h3t_files/maplibre-gl-geocoder-1.5.0/maplibre-gl-geocoder.css" rel="stylesheet">
+<script src="h3t_files/maplibre-gl-geocoder-1.5.0/maplibre-gl-geocoder.min.js"></script><script src="h3t_files/mapbox-gl-globe-minimap-1.2.1/bundle.js"></script><script src="h3t_files/pmtiles-4.4.0/pmtiles.js"></script><script src="h3t_files/h3j-h3t-0.9.7/h3j_h3t.js"></script><link href="h3t_files/maptiler-geocoding-control-2.1.7/style.css" rel="stylesheet">
+<script src="h3t_files/maptiler-geocoding-control-2.1.7/maplibregl.umd.js"></script><script src="h3t_files/turf-7.3.0/turf.min.js"></script><script src="h3t_files/turf-operations-1.0.0/turf-operations.js"></script><script src="h3t_files/html2canvas-1.4.1/html2canvas.min.js"></script><script src="h3t_files/screenshot-1.0.0/screenshot.js"></script><link href="h3t_files/legend-interactivity-1.0.0/legend-interactivity.css" rel="stylesheet">
+<script src="h3t_files/legend-interactivity-1.0.0/legend-interactivity.js"></script><script src="h3t_files/mapgl-slider-1.0.0/slider.js"></script><link href="h3t_files/mapgl-slider-css-1.0.0/slider-control.css" rel="stylesheet">
+<script src="h3t_files/maplibregl-binding-0.5.0/maplibregl.js"></script><link href="h3t_files/layers-control-1.0.0/layers-control.css" rel="stylesheet">
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
@@ -87,7 +93,7 @@ the tile URL, validates it is read-only and projects exactly
 placeholder with the tile’s H3 resolution, and returns <a href="https://github.com/INSPIDE/h3j-h3t" class="external-link">h3j</a> JSON for MapLibre
 (<code><a href="https://walker-data.com/mapgl/reference/add_h3t_source.html" class="external-link">mapgl::add_h3t_source()</a></code>).</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators" class="external-link">obisindicators</a></span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators">obisindicators</a></span><span class="op">)</span></span></code></pre></div>
 <div class="section level2">
 <h2 id="build-the-authoritative-store">1. Build the authoritative store<a class="anchor" aria-label="anchor" href="#build-the-authoritative-store"></a>
 </h2>
@@ -140,7 +146,7 @@ fronted by Varnish + Caddy:</p>
 with a <code>taxon</code>/<code>years</code> filter it computes the
 indicator live from the species store.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators" class="external-link">obisindicators</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators">obisindicators</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># default ES50 (all taxa) — precomputed, fast</span></span>
 <span><span class="fu"><a href="../reference/obis_h3t_sql.html">obis_h3t_sql</a></span><span class="op">(</span><span class="st">"es"</span><span class="op">)</span></span>
@@ -192,10 +198,11 @@ endpoint:</p>
 <span>    source       <span class="op">=</span> <span class="st">"obis_es50"</span>,</span>
 <span>    source_layer <span class="op">=</span> <span class="st">"obis_es50"</span>,</span>
 <span>    fill_color   <span class="op">=</span> <span class="fu">interpolate</span><span class="op">(</span></span>
-<span>      column <span class="op">=</span> <span class="st">"value"</span>, values <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">50</span><span class="op">)</span>,</span>
+<span>      column <span class="op">=</span> <span class="st">"value"</span>, values <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">25</span>, <span class="fl">50</span><span class="op">)</span>,</span>
 <span>      stops  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#440154"</span>, <span class="st">"#21908C"</span>, <span class="st">"#FDE725"</span><span class="op">)</span><span class="op">)</span>,  <span class="co"># viridis</span></span>
 <span>    fill_opacity <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span></span></code></pre></div>
-<p>Swap <code>indicator = "sp"</code> for richness, or add a
+<div id="htmlwidget-ac96cb3ee4656e2e9ec3" style="width:100%;height:432.632880098888px;" class="maplibregl html-widget"></div>
+<script type="application/json" data-for="htmlwidget-ac96cb3ee4656e2e9ec3">{"x":{"style":"https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json","center":[-25,-30],"zoom":3,"bearing":0,"pitch":0,"projection":"globe","additional_params":[],"h3t_sources":[{"id":"obis_es50","tiles":["h3tiles://h3tcache.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t?q=U0VMRUNUIGNlbGxfaWQsIGVzIEFTIHZhbHVlLCBuIEZST00gaWR4X2gzIFdIRVJFIHJlcyA9IExFQVNUKHt7cmVzfX0sIDcp&release=v20260623"],"sourcelayer":"obis_es50","geometry_type":"Polygon","minzoom":0,"maxzoom":14,"promoteId":true,"debug":false}],"layers":[{"id":"obis_es50","type":"fill","source":"obis_es50","source_layer":"obis_es50","paint":{"fill-antialias":true,"fill-color":["interpolate",["linear"],["get","value"],1,"#440154",25,"#21908C",50,"#FDE725"],"fill-opacity":0.8,"fill-translate-anchor":"map"},"layout":{"visibility":"visible"},"slot":null,"minzoom":null,"maxzoom":null,"popup":null,"tooltip":null,"tooltip_style":null,"popup_style":null,"hover_options":null,"before_id":null,"filter":null}]},"evals":[],"jsHooks":[]}</script><p>Swap <code>indicator = "sp"</code> for richness, or add a
 <code>taxon</code>/<code>years</code> filter to drive a dropdown — each
 choice rebuilds the SQL encoded in the tile URL, and the same
 authoritative store answers every query.</p>

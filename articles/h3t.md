@@ -26,7 +26,7 @@ library(obisindicators)
 
 ## 1. Build the authoritative store
 
-[`build_obis_h3_duckdb()`](http://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
+[`build_obis_h3_duckdb()`](https://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
 streams [OBIS open-data](https://github.com/iobis/obis-open-data)
 geoparquet via DuckDB `httpfs` (byte-range, no full download), bins
 occurrences to H3, and writes two layers:
@@ -37,7 +37,7 @@ occurrences to H3, and writes two layers:
   on-the-fly **taxon/year-filtered** queries.
 
 The indicator math is the SQL translation of
-\[[`calc_indicators()`](http://marinebon.org/obisindicators/reference/calc_indicators.md)\]
+\[[`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md)\]
 (`esn = 50`), pinned to that R reference by the package tests.
 
 ``` r
@@ -78,7 +78,7 @@ docker compose up -d --build h3t h3tcache   # -> https://h3t.marinesensitivity.o
 
 ## 3. Compose tile queries
 
-[`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
+[`obis_h3t_sql()`](https://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
 generates the validated `SELECT`. With no filter it reads the fast
 precomputed layer; with a `taxon`/`years` filter it computes the
 indicator live from the species store.
@@ -104,7 +104,7 @@ cat(obis_h3t_sql("sp", taxon = list(class = "Aves"), years = c(2000, NA)))
 #> SELECT cell_id, COUNT(*) AS value, SUM(ni) AS n FROM src GROUP BY cell_id
 ```
 
-[`obis_h3t_url()`](http://marinebon.org/obisindicators/reference/obis_h3t_url.md)
+[`obis_h3t_url()`](https://marinebon.org/obisindicators/reference/obis_h3t_url.md)
 base64-encodes the SQL into a `?q=` tile URL (and safely percent-encodes
 it, so `+`/`/` in the base64 survive query parsing):
 
@@ -146,7 +146,7 @@ maplibre(center = c(-25, -30), zoom = 3) |>
     source       = "obis_es50",
     source_layer = "obis_es50",
     fill_color   = interpolate(
-      column = "value", values = c(1, 50),
+      column = "value", values = c(1, 25, 50),
       stops  = c("#440154", "#21908C", "#FDE725")),  # viridis
     fill_opacity = 0.8)
 ```

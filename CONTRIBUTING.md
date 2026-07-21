@@ -67,5 +67,5 @@ help you write a unit test, if needed).
 
 Please note that the obisindicators project is released with a
 [Contributor Code of
-Conduct](http://marinebon.org/obisindicators/CODE_OF_CONDUCT.md). By
+Conduct](https://marinebon.org/obisindicators/CODE_OF_CONDUCT.md). By
 contributing to this project you agree to abide by its terms.

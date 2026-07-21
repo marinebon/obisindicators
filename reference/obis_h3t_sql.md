@@ -59,7 +59,7 @@ obis_h3t_sql(
   The h3t tile server prunes each tile automatically: it derives the
   tile's covering coarse H3 cells from `z/x/y` and injects
   `hex_prune IN (...)` into the `idx_h3` / `occ_h3` scan (see
-  [`build_obis_h3_duckdb()`](http://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
+  [`build_obis_h3_duckdb()`](https://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
   and `H3T_PRUNE_RES`), so the emitted SQL is a plain per-resolution
   `SELECT` — no client-side bbox.
 
@@ -80,7 +80,7 @@ Query routing (fastest first):
 - an `aphiaid` filter → live indicator over `occ_h3`, filtered to the
   AphiaID subtree resolved from the baked `taxon` table via a recursive
   CTE (arbitrary rank, e.g. Infraorder Cetacea); see
-  [`obis_taxon_children()`](http://marinebon.org/obisindicators/reference/obis_taxon_children.md).
+  [`obis_taxon_children()`](https://marinebon.org/obisindicators/reference/obis_taxon_children.md).
 
 - anything else (finer rank, multiple values, or a year range) → live
   indicator computed on the fly from the species-level `occ_h3` store,

@@ -3,15 +3,15 @@
 ### Examples
 
 - [Regional
-  Diversity](http://marinebon.org/obisindicators/articles/regional_diversity.md):
-- [resolution](http://marinebon.org/obisindicators/articles/resolution.md):
+  Diversity](https://marinebon.org/obisindicators/articles/regional_diversity.md):
+- [resolution](https://marinebon.org/obisindicators/articles/resolution.md):
 - [Temporal
-  Subsets](http://marinebon.org/obisindicators/articles/temporal_subsets.md):
+  Subsets](https://marinebon.org/obisindicators/articles/temporal_subsets.md):
 - [H3 grids and
-  deckgl](http://marinebon.org/obisindicators/articles/h3.md):
+  deckgl](https://marinebon.org/obisindicators/articles/h3.md):
 - [Serving OBIS indicators as H3 hexagon tiles
-  (h3t)](http://marinebon.org/obisindicators/articles/h3t.md):
+  (h3t)](https://marinebon.org/obisindicators/articles/h3t.md):
 - [Children taxa & an effort proxy (SPUE) from the OBIS
-  snapshot](http://marinebon.org/obisindicators/articles/taxon_children.md):
+  snapshot](https://marinebon.org/obisindicators/articles/taxon_children.md):
 - [Scaling OBIS observations across H3
-  resolutions](http://marinebon.org/obisindicators/articles/scaling.md):
+  resolutions](https://marinebon.org/obisindicators/articles/scaling.md):

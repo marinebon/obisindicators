@@ -7,7 +7,7 @@ OBIS web services — and how to turn a higher-order taxon into an
 sightings-per-unit-effort (SPUE) indicator.
 
 It builds on
-[`vignette("h3t")`](http://marinebon.org/obisindicators/articles/h3t.md):
+[`vignette("h3t")`](https://marinebon.org/obisindicators/articles/h3t.md):
 the same `occ_h3` species-level store, plus a baked **`taxon`** table
 (the WoRMS taxonomy) that lets us resolve the descendants of an
 arbitrary AphiaID.
@@ -43,7 +43,7 @@ dbExecute(con, "LOAD h3;")
 
 ## Resolve the children of a taxon
 
-[`obis_taxon_children()`](http://marinebon.org/obisindicators/reference/obis_taxon_children.md)
+[`obis_taxon_children()`](https://marinebon.org/obisindicators/reference/obis_taxon_children.md)
 returns the seed taxon plus every descendant, at any rank, via a
 recursive walk of `parentNameUsageID`. On the full WoRMS table (~1.5 M
 rows) this resolves in a fraction of a second.
@@ -62,7 +62,7 @@ nrow(dia)                              # ~71,500 descendant taxa
 
 The descendant AphiaIDs (`cet$taxonID`) are exactly the set used to
 filter `occ_h3.aphiaid`.
-[`obis_taxon_subtree_sql()`](http://marinebon.org/obisindicators/reference/obis_taxon_subtree_sql.md)
+[`obis_taxon_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_taxon_subtree_sql.md)
 returns that resolution as a standalone read-only `SELECT`, handy for
 the API.
 
@@ -71,7 +71,7 @@ the API.
 `obis_h3t_sql(aphiaid = ...)` builds a served tile query that filters
 `occ_h3` to the subtree via a recursive CTE (the `h3t` validator permits
 `WITH RECURSIVE`).
-[`obis_h3t_url()`](http://marinebon.org/obisindicators/reference/obis_h3t_url.md)
+[`obis_h3t_url()`](https://marinebon.org/obisindicators/reference/obis_h3t_url.md)
 base64-encodes it into a tile URL.
 
 ``` r
@@ -125,10 +125,10 @@ whale/dolphin), what fraction of records are the target species?
 \text{SPUE}_{cell} = \frac{\text{records of the target taxon}}{\text{records of the effort taxon}}
 ```
 
-[`obis_spue_sql()`](http://marinebon.org/obisindicators/reference/obis_spue_sql.md)
+[`obis_spue_sql()`](https://marinebon.org/obisindicators/reference/obis_spue_sql.md)
 builds this as a served tile query (two recursive subtrees: numerator =
 target, denominator = effort).
-[`calc_spue()`](http://marinebon.org/obisindicators/reference/calc_spue.md)
+[`calc_spue()`](https://marinebon.org/obisindicators/reference/calc_spue.md)
 is the pinned R reference (see `test-spue-parity.R`).
 
 ``` r
@@ -192,7 +192,7 @@ cell backed by a large `n` is a robust SPUE; a bright cell over `n = 3`
 is noise. Choosing the effort taxon is the analyst’s call — the parent
 class or order is a sensible default, but a survey-defined group
 (e.g. Cetacea, seabirds) is often better. See
-[`vignette("scaling")`](http://marinebon.org/obisindicators/articles/scaling.md)
+[`vignette("scaling")`](https://marinebon.org/obisindicators/articles/scaling.md)
 for how the denominator’s sparsity behaves across H3 resolutions.
 
 ``` r

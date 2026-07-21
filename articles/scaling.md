@@ -6,7 +6,7 @@ resolutions therefore trades **spatial detail** against **per-cell
 sample size** and **query cost**. This article walks those trade-offs
 and the choices they force in the `h3t` serving design — especially for
 the live children-taxa and SPUE paths from
-[`vignette("taxon_children")`](http://marinebon.org/obisindicators/articles/taxon_children.md).
+[`vignette("taxon_children")`](https://marinebon.org/obisindicators/articles/taxon_children.md).
 
 ``` r
 
@@ -39,7 +39,7 @@ purrr::map_dfr(1:7, res_summary)
 The store keeps species-level `occ_h3` at only three tiers (3 / 5 / 7);
 a query at res 1–2 rolls up from tier 3, res 4 from tier 5, res 6 from
 tier 7 (see
-[`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md)).
+[`obis_h3t_sql()`](https://marinebon.org/obisindicators/reference/obis_h3t_sql.md)).
 Rolling *up* is cheap; the expense is the base-tier scan.
 
 ## Precomputed vs. live query cost

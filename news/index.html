@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -43,6 +43,19 @@
       <small>Source: <a href="https://github.com/marinebon/obisindicators/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.4.2" id="obisindicators-042">obisindicators 0.4.2<a class="anchor" aria-label="anchor" href="#obisindicators-042"></a></h2>
+<ul><li>
+<strong>Vignette H3 tile maps now actually render</strong> (the <code>mapgl</code>/MapLibre chunks that 0.4.1 still left as code-only):
+<ul><li>
+<code><a href="../articles/h3t.html">vignette("h3t")</a></code> renders the interactive ES50 hexagon map; <code><a href="../articles/taxon_children.html">vignette("taxon_children")</a></code> renders the Cetacea-records map and the SPUE map. These are client-side MapLibre widgets — tiles are fetched from the deployed <code>h3t</code> service in the reader’s browser, so they need no store/S3 at build time.</li>
+<li>
+<strong>New Remote dependency</strong>: the maps require the h3t-antimeridian fix in <code>mapgl</code> (renders H3 hexagons that cross the dateline), pinned via <code>Remotes: mapgl=bbest/mapgl@fix/h3t-antimeridian</code> (<a href="https://github.com/walkerke/mapgl/pull/211" class="external-link">walkerke/mapgl#211</a>). Switch to upstream <code>mapgl</code> once that PR merges.</li>
+<li>Fixed a latent bug in the <code>h3t</code> map example — <code>interpolate(values=)</code> now has the same length as <code>stops=</code> (a 3-stop viridis ramp), which previously would have errored had the chunk been evaluated.</li>
+<li>
+<code><a href="../articles/scaling.html">vignette("scaling")</a></code> stays code-only: every chunk runs live benchmark queries against the deployed DuckDB store (no map widgets), which CI cannot reach.</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.4.1" id="obisindicators-041">obisindicators 0.4.1<a class="anchor" aria-label="anchor" href="#obisindicators-041"></a></h2>
 <ul><li>

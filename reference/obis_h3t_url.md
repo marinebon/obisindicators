@@ -1,7 +1,7 @@
 # Assemble an h3t tile (or stats) URL for an OBIS indicator
 
 Base64-encodes the SQL from
-[`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
+[`obis_h3t_sql()`](https://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
 into the `?q=` parameter.
 
 ## Usage
@@ -27,7 +27,7 @@ obis_h3t_url(
 - sql:
 
   the SQL from
-  [`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
+  [`obis_h3t_sql()`](https://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
   (or pass `...` to build it).
 
 - release:
@@ -41,7 +41,7 @@ obis_h3t_url(
 - ...:
 
   passed to
-  [`obis_h3t_sql()`](http://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
+  [`obis_h3t_sql()`](https://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
   when `sql` is missing.
 
 ## Value
