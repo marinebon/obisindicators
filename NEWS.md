@@ -1,3 +1,20 @@
+# obisindicators 0.4.1
+
+* **Vignettes now render their evaluable R chunks** on the pkgdown site instead
+  of showing code-only:
+  - `vignette("h3")` runs the full h3-grid → `calc_indicators()` → `gmap_indicator()`
+    pipeline on shipped `occ_1M` and renders the ES(50) map (only the `deckgl`
+    install/demo stays code-only).
+  - `vignette("taxon_children")` now renders the generated `WITH RECURSIVE`
+    tile SQL and tile URLs from `obis_h3t_sql(aphiaid=)` / `obis_spue_sql()`
+    (pure builders, no store needed); only the DB-connection and `mapgl`
+    widget chunks stay code-only.
+  - `vignette("h3t")` suppresses package-load messages so the evaluated
+    `obis_h3t_sql()` output is clean.
+  - Chunks that genuinely require the deployed S3 / DuckDB store / `h3t` tile
+    service (`vignette("scaling")`, the build/deploy/map chunks) remain
+    illustrative code, as they cannot run in CI.
+
 # obisindicators 0.4.0
 
 * **Automatic per-tile spatial pruning via `hex_prune`** (supersedes 0.3.0's

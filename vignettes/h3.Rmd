@@ -10,14 +10,14 @@ editor_options:
 ---
 
 ```{r, include = FALSE}
-# code-only walkthrough (deckgl/h3 demo); see vignette("obisindicators") for the
-# rendered indicator maps.
+# the h3-grid → indicator → map pipeline runs on shipped occ_1M (same as
+# vignette("obisindicators")); only the deckgl demo below stays code-only, since
+# it installs from GitHub and needs a browser to render.
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment  = "#>",
   warning  = FALSE,
-  message  = FALSE,
-  eval     = FALSE)
+  message  = FALSE)
 ```
 
 ```{r setup}
@@ -87,7 +87,7 @@ obisindicators::gmap_indicator(
 
 # `deckgl`
 
-```{r}
+```{r, eval = FALSE}
 remotes::install_github("crazycapivara/deckgl")
 librarian::shelf(
   deckgl, htmlwidgets)

@@ -13,6 +13,8 @@ editor_options:
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment  = "#>",
+  warning  = FALSE,
+  message  = FALSE,
   eval     = FALSE)  # most chunks hit S3 / the deployed h3t service
 ```
 

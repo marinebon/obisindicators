@@ -13,7 +13,10 @@ editor_options:
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment  = "#>",
-  eval     = FALSE)  # chunks query the deployed obis_h3 DuckDB store
+  warning  = FALSE,
+  message  = FALSE,
+  eval     = FALSE)  # DB/map chunks hit the deployed obis_h3 store & tile service;
+                     # the pure SQL-builder chunks below opt back in with eval = TRUE
 ```
 
 This article shows how to filter OBIS by **any WoRMS taxon, at any rank**, using
@@ -39,8 +42,11 @@ those we walk the full WoRMS hierarchy:
 - `migrate_add_taxon.R` bakes that into `obis_h3.duckdb` (indexed on
   `parentNameUsageID`), alongside `occ_h3` / `idx_h3`.
 
-```{r setup}
+```{r setup, eval = TRUE}
 library(obisindicators)
+```
+
+```{r connect}
 library(DBI)
 library(duckdb)
 
@@ -75,14 +81,16 @@ standalone read-only `SELECT`, handy for the API.
 to the subtree via a recursive CTE (the `h3t` validator permits
 `WITH RECURSIVE`). `obis_h3t_url()` base64-encodes it into a tile URL.
 
-```{r map-records}
+```{r map-records-sql, eval = TRUE}
 sql <- obis_h3t_sql(indicator = "n", aphiaid = 2688)   # # records, all Cetacea
 cat(sql)
 
 url <- obis_h3t_url(
   base_url  = "h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t",
   sql       = sql)
+```
 
+```{r map-records}
 library(mapgl)
 maplibre(center = c(-40, 20), zoom = 1.5) |>
   add_h3t_source(id = "cet", tiles = url) |>
@@ -108,7 +116,7 @@ $$\text{SPUE}_{cell} = \frac{\text{records of the target taxon}}{\text{records o
 numerator = target, denominator = effort). `calc_spue()` is the pinned R
 reference (see `test-spue-parity.R`).
 
-```{r spue}
+```{r spue-sql, eval = TRUE}
 # target: Tursiops truncatus (common bottlenose dolphin) = 137111
 # effort: Infraorder Cetacea = 2688 (its multi-species-survey footprint)
 spue_sql <- obis_spue_sql(num_aphiaid = 137111, den_aphiaid = 2688)
@@ -117,7 +125,9 @@ cat(spue_sql)
 spue_url <- obis_h3t_url(
   base_url = "h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t",
   sql      = spue_sql)
+```
 
+```{r spue-map}
 maplibre(center = c(-40, 20), zoom = 1.5) |>
   add_h3t_source(id = "spue", tiles = spue_url) |>
   add_fill_layer(
