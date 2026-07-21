@@ -119,7 +119,7 @@ jsonlite::fromJSON(u)  # {min, max, p02, p98, n}
 
 ## 4. Map it with MapLibre
 
-```{r map}
+```{r map, eval = TRUE}
 library(mapgl)
 
 tiles_es50 <- obis_h3t_url(
@@ -134,7 +134,7 @@ maplibre(center = c(-25, -30), zoom = 3) |>
     source       = "obis_es50",
     source_layer = "obis_es50",
     fill_color   = interpolate(
-      column = "value", values = c(1, 50),
+      column = "value", values = c(1, 25, 50),
       stops  = c("#440154", "#21908C", "#FDE725")),  # viridis
     fill_opacity = 0.8)
 ```

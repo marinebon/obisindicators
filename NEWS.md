@@ -1,3 +1,23 @@
+# obisindicators 0.4.2
+
+* **Vignette H3 tile maps now actually render** (the `mapgl`/MapLibre chunks that
+  0.4.1 still left as code-only):
+  - `vignette("h3t")` renders the interactive ES50 hexagon map; `vignette("taxon_children")`
+    renders the Cetacea-records map and the SPUE map. These are client-side
+    MapLibre widgets — tiles are fetched from the deployed `h3t` service in the
+    reader's browser, so they need no store/S3 at build time.
+  - **New Remote dependency**: the maps require the h3t-antimeridian fix in
+    `mapgl` (renders H3 hexagons that cross the dateline), pinned via
+    `Remotes: mapgl=bbest/mapgl@fix/h3t-antimeridian`
+    ([walkerke/mapgl#211](https://github.com/walkerke/mapgl/pull/211)). Switch to
+    upstream `mapgl` once that PR merges.
+  - Fixed a latent bug in the `h3t` map example — `interpolate(values=)` now has
+    the same length as `stops=` (a 3-stop viridis ramp), which previously would
+    have errored had the chunk been evaluated.
+  - `vignette("scaling")` stays code-only: every chunk runs live benchmark
+    queries against the deployed DuckDB store (no map widgets), which CI cannot
+    reach.
+
 # obisindicators 0.4.1
 
 * **Vignettes now render their evaluable R chunks** on the pkgdown site instead

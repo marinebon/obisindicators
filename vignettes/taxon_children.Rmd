@@ -90,7 +90,7 @@ url <- obis_h3t_url(
   sql       = sql)
 ```
 
-```{r map-records}
+```{r map-records, eval = TRUE}
 library(mapgl)
 maplibre(center = c(-40, 20), zoom = 1.5) |>
   add_h3t_source(id = "cet", tiles = url) |>
@@ -127,7 +127,7 @@ spue_url <- obis_h3t_url(
   sql      = spue_sql)
 ```
 
-```{r spue-map}
+```{r spue-map, eval = TRUE}
 maplibre(center = c(-40, 20), zoom = 1.5) |>
   add_h3t_source(id = "spue", tiles = spue_url) |>
   add_fill_layer(
