@@ -163,6 +163,24 @@ finish_taxonomy <- function(path_duckdb, esn = 50L) {
   invisible(TRUE)
 }
 
+# ---- 0. Resume path -------------------------------------------------------
+# Finish an already-built store (gap-fill + EOV layers + verify) without redoing
+# the sync and build. The core layers are the expensive part (~hours); the
+# taxonomy layers are minutes, so a build that dies after occ_h3/idx_h3 should
+# never require starting over. Same code path as a full build — not a
+# reimplementation that could drift.
+finish_only <- Sys.getenv("OBIS_FINISH_ONLY", "")
+if (nzchar(finish_only)) {
+  if (!file.exists(finish_only))
+    stop("OBIS_FINISH_ONLY store not found: ", finish_only)
+  message("finish-only mode: ", finish_only)
+  finish_taxonomy(finish_only, esn = esn)
+  message("finish-only complete. Publish with:\n",
+          "  data-raw/deploy_obis_h3.sh --skip-sync --skip-build --store ",
+          finish_only)
+  quit(save = "no", status = 0)
+}
+
 # ---- 1. Demo store from shipped South Atlantic data (always) ---------------
 load(file.path(pkg_root, "data", "occ_SAtlantic.rda"))
 path_demo <- file.path(dir_obis, glue("obis_h3_satlantic_{stamp}.duckdb"))
