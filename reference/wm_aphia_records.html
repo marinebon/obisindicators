@@ -64,6 +64,7 @@ per-id supplement to the bulk <code>taxon.txt</code> download — see
 <span>  server <span class="op">=</span> <span class="va">WORMS_REST_SERVER</span>,</span>
 <span>  batch_size <span class="op">=</span> <span class="va">WM_MAX_IDS</span>,</span>
 <span>  concurrency <span class="op">=</span> <span class="fl">4L</span>,</span>
+<span>  max_passes <span class="op">=</span> <span class="fl">3L</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -89,6 +90,11 @@ per-id supplement to the bulk <code>taxon.txt</code> download — see
 to a shared public service.</p></dd>
 
 
+<dt id="arg-max-passes">max_passes<a class="anchor" aria-label="anchor" href="#arg-max-passes"></a></dt>
+<dd><p>retry passes over batches whose request failed, with a
+linear backoff between them.</p></dd>
+
+
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>message progress per round of requests.</p></dd>
 
@@ -96,13 +102,20 @@ to a shared public service.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>data frame with <code>taxonID</code>, <code>parentNameUsageID</code>, <code>acceptedNameUsageID</code>,
-<code>scientificName</code>, <code>taxonRank</code>, <code>taxonomicStatus</code>; zero rows if nothing matched.</p>
+<code>scientificName</code>, <code>taxonRank</code>, <code>taxonomicStatus</code>; zero rows if nothing
+matched. The <code>"failed_ids"</code> attribute holds ids whose request never
+succeeded (distinct from ids WoRMS genuinely lacks).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Ids WoRMS has no record for are simply absent from the result (the API
-returns a positional <code>null</code> for them, or HTTP 204 when a whole batch misses),
-so <code>setdiff(aphiaid, out$taxonID)</code> gives the unresolvable ids.</p>
+    <p>A request that FAILS is not the same as an id WoRMS has no record for, and
+the two must not be conflated: an id is only unresolvable if a <em>successful</em>
+response omitted it (the API returns a positional <code>null</code> for those, or HTTP
+204 when a whole batch misses). Batches whose request errored are retried up
+to <code>max_passes</code> times, and any still failing are returned in the
+<code>"failed_ids"</code> attribute so the caller can retry rather than write them off.
+Conflating the two silently discarded 2,250 resolvable algae ids (exactly 45
+whole batches) on the first real run against the global store.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

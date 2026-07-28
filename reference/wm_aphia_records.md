@@ -15,6 +15,7 @@ wm_aphia_records(
   server = WORMS_REST_SERVER,
   batch_size = WM_MAX_IDS,
   concurrency = 4L,
+  max_passes = 3L,
   verbose = TRUE
 )
 ```
@@ -38,6 +39,11 @@ wm_aphia_records(
   max parallel requests; kept low by default to stay polite to a shared
   public service.
 
+- max_passes:
+
+  retry passes over batches whose request failed, with a linear backoff
+  between them.
+
 - verbose:
 
   message progress per round of requests.
@@ -46,10 +52,17 @@ wm_aphia_records(
 
 data frame with `taxonID`, `parentNameUsageID`, `acceptedNameUsageID`,
 `scientificName`, `taxonRank`, `taxonomicStatus`; zero rows if nothing
-matched.
+matched. The `"failed_ids"` attribute holds ids whose request never
+succeeded (distinct from ids WoRMS genuinely lacks).
 
 ## Details
 
-Ids WoRMS has no record for are simply absent from the result (the API
-returns a positional `null` for them, or HTTP 204 when a whole batch
-misses), so `setdiff(aphiaid, out$taxonID)` gives the unresolvable ids.
+A request that FAILS is not the same as an id WoRMS has no record for,
+and the two must not be conflated: an id is only unresolvable if a
+*successful* response omitted it (the API returns a positional `null`
+for those, or HTTP 204 when a whole batch misses). Batches whose request
+errored are retried up to `max_passes` times, and any still failing are
+returned in the `"failed_ids"` attribute so the caller can retry rather
+than write them off. Conflating the two silently discarded 2,250
+resolvable algae ids (exactly 45 whole batches) on the first real run
+against the global store.
