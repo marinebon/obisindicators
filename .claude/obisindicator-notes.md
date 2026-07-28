@@ -120,6 +120,157 @@ Want me to draft the reply to Matt and Laura? The measured findings — the rank
 
 Please run locally or server side (using `ssh msens`) and getting actual gap coverage, git commit and push all, then draft email response to Matt and Laura with full findings and links ready
 
+----
+
+Done. Here's where everything landed.
+
+Actual gap coverage — the gap closes completely
+
+┌─────────────────────┬────────────────────────────┬───────────┐
+│                     │           before           │   after   │
+├─────────────────────┼────────────────────────────┼───────────┤
+│ Orphan AphiaIDs     │ 12,021 of 167,190 (7.2%)   │ 0         │
+├─────────────────────┼────────────────────────────┼───────────┤
+│ Unreachable records │ 8,303,471 of 121.9M (6.8%) │ 0         │
+├─────────────────────┼────────────────────────────┼───────────┤
+│ taxon rows          │ 1,559,375                  │ 1,571,867 │
+└─────────────────────┴────────────────────────────┴───────────┘
+
+All 12,021 resolved in 3 closure rounds. Your algae hypothesis was right on the nose.
+
+The finding worth the whole exercise: seagrasses were undercounted 8.3×
+
+31,360 → 260,236 records (+729.8%). 69 of the 88 Alismatales taxa in OBIS were missing from the bulk WoRMS export — and the missing ones were the actual seagrasses: Halophila ovalis (33,683), Halodule uninervis (30,377), Thalassia hemprichii (17,569), Zostera marina, Enhalus acoroides, Posidonia oceanica, Thalassia testudinum.
+
+What remained visible was mostly freshwater pondweeds (Stuckenia, Potamogeton, Najas). A seagrass EOV map built on the un-filled table would have shown largely the wrong plants. The other six EOVs gained nothing — the recovered records are algae and protists outside those subtrees, so the effect is precisely localized.
+
+One bug the server run exposed
+
+The first real run reported 2,250 IDs "unresolved by WoRMS". Spot-checking showed they were all real accepted species. 2,250 = exactly 45 × 50 — whole request batches had failed, and my code treated "request errored" the same as "API says no record", permanently branding all 50. Fixed: failed batches now retry and are returned separately from genuinely-absent IDs, with a regression test. That fix is what took the gap from 97.2% to 100% closed.
+
+I also hit an httr2 version skew — the plumber container pins 1.0.5 where concurrency rides on a curl pool, not max_active. Now version-tolerant, tested against both signatures.
+
+Committed and pushed
+
+- marinebon/obisindicators — def073a, 8b6ef9f, f759d4e (212 tests passing, zero skips)
+- MarineSensitivity/apps — d0969e6
+
+Email draft
+
+Created as a Gmail draft replying in-thread to Matt, cc Laura — not sent. It leads with the seagrass finding, credits their AphiaID approach with the measured rank-column evidence, flags the Lontra/Lutra disagreement between their two files and the dual Zostera marina AphiaIDs, and closes on EOV-as-SPUE-denominator. All 10 links verified 200.
+
+Not deployed — needs your call
+
+The new store is staged at /share/data/obis_eov_work/obis_h3_eov_v20260728.duckdb (2.17 GB, idx_h3_eov = 6.4M rows). I stopped short of the live swap since it's outward-facing. Two steps remain, and one sentence in the draft ("Fixed in the app") only becomes true after the first:
+
+1. App — pull the apps checkout on msens, touch restart.txt → EOV picker + fixed presets go live.
+2. Store — sudo ln -sfn the new file, rebuild/restart h3t, ban the Varnish cache → seagrass data corrects. Then flip EOV_PRECOMPUTED <- TRUE. Rollback is a symlink flip back to obis_h3_global_hp_v20260717.duckdb.
+
+Want me to run both now?
+
+----
+
+Both are deployed and verified live.
+
+Gap coverage — closed completely
+
+┌─────────────────────┬────────────────────────────┬───────────────────┐
+│                     │           before           │       after       │
+├─────────────────────┼────────────────────────────┼───────────────────┤
+│ Orphan AphiaIDs     │ 12,021 of 167,190 (7.2%)   │ 0                 │
+├─────────────────────┼────────────────────────────┼───────────────────┤
+│ Unreachable records │ 8,303,471 of 121.9M (6.8%) │ 0                 │
+├─────────────────────┼────────────────────────────┼───────────────────┤
+│ taxon rows          │ 1,559,375                  │ 1,571,867         │
+├─────────────────────┼────────────────────────────┼───────────────────┤
+│ Seagrasses EOV      │ 31,360 records             │ 260,236 (+729.8%) │
+└─────────────────────┴────────────────────────────┴───────────────────┘
+
+All 12,021 resolved in 3 closure rounds. Total records unchanged at 121,922,979 — nothing lost in the swap.
+
+Deploy
+
+Store swapped to obis_h3_global_eov_v20260728.duckdb, h3t recreated, Varnish banned, app rolled out. Verified against the live endpoint: every path the old app used still works (idx_h3, idx_h3_taxon, live subtree, SPUE), and the precomputed EOV layer is 4–8× faster — 0.14s vs 0.5–1.1s. The live app now serves both dropdown groups and the 1837→1836 typo is gone.
+
+Three things bit me, all now fixed and remembered:
+
+- docker compose up -d h3t is a no-op when the image is cache-identical. It printed "Container h3t Running" while still serving the old store — health reported the stale mtime. Needed --force-recreate.
+- The apps checkout on msens is on branch v7, 34 commits behind main, and several live apps symlink into that one checkout. A plain git pull fetched but changed nothing served.
+- Inside ssh 'bash -s' <<EOF, git consumes the rest of the heredoc from stdin, and set -e plus a no-match grep aborts the script — both silently truncated my deploy scripts twice before I spotted it.
+
+About that v7 checkout
+
+It had uncommitted work in h3-db/. I checked before touching it: that work is a duplicate of what's already on main — same custom_aphiaid control, same help text (including the old 1837 typo), and git diff origin/main -- schema_cols.csv came back empty. So nothing unique was at risk.
+
+I still took the conservative route: stashed it (stash@{0}, "h3-db WIP before EOV rollout 2026-07-28") and used git checkout origin/main -- h3-db/ so only that one app moved. Branch v7 and every other app are untouched. To undo: git checkout v7 -- h3-db/ && git stash pop.
+
+That's the one place I extended your "run both" beyond what you'd seen — you approved the rollout before I knew the checkout wasn't on main. Worth a glance to confirm you're happy the stashed WIP was genuinely redundant.
+
+Email
+
+Draft updated and sitting in Gmail replying in-thread to Matt, cc Laura — not sent. It opens with a live "try it right now" link since the picker is up, leads on the seagrass finding, credits their AphiaID approach with the measured rank-column evidence, and flags the Lontra/Lutra file disagreement and the dual Zostera marina IDs. All links verified 200.
+
+Commits pushed: def073a, 8b6ef9f, f759d4e (obisindicators, 212 tests passing) and d0969e6, b285077 (apps).
+
+---- 
+
+Also make sure the app @../../MarineSensitivity/apps/h3-db/ on the server is using locally sync'd parquet files and duckdb, not remote S3 queries.
+
+----
+
+Confirmed — the app never touches S3. Verified at every layer:
+
+Serving path: fully local
+
+┌───────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│       Layer       │                                                Finding                                                │
+├───────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ app.R             │ No S3/parquet refs — talks only to h3t.marinesensitivity.org (the one CDN hit is client-side mermaid) │
+├───────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ h3t container env │ H3T_DBS=obis:/share/data/obis/obis_h3.duckdb — local path; no AWS/S3 env vars at all                  │
+├───────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ /share            │ bind mount on local block device /dev/xvdb (xfs, 200G) — real disk, not a network mount               │
+├───────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Store objects     │ all 6 are BASE TABLE, 0 views — nothing lazily reading remote parquet                                 │
+├───────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Extensions        │ h3 + spatial loaded; httpfs installed but NOT loaded, aws not installed                               │
+└───────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Since DuckDB can autoload httpfs on demand, "not loaded" isn't sufficient on its own — so I probed the live endpoint:
+
+read_parquet('s3://…')  → HTTP 400  "function not allowed: read_parquet"
+read_csv('https://…')   → HTTP 400  "function not allowed: read_csv"
+INSTALL httpfs; …       → HTTP 400  "expected 1 statement, got 2"
+idx_h3 (local control)  → HTTP 200  0.14s, 18,559 cells
+
+The S3 route is blocked at the validator, not merely unused.
+
+Build path: also local-first
+
+The June 24 global build did the right thing — it aws sync'd 6,972 OBIS parquet files to disk, waited for the sync to complete, then built the DuckDB from local files. Not remote S3 queries.
+
+Two things worth your attention
+
+1. The synced OBIS parquet is gone. Nothing under /share holds OBIS occurrence parquet now (the 24,133 parquet files there are marine-atlas v8, unrelated). It was evidently reclaimed for space. A rebuild would need a fresh ~6,972-file sync, and /share is at 77% with 47 GB free — worth a disk check before kicking one off, given CLAUDE.md pegs a global scan near 96 GB.
+
+2. The build script's post-build restart fails silently. The tail of global_build.log:
+
+sh: 1: docker: not found
+sh: 1: docker: not found
+global build complete: …obis_h3_global_v20260624.duckdb
+
+Those are the docker compose restart h3t and the Varnish ban — they fail because the build runs inside the plumber container, which has no docker CLI. EXIT 0, so the build reports success. This is the same trap that bit me manually today: h3t holds the old file handle, so every automated global build leaves the service serving the previous store until someone restarts it by hand. Nothing is wrong right now (I force-recreated it), but it means the swap step is silently a no-op in the automated path.
+
+Want me to fix that? The clean version is to have the build write a sentinel or exit with a clear "restart required" message rather than swallowing the failure — or run the restart from a host-side wrapper instead of inside the container.
+
+----
+
+Fix both on the server. I don't know how the OBIS parquet is gone. Please do a find and disk check before full rebuild. And fix the build inside the plumber container -- pick strategy that has is most reproducible and least likely to silently fail
+
+----
+
+
+
 ## 2026-07-28 update mapgl to fix anti-meridian rendering
 
 

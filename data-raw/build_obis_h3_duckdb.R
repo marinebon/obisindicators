@@ -114,20 +114,32 @@ if (has_local || force_s3) {
   bake_taxon(path_global)   # add WoRMS taxon table for children-taxa queries
   symlink_to(path_global)
 
-  # restart h3t + flush Varnish — only works when docker is accessible from the
-  # build environment (skip silently when running inside a container).
-  server_dir <- "/share/github/MarineSensitivity/server"
-  docker_bin <- Sys.which("docker")
-  if (dir.exists(server_dir) && nzchar(docker_bin)) {
-    system(glue("{docker_bin} compose -f {server_dir}/docker-compose.yml restart h3t"))
-    system(paste0(
-      docker_bin, " compose -f ", server_dir, "/docker-compose.yml exec -T h3tcache ",
-      "varnishadm 'ban req.url ~ \"^/h3t/\"'"))
-    message("h3t restarted and Varnish cache flushed.")
-  } else {
-    message("docker not found in PATH — restart h3t manually:\n",
-            "  docker compose -f ", server_dir, "/docker-compose.yml restart h3t")
-  }
+  # This script BUILDS; it does not deploy. It used to shell out to
+  # `docker compose restart h3t` here, which is wrong in two ways: this runs
+  # inside the plumber container, which has no docker CLI (the Jun-2026 global
+  # build logged "sh: 1: docker: not found" twice and still exited 0), and
+  # system() return codes were never checked, so even where docker DID exist a
+  # failed restart was invisible. h3t holds the store's file handle open, so a
+  # skipped restart leaves the service quietly serving the PREVIOUS store while
+  # the symlink says otherwise — the worst kind of failure, a successful-looking
+  # no-op.
+  #
+  # Deployment now belongs to data-raw/deploy_obis_h3.sh, which runs on the HOST
+  # (where docker exists) and verifies the restart actually took effect. Drop a
+  # sentinel so a directly-invoked build can't be mistaken for a deployed one.
+  sentinel <- file.path(dir_obis, "RESTART_REQUIRED")
+  writeLines(c(
+    paste0("built: ",  path_global),
+    paste0("at: ",     format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")),
+    "h3t is still serving the PREVIOUS store until it is restarted.",
+    "Deploy with:  data-raw/deploy_obis_h3.sh --skip-sync --skip-build",
+    "(that script restarts h3t, flushes Varnish, and VERIFIES the swap took)"),
+    sentinel)
+  message(strrep("=", 72), "\n",
+          "BUILD COMPLETE - NOT YET DEPLOYED\n",
+          "h3t holds the old store's file handle and will keep serving it.\n",
+          "Run on the HOST:  data-raw/deploy_obis_h3.sh --skip-sync --skip-build\n",
+          "Sentinel: ", sentinel, "\n", strrep("=", 72))
 
   # clean up spill files
   unlink(tmp_dir, recursive = TRUE)
