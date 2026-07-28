@@ -80,7 +80,11 @@ if [ "$SKIP_SYNC" -eq 0 ]; then
      Reclaim candidates:  du -sh $OBIS_DIR/*.duckdb  /share/data/*"
   fi
   command -v aws >/dev/null || die "aws CLI not found — needed for the parquet sync"
-  mkdir -p "$OCC_DIR"
+  # $OBIS_DIR is root-owned, so a plain mkdir here fails with EACCES. Create the
+  # target as root and hand it to the invoking user, so the sync itself runs
+  # unprivileged (sudo + the snap-packaged aws CLI is its own headache).
+  sudo mkdir -p "$OCC_DIR"
+  sudo chown "$(id -u):$(id -g)" "$OCC_DIR"
   aws s3 sync --no-sign-request s3://obis-open-data/occurrence/ "$OCC_DIR/"
   n_pq=$(find "$OCC_DIR" -name '*.parquet' | wc -l)
   [ "$n_pq" -gt 0 ] || die "sync produced no parquet files in $OCC_DIR"
