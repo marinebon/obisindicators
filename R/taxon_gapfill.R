@@ -46,19 +46,28 @@ WM_FIELD_MAP <- c(
 #' per-id supplement to the bulk `taxon.txt` download — see
 #' [obis_taxon_fill_gaps()], which drives it.
 #'
-#' Ids WoRMS has no record for are simply absent from the result (the API
-#' returns a positional `null` for them, or HTTP 204 when a whole batch misses),
-#' so `setdiff(aphiaid, out$taxonID)` gives the unresolvable ids.
+#' A request that FAILS is not the same as an id WoRMS has no record for, and
+#' the two must not be conflated: an id is only unresolvable if a *successful*
+#' response omitted it (the API returns a positional `null` for those, or HTTP
+#' 204 when a whole batch misses). Batches whose request errored are retried up
+#' to `max_passes` times, and any still failing are returned in the
+#' `"failed_ids"` attribute so the caller can retry rather than write them off.
+#' Conflating the two silently discarded 2,250 resolvable algae ids (exactly 45
+#' whole batches) on the first real run against the global store.
 #'
 #' @param aphiaid integer WoRMS AphiaID(s) to look up.
 #' @param server WoRMS REST base URL; default `"https://www.marinespecies.org/rest"`.
 #' @param batch_size ids per request (WoRMS caps this operation at 50).
 #' @param concurrency max parallel requests; kept low by default to stay polite
 #'   to a shared public service.
+#' @param max_passes retry passes over batches whose request failed, with a
+#'   linear backoff between them.
 #' @param verbose message progress per round of requests.
 #'
 #' @return data frame with `taxonID`, `parentNameUsageID`, `acceptedNameUsageID`,
-#'   `scientificName`, `taxonRank`, `taxonomicStatus`; zero rows if nothing matched.
+#'   `scientificName`, `taxonRank`, `taxonomicStatus`; zero rows if nothing
+#'   matched. The `"failed_ids"` attribute holds ids whose request never
+#'   succeeded (distinct from ids WoRMS genuinely lacks).
 #' @concept taxon
 #' @export
 wm_aphia_records <- function(
@@ -66,6 +75,7 @@ wm_aphia_records <- function(
   server      = WORMS_REST_SERVER,
   batch_size  = WM_MAX_IDS,
   concurrency = 4L,
+  max_passes  = 3L,
   verbose     = TRUE) {
 
   if (!requireNamespace("httr2", quietly = TRUE))
@@ -73,33 +83,53 @@ wm_aphia_records <- function(
 
   ids <- .h3t_aphiaid_ints(aphiaid)
   bs  <- max(1L, min(as.integer(batch_size), WM_MAX_IDS))
-  grp <- split(ids, ceiling(seq_along(ids) / bs))
+  pending <- unname(split(ids, ceiling(seq_along(ids) / bs)))
   if (verbose)
-    message("  WoRMS: ", length(ids), " id(s) in ", length(grp), " request(s)")
+    message("  WoRMS: ", length(ids), " id(s) in ", length(pending), " request(s)")
 
-  reqs <- lapply(grp, function(g) {
+  one_req <- function(g)
     httr2::request(server) |>
       httr2::req_url_path_append("AphiaRecordsByAphiaIDs") |>
       httr2::req_url_query(`aphiaids[]` = g, .multi = "explode") |>
-      httr2::req_retry(max_tries = 3L) |>
+      httr2::req_retry(max_tries = 5L) |>
       httr2::req_timeout(60L)
-  })
 
-  resps <- do.call(
-    httr2::req_perform_parallel,
-    .wm_parallel_args(reqs, max(1L, as.integer(concurrency))))
+  recs <- list()
+  for (pass in seq_len(max(1L, as.integer(max_passes)))) {
+    if (!length(pending)) break
+    resps <- do.call(
+      httr2::req_perform_parallel,
+      .wm_parallel_args(lapply(pending, one_req),
+                        max(1L, as.integer(concurrency))))
 
-  recs <- unlist(lapply(resps, function(r) {
-    # a failed request (or 204 No Content) contributes nothing; the ids simply
-    # stay unresolved rather than aborting the whole fill
-    if (inherits(r, "error") || is.null(r)) return(list())
-    if (httr2::resp_status(r) != 200L)      return(list())
-    body <- tryCatch(httr2::resp_body_json(r), error = function(e) list())
-    Filter(Negate(is.null), body)
-  }), recursive = FALSE)
+    retry <- list()
+    for (i in seq_along(pending)) {
+      r <- resps[[i]]
+      # transport error / non-2xx -> the batch is UNKNOWN, not empty: retry it
+      if (inherits(r, "error") || is.null(r)) { retry[[length(retry) + 1L]] <- pending[[i]]; next }
+      st <- httr2::resp_status(r)
+      if (st == 204L) next                    # definitive: no records for these
+      if (st != 200L) { retry[[length(retry) + 1L]] <- pending[[i]]; next }
+      body <- tryCatch(httr2::resp_body_json(r), error = function(e) NULL)
+      if (is.null(body)) { retry[[length(retry) + 1L]] <- pending[[i]]; next }
+      recs <- c(recs, Filter(Negate(is.null), body))
+    }
+    pending <- retry
+    if (length(pending) && pass < max_passes) {
+      if (verbose) message("  retrying ", length(pending), " failed request(s)")
+      Sys.sleep(2 * pass)                     # linear backoff
+    }
+  }
+  failed <- unlist(pending, use.names = FALSE)
+  if (length(failed) && verbose)
+    message("  ", length(failed), " id(s) in requests that never succeeded ",
+            "(will be retried next round, NOT marked unresolvable)")
 
-  if (!length(recs))
-    return(.wm_empty_taxon_df())
+  if (!length(recs)) {
+    out <- .wm_empty_taxon_df()
+    attr(out, "failed_ids") <- as.integer(failed)
+    return(out)
+  }
 
   out <- data.frame(
     taxonID             = vapply(recs, .wm_field, integer(1),   WM_FIELD_MAP[["taxonID"]],             as_int = TRUE),
@@ -111,7 +141,15 @@ wm_aphia_records <- function(
     stringsAsFactors    = FALSE)
 
   out <- out[!is.na(out$taxonID), , drop = FALSE]
-  out[!duplicated(out$taxonID), , drop = FALSE]
+  out <- out[!duplicated(out$taxonID), , drop = FALSE]
+  attr(out, "failed_ids") <- setdiff(as.integer(failed), out$taxonID)
+  out
+}
+
+# ids whose request never succeeded — unknown, not absent (see wm_aphia_records)
+.wm_failed_ids <- function(x) {
+  f <- attr(x, "failed_ids")
+  if (is.null(f)) integer(0) else as.integer(f)
 }
 
 # httr2 renamed the concurrency control: >= 1.1 takes `max_active`, earlier
@@ -244,17 +282,20 @@ obis_taxon_fill_gaps <- function(
     round <- round + 1L
     if (verbose) message(" round ", round, ": fetching ", length(todo), " id(s)")
 
-    got <- fetch(todo)
-    # ids WoRMS has no record for: remember them so later rounds don't retry
-    unresolved <- union(unresolved, setdiff(todo, got$taxonID))
+    got    <- fetch(todo)
+    # ids whose REQUEST failed are unknown, not absent — they stay in `todo` for
+    # the next round instead of being written off as unresolvable
+    failed <- .wm_failed_ids(got)
+    unresolved <- union(unresolved, setdiff(todo, c(got$taxonID, failed)))
 
     got <- got[!got$taxonID %in% added$taxonID, , drop = FALSE]
     if (nrow(got)) {
       .obis_taxon_insert(con, got, taxon_cols)
       added <- rbind(added, got)
     }
-    # close the tree: chase ancestors the new rows point at but that are absent
-    todo <- setdiff(.obis_taxon_dangling(con), unresolved)
+    # close the tree: chase ancestors the new rows point at but that are absent,
+    # plus anything whose request failed this round
+    todo <- union(setdiff(.obis_taxon_dangling(con), unresolved), failed)
   }
 
   # a partial climb leaves rows whose parent is still absent, so a walk seeded

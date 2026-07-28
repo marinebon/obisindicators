@@ -9,6 +9,7 @@ wm_aphia_records(
   server = WORMS_REST_SERVER,
   batch_size = WM_MAX_IDS,
   concurrency = 4L,
+  max_passes = 3L,
   verbose = TRUE
 )
 }
@@ -22,11 +23,16 @@ wm_aphia_records(
 \item{concurrency}{max parallel requests; kept low by default to stay polite
 to a shared public service.}
 
+\item{max_passes}{retry passes over batches whose request failed, with a
+linear backoff between them.}
+
 \item{verbose}{message progress per round of requests.}
 }
 \value{
 data frame with \code{taxonID}, \code{parentNameUsageID}, \code{acceptedNameUsageID},
-\code{scientificName}, \code{taxonRank}, \code{taxonomicStatus}; zero rows if nothing matched.
+\code{scientificName}, \code{taxonRank}, \code{taxonomicStatus}; zero rows if nothing
+matched. The \code{"failed_ids"} attribute holds ids whose request never
+succeeded (distinct from ids WoRMS genuinely lacks).
 }
 \description{
 Batched, parallel calls to the WoRMS REST \code{AphiaRecordsByAphiaIDs} operation,
@@ -35,8 +41,13 @@ per-id supplement to the bulk \code{taxon.txt} download — see
 \code{\link[=obis_taxon_fill_gaps]{obis_taxon_fill_gaps()}}, which drives it.
 }
 \details{
-Ids WoRMS has no record for are simply absent from the result (the API
-returns a positional \code{null} for them, or HTTP 204 when a whole batch misses),
-so \code{setdiff(aphiaid, out$taxonID)} gives the unresolvable ids.
+A request that FAILS is not the same as an id WoRMS has no record for, and
+the two must not be conflated: an id is only unresolvable if a \emph{successful}
+response omitted it (the API returns a positional \code{null} for those, or HTTP
+204 when a whole batch misses). Batches whose request errored are retried up
+to \code{max_passes} times, and any still failing are returned in the
+\code{"failed_ids"} attribute so the caller can retry rather than write them off.
+Conflating the two silently discarded 2,250 resolvable algae ids (exactly 45
+whole batches) on the first real run against the global store.
 }
 \concept{taxon}

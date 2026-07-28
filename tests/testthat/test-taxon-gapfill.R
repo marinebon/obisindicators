@@ -134,6 +134,40 @@ test_that("fill is idempotent — a second pass adds nothing", {
   expect_equal(nrow(res$added), 0)
 })
 
+test_that("a FAILED request is retried, not written off as unresolvable", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+
+  fx <- make_gapfill_fixture(); con <- fx$con
+  on.exit({ DBI::dbDisconnect(con, shutdown = TRUE); unlink(fx$db) }, add = TRUE)
+
+  # a fetcher whose FIRST call fails outright (transport error), reporting its
+  # ids via the failed_ids attribute — as wm_aphia_records() does for a batch
+  # whose request never succeeded. This is the bug that silently discarded 2,250
+  # resolvable algae ids (45 whole batches) on the first real global run.
+  n <- 0L
+  flaky <- function(aphiaid) {
+    n <<- n + 1L
+    if (n == 1L) {
+      out <- obisindicators:::.wm_empty_taxon_df()
+      attr(out, "failed_ids") <- as.integer(aphiaid)
+      return(out)
+    }
+    fx$worms[fx$worms$taxonID %in% as.integer(aphiaid), , drop = FALSE]
+  }
+
+  res <- obis_taxon_fill_gaps(con, fetch = flaky, verbose = FALSE)
+
+  # 3002 was in the failed batch — it must NOT be branded unresolvable, and the
+  # retry must have gone on to resolve it and close its ancestry
+  expect_false(3002 %in% res$unresolved)
+  expect_setequal(res$added$taxonID, c(3002, 3001, 3000))
+  expect_true(res$closed)
+  # 9999 was also in that batch but is genuinely absent; once a request DOES
+  # succeed without it, it is correctly recorded as unresolvable
+  expect_true(9999 %in% res$unresolved)
+})
+
 test_that("parallel-request args adapt to the installed httr2 version", {
   skip_if_not_installed("httr2")
 
