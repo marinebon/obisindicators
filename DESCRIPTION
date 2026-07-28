@@ -29,6 +29,7 @@ Suggests:
     testthat (>= 3.0.0),
     DBI,
     duckdb,
+    curl,
     httr2,
     mapgl
 VignetteBuilder: knitr

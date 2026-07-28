@@ -85,8 +85,9 @@ wm_aphia_records <- function(
       httr2::req_timeout(60L)
   })
 
-  resps <- httr2::req_perform_parallel(
-    reqs, max_active = max(1L, as.integer(concurrency)), on_error = "continue")
+  resps <- do.call(
+    httr2::req_perform_parallel,
+    .wm_parallel_args(reqs, max(1L, as.integer(concurrency))))
 
   recs <- unlist(lapply(resps, function(r) {
     # a failed request (or 204 No Content) contributes nothing; the ids simply
@@ -111,6 +112,23 @@ wm_aphia_records <- function(
 
   out <- out[!is.na(out$taxonID), , drop = FALSE]
   out[!duplicated(out$taxonID), , drop = FALSE]
+}
+
+# httr2 renamed the concurrency control: >= 1.1 takes `max_active`, earlier
+# versions cap it on a curl `pool`. Build whichever the INSTALLED version
+# accepts, so the same code runs against the older httr2 pinned in the msens
+# plumber container (1.0.5) as on a current laptop.
+.wm_parallel_args <- function(reqs, concurrency,
+                              fn = httr2::req_perform_parallel) {
+  fmls <- names(formals(fn))
+  args <- list(reqs)
+  if ("max_active" %in% fmls) {
+    args$max_active <- concurrency
+  } else if ("pool" %in% fmls) {
+    args$pool <- curl::new_pool(total_con = concurrency, host_con = concurrency)
+  }
+  if ("on_error" %in% fmls) args$on_error <- "continue"
+  args
 }
 
 .wm_empty_taxon_df <- function()

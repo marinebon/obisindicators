@@ -134,6 +134,29 @@ test_that("fill is idempotent — a second pass adds nothing", {
   expect_equal(nrow(res$added), 0)
 })
 
+test_that("parallel-request args adapt to the installed httr2 version", {
+  skip_if_not_installed("httr2")
+
+  # httr2 >= 1.1 (a current laptop)
+  new_fn <- function(reqs, paths, on_error, progress, max_active, mock) NULL
+  a <- obisindicators:::.wm_parallel_args(list("r"), 4L, new_fn)
+  expect_equal(a$max_active, 4L)
+  expect_null(a$pool)
+  expect_equal(a$on_error, "continue")
+
+  # httr2 1.0.x (the msens plumber container) — concurrency rides on a curl pool
+  old_fn <- function(reqs, paths, pool, on_error, progress) NULL
+  b <- obisindicators:::.wm_parallel_args(list("r"), 4L, old_fn)
+  expect_null(b$max_active)
+  expect_s3_class(b$pool, "curl_multi")
+  expect_equal(b$on_error, "continue")
+
+  # a hypothetical version with neither must still produce a callable arg list
+  bare <- function(reqs) NULL
+  d <- obisindicators:::.wm_parallel_args(list("r"), 4L, bare)
+  expect_length(d, 1L)
+})
+
 test_that("wm_aphia_records() parses live WoRMS responses", {
   skip_if_not_installed("httr2")
   skip_on_cran()
