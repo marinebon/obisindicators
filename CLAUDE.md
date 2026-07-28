@@ -221,9 +221,23 @@ devtools::test()
 ```
 
 ``` bash
-# build the authoritative h3t DuckDB store (server-side driver). Always builds a
-# demo store from shipped occ_SAtlantic; auto-builds a global store if local
-# parquets exist at /share/data/obis/occurrence, or force S3 with OBIS_GLOBAL=true.
+# THE deploy entrypoint — run on the HOST, not in a container:
+#   sync -> build -> swap symlink -> restart h3t -> VERIFY -> flush Varnish.
+# Every step aborts on failure, and the deploy is confirmed by a post-condition
+# (the mtime h3t reports at /h3t/health must equal the published file's mtime),
+# not by trusting exit codes. Refuses to sync unless ~110 GB is free: a partial
+# sync silently builds a store from a TRUNCATED snapshot.
+data-raw/deploy_obis_h3.sh                       # full: sync + build + deploy
+data-raw/deploy_obis_h3.sh --skip-sync           # rebuild from parquet on disk
+data-raw/deploy_obis_h3.sh --skip-sync --skip-build --store <f.duckdb> --yes
+
+# build ONLY (no deploy). Always builds a demo store from shipped occ_SAtlantic;
+# auto-builds a global store if local parquets exist at /share/data/obis/occurrence,
+# or force S3 with OBIS_GLOBAL=true. Runs inside the plumber container, so it
+# deliberately does NOT touch docker — it drops a `RESTART_REQUIRED` sentinel and
+# tells you to deploy. h3t holds the store's file handle open, so a build without
+# a restart leaves the service serving the PREVIOUS store while the symlink says
+# otherwise (this silently happened on the Jun-2026 global build).
 Rscript data-raw/build_obis_h3_duckdb.R
 
 # add the idx_h3_taxon layer to an EXISTING store (no S3 re-read, writes a new file)

@@ -112,31 +112,45 @@
 <span><span class="co"># download of the duckdb `h3` community extension; they skip gracefully if any</span></span>
 <span><span class="co"># is unavailable (CI installs deps but may skip the extension).</span></span>
 <span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># build the authoritative h3t DuckDB store (server-side driver). Always builds a</span></span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="co"># demo store from shipped occ_SAtlantic; auto-builds a global store if local</span></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co"># parquets exist at /share/data/obis/occurrence, or force S3 with OBIS_GLOBAL=true.</span></span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/build_obis_h3_duckdb.R</span>
-<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a></span>
-<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="co"># add the idx_h3_taxon layer to an EXISTING store (no S3 re-read, writes a new file)</span></span>
-<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_idx_h3_taxon.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> <span class="pp">[--</span><span class="ss">cluster</span><span class="pp">-</span><span class="ss">occ</span><span class="pp">]</span></span>
-<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a></span>
-<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="co"># extract the WoRMS taxonomy subset (run where the WoRMS taxon.txt lives), then</span></span>
-<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="co"># bake it into a store so aphiaid children/SPUE queries work (writes a new file)</span></span>
-<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/build_taxon_parquet.R <span class="pp">[</span><span class="ss">taxon.txt</span><span class="pp">]</span> <span class="pp">[</span><span class="ss">taxon.parquet</span><span class="pp">]</span></span>
-<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_taxon.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> <span class="pp">[</span><span class="ss">taxon.parquet</span><span class="pp">]</span></span>
-<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a></span>
-<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="co"># close the taxon coverage gap from the WoRMS REST API (run AFTER migrate_add_taxon.R</span></span>
-<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="co"># and BEFORE migrate_add_eov.R — EOV membership is only as complete as `taxon`)</span></span>
-<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_fill_taxon_gaps.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> <span class="pp">[</span><span class="ss">min_records</span><span class="pp">]</span></span>
-<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a></span>
-<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="co"># add the EOV layers (`eov` membership + precomputed `idx_h3_eov`) to a store</span></span>
-<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_eov.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> [eov ...]</span>
-<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a></span>
-<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a><span class="co"># add the coarse-parent `hex_prune` key + (res, hex_prune, cell_id) clustering to</span></span>
-<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a><span class="co"># occ_h3/idx_h3 in an EXISTING store so the h3t server prunes each tile (no S3</span></span>
-<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a><span class="co"># re-read, writes a new file; drops any interim lat/lng cols). rebuilds needn't</span></span>
-<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a><span class="co"># run this — build_obis_h3_duckdb() bakes hex_prune natively.</span></span>
-<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_spatial_cluster.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span></span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># THE deploy entrypoint — run on the HOST, not in a container:</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="co">#   sync -&gt; build -&gt; swap symlink -&gt; restart h3t -&gt; VERIFY -&gt; flush Varnish.</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co"># Every step aborts on failure, and the deploy is confirmed by a post-condition</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="co"># (the mtime h3t reports at /h3t/health must equal the published file's mtime),</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="co"># not by trusting exit codes. Refuses to sync unless ~110 GB is free: a partial</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="co"># sync silently builds a store from a TRUNCATED snapshot.</span></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="ex">data-raw/deploy_obis_h3.sh</span>                       <span class="co"># full: sync + build + deploy</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="ex">data-raw/deploy_obis_h3.sh</span> <span class="at">--skip-sync</span>           <span class="co"># rebuild from parquet on disk</span></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="ex">data-raw/deploy_obis_h3.sh</span> <span class="at">--skip-sync</span> <span class="at">--skip-build</span> <span class="at">--store</span> <span class="op">&lt;</span>f.duckdb<span class="op">&gt;</span> --yes</span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a><span class="co"># build ONLY (no deploy). Always builds a demo store from shipped occ_SAtlantic;</span></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="co"># auto-builds a global store if local parquets exist at /share/data/obis/occurrence,</span></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="co"># or force S3 with OBIS_GLOBAL=true. Runs inside the plumber container, so it</span></span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="co"># deliberately does NOT touch docker — it drops a `RESTART_REQUIRED` sentinel and</span></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="co"># tells you to deploy. h3t holds the store's file handle open, so a build without</span></span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="co"># a restart leaves the service serving the PREVIOUS store while the symlink says</span></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a><span class="co"># otherwise (this silently happened on the Jun-2026 global build).</span></span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/build_obis_h3_duckdb.R</span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a></span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a><span class="co"># add the idx_h3_taxon layer to an EXISTING store (no S3 re-read, writes a new file)</span></span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_idx_h3_taxon.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> <span class="pp">[--</span><span class="ss">cluster</span><span class="pp">-</span><span class="ss">occ</span><span class="pp">]</span></span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a></span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a><span class="co"># extract the WoRMS taxonomy subset (run where the WoRMS taxon.txt lives), then</span></span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a><span class="co"># bake it into a store so aphiaid children/SPUE queries work (writes a new file)</span></span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/build_taxon_parquet.R <span class="pp">[</span><span class="ss">taxon.txt</span><span class="pp">]</span> <span class="pp">[</span><span class="ss">taxon.parquet</span><span class="pp">]</span></span>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_taxon.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> <span class="pp">[</span><span class="ss">taxon.parquet</span><span class="pp">]</span></span>
+<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a></span>
+<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a><span class="co"># close the taxon coverage gap from the WoRMS REST API (run AFTER migrate_add_taxon.R</span></span>
+<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a><span class="co"># and BEFORE migrate_add_eov.R — EOV membership is only as complete as `taxon`)</span></span>
+<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_fill_taxon_gaps.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> <span class="pp">[</span><span class="ss">min_records</span><span class="pp">]</span></span>
+<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a></span>
+<span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a><span class="co"># add the EOV layers (`eov` membership + precomputed `idx_h3_eov`) to a store</span></span>
+<span id="cb2-33"><a href="#cb2-33" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_eov.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> [eov ...]</span>
+<span id="cb2-34"><a href="#cb2-34" tabindex="-1"></a></span>
+<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a><span class="co"># add the coarse-parent `hex_prune` key + (res, hex_prune, cell_id) clustering to</span></span>
+<span id="cb2-36"><a href="#cb2-36" tabindex="-1"></a><span class="co"># occ_h3/idx_h3 in an EXISTING store so the h3t server prunes each tile (no S3</span></span>
+<span id="cb2-37"><a href="#cb2-37" tabindex="-1"></a><span class="co"># re-read, writes a new file; drops any interim lat/lng cols). rebuilds needn't</span></span>
+<span id="cb2-38"><a href="#cb2-38" tabindex="-1"></a><span class="co"># run this — build_obis_h3_duckdb() bakes hex_prune natively.</span></span>
+<span id="cb2-39"><a href="#cb2-39" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_spatial_cluster.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span></span></code></pre></div>
 <ul><li>CI: <code>.github/workflows/run_tests.yml</code> runs <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_local()</a></code> on every push/PR; <code>pkgdown.yaml</code> builds the site (allowed to fail without blocking).</li>
 <li>
 <code>inst/sql/*.sql</code> are <strong>canonical, human-readable references</strong> of what the R functions generate (<code>build_obis_h3.sql</code>, <code>tile_templates.sql</code>) — the R code is the source of truth; keep the SQL comments in sync when the R changes.</li>
