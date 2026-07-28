@@ -33,9 +33,10 @@ in `obis_h3t_sql`) is a **translation of `calc_indicators()` with `esn = 50`**.
 `occ_SAtlantic` and asserts the SQL output matches `calc_indicators()`
 cell-for-cell (exact for `n`/`sp`, tight tolerance for shannon/simpson, 1e-3 for
 `es` due to `lgamma` float). **If you change the indicator formula in one place,
-change it in the other and keep this test green.** The ES(n) term appears in
-four spots: `calc_indicators()` (`R/analyze.R`), `.h3t_idx_sql`,
-`.h3t_idx_taxon_sql`, and the `es` branch of `obis_h3t_sql`.
+change it in the others and keep these tests green.** The ES(n) term appears in
+**five** spots: `calc_indicators()` (`R/analyze.R`), `.h3t_idx_sql`,
+`.h3t_idx_taxon_sql`, the `es` branch of `obis_h3t_sql` (all `R/h3t.R`), and
+`.h3t_idx_eov_sql` (`R/eov.R`, pinned by `test-eov-parity.R`).
 
 ## The h3t store & serving pipeline
 
@@ -106,6 +107,43 @@ integer `taxonID` = AphiaID) and baked into `obis_h3.duckdb` by
 `data-raw/migrate_add_taxon.R` (or `bake_taxon()` in the build driver). AphiaIDs
 are integer-validated (`.h3t_aphiaid_ints`), the injection guard for the id-list.
 
+**The bulk download is not a complete cover** (`R/taxon_gapfill.R`). On the
+2026-07 global store 12,021 of 167,190 distinct `occ_h3.aphiaid` values (~7%,
+8.3M of 121.9M records) were absent from `taxon` — notably algae, whose WoRMS
+records come from thematic databases the DwC export lags — making them invisible
+to every children/EOV/SPUE query. `obis_taxon_orphans()` reports the gap and
+`obis_taxon_fill_gaps()` closes it by supplementing the bulk join with per-id
+WoRMS REST lookups (`wm_aphia_records()`, the `AphiaRecordsByAphiaIDs` operation
+at 50 ids/request, in parallel — same pattern as `msens::wm_rest()`). **The fill
+must run to transitive closure**: inserting an orphan whose ancestors are also
+missing leaves it disconnected from any seed above it, so each round re-chases
+newly-dangling parents. It warns and returns `closed = FALSE` rather than
+implying a whole tree when `max_rounds` is hit (a real WoRMS chain needs ~14
+rounds; the default is 40). `fetch` is the injectable seam the tests use to run
+offline.
+
+## EOVs (`R/eov.R`)
+
+GOOS/IOOS biology & ecosystems **Essential Ocean Variables** are defined
+taxonomically, and the IOOS Marine Life Data Network publishes that definition
+as root AphiaIDs per EOV ([`eov_taxonomy/IdentifierList.csv`](https://github.com/ioos/marine_life_data_network/tree/main/eov_taxonomy)) —
+33 seeds across 7 EOVs. That is exactly a multi-seed `aphiaid` subtree, so
+`OBIS_EOV` holds the seeds, `obis_eov_sql()` builds the tile SQL, and
+`obis_eov_bake()` adds two layers: `eov` (`eov, taxonID` membership, seeds
+expanded over `taxon`) and `idx_h3_eov` (precomputed indicators per `(eov, res)`,
+res 1–7, clustered by `(eov, res, cell_id)`; no `hex_prune` — like
+`idx_h3_taxon` it is already small). Routing mirrors `obis_h3t_sql`: one EOV and
+no years → `idx_h3_eov`; years, several EOVs, or `live = TRUE` → live subtree.
+
+**Why seeds-and-subtree rather than the DwC rank columns**: the rank a name
+occupies is not stable, so a `class = <name>` filter silently matches *nothing*
+when OBIS files the name elsewhere. Measured on the global store:
+`class='Actinopterygii'` → 0 records (WoRMS ranks it a Gigaclass; OBIS's class
+is `Teleostei`, 44.2M) and `class='Anthozoa'` → 0 (a Subphylum; OBIS uses
+`Hexacorallia`/`Octocorallia`). Both were live bugs in the h3-db app's presets.
+Subtree walking is rank-agnostic and immune. EOV membership is only as complete
+as `taxon`, so run the gap-fill first.
+
 ### h3t gotchas
 
 - **SQL injection**: taxon/year predicates are built by `.h3t_where_clause()` +
@@ -152,6 +190,13 @@ Rscript data-raw/migrate_add_idx_h3_taxon.R <in.duckdb> <out.duckdb> [--cluster-
 Rscript data-raw/build_taxon_parquet.R [taxon.txt] [taxon.parquet]
 Rscript data-raw/migrate_add_taxon.R <in.duckdb> <out.duckdb> [taxon.parquet]
 
+# close the taxon coverage gap from the WoRMS REST API (run AFTER migrate_add_taxon.R
+# and BEFORE migrate_add_eov.R — EOV membership is only as complete as `taxon`)
+Rscript data-raw/migrate_fill_taxon_gaps.R <in.duckdb> <out.duckdb> [min_records]
+
+# add the EOV layers (`eov` membership + precomputed `idx_h3_eov`) to a store
+Rscript data-raw/migrate_add_eov.R <in.duckdb> <out.duckdb> [eov ...]
+
 # add the coarse-parent `hex_prune` key + (res, hex_prune, cell_id) clustering to
 # occ_h3/idx_h3 in an EXISTING store so the h3t server prunes each tile (no S3
 # re-read, writes a new file; drops any interim lat/lng cols). rebuilds needn't
@@ -174,6 +219,8 @@ Rscript data-raw/migrate_add_spatial_cluster.R <in.duckdb> <out.duckdb>
 - `R/h3.R` — `make_hex_res()` (build an H3 hex grid `sf`, dateline-wrapped).
 - `R/h3t.R` — the entire DuckDB build + tile-SQL/URL layer.
 - `R/taxon.R` — WoRMS children resolution + the SPUE effort proxy.
+- `R/taxon_gapfill.R` — WoRMS REST supplement closing the `taxon` coverage gap.
+- `R/eov.R` — Essential Ocean Variables as multi-seed AphiaID subtrees.
 - `R/visualize.R` — `gmap_indicator()` static ggplot maps.
 - `R/data.R` — roxygen docs for the shipped `occ_*` datasets.
 - roxygen `@concept` tags (`read`/`analyze`/`h3t`/`taxon`/`visualize`/`data`) drive

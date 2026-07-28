@@ -57,3 +57,123 @@ make_taxon_fixture <- function() {
 
   list(con = con, db = db)
 }
+
+# fixture for the WoRMS gap-fill: a `taxon` table that is deliberately INCOMPLETE
+# with respect to `occ_h3`, mimicking the real algae gap. occ_h3 carries three
+# aphiaids absent from `taxon`:
+#   3002 a species whose whole ancestor chain (3001 genus, 3000 class) is also
+#        missing -> only a transitive-closure fill reconnects it;
+#   1111 present in taxon already (control, must not be re-fetched);
+#   9999 an id WoRMS has no record for -> must end up `unresolved`, not looping.
+# returns list(con, db, worms) where `worms` is the stand-in WoRMS API table.
+make_gapfill_fixture <- function() {
+  db  <- tempfile(fileext = ".duckdb")
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db, read_only = FALSE)
+
+  DBI::dbExecute(con, "
+    CREATE TABLE taxon (
+      taxonID BIGINT, parentNameUsageID BIGINT, acceptedNameUsageID BIGINT,
+      scientificName VARCHAR, taxonRank VARCHAR, taxonomicStatus VARCHAR);")
+  DBI::dbExecute(con, "
+    INSERT INTO taxon VALUES
+      (1000, NULL, 1000, 'Cetacea',            'Infraorder', 'accepted'),
+      (1100, 1000, 1100, 'Delphinidae',        'Family',     'accepted'),
+      (1110, 1100, 1110, 'Tursiops',           'Genus',      'accepted'),
+      (1111, 1110, 1111, 'Tursiops truncatus', 'Species',    'accepted');")
+
+  # no h3 extension needed: cell_id values are arbitrary here, the gap-fill
+  # never touches geometry
+  DBI::dbExecute(con, "
+    CREATE TABLE occ_h3 (res UTINYINT, cell_id BIGINT, aphiaid BIGINT,
+                         species VARCHAR, records BIGINT);")
+  DBI::dbExecute(con, "
+    INSERT INTO occ_h3 VALUES
+      (3, 11, 1111, 'Tursiops truncatus',  30),
+      (3, 11, 3002, 'Navicula perminuta', 500),
+      (3, 12, 3002, 'Navicula perminuta', 250),
+      (3, 12, 9999, 'Deleted taxon',        7),
+      -- same records rolled up at a finer tier: orphan counting must not
+      -- double-count across resolution tiers
+      (5, 21, 1111, 'Tursiops truncatus',  30),
+      (5, 21, 3002, 'Navicula perminuta', 500),
+      (5, 22, 3002, 'Navicula perminuta', 250),
+      (5, 22, 9999, 'Deleted taxon',        7);")
+
+  # what the stand-in WoRMS API knows. 9999 is deliberately absent.
+  worms <- data.frame(
+    taxonID             = c(3002L, 3001L, 3000L),
+    parentNameUsageID   = c(3001L, 3000L, NA_integer_),
+    acceptedNameUsageID = c(3002L, 3001L, 3000L),
+    scientificName      = c("Navicula perminuta", "Navicula", "Bacillariophyceae"),
+    taxonRank           = c("Species", "Genus", "Class"),
+    taxonomicStatus     = rep("accepted", 3),
+    stringsAsFactors    = FALSE)
+
+  list(con = con, db = db, worms = worms)
+}
+
+# fixture for the EOV layer: a `taxon` tree rooted at two REAL EOV seed
+# AphiaIDs (987094 Chelonioidea = seaTurtles, 1836 Aves = seabirds) with
+# synthetic descendants, plus occ_h3 at real H3 cells. Record counts are well
+# over esn=50 per cell so ES(50) is non-NULL and parity is actually exercised.
+# Needs the duckdb h3 community extension.
+make_eov_fixture <- function() {
+  db  <- tempfile(fileext = ".duckdb")
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = db, read_only = FALSE)
+  DBI::dbExecute(con, "LOAD h3;")
+
+  DBI::dbExecute(con, "
+    CREATE TABLE taxon (
+      taxonID BIGINT, parentNameUsageID BIGINT, acceptedNameUsageID BIGINT,
+      scientificName VARCHAR, taxonRank VARCHAR, taxonomicStatus VARCHAR);")
+  DBI::dbExecute(con, "
+    INSERT INTO taxon VALUES
+      (987094, NULL,   987094, 'Chelonioidea',      'Superfamily', 'accepted'),
+      (987095, 987094, 987095, 'Cheloniidae',       'Family',      'accepted'),
+      (987096, 987095, 987096, 'Chelonia',          'Genus',       'accepted'),
+      (987097, 987096, 987097, 'Chelonia mydas',    'Species',     'accepted'),
+      (987098, 987095, 987098, 'Caretta caretta',   'Species',     'accepted'),
+      (1836,   NULL,   1836,   'Aves',              'Class',       'accepted'),
+      (1840,   1836,   1840,   'Larus argentatus',  'Species',     'accepted');")
+
+  # two turtle cells (both with >= 50 records so ES(50) is defined) + a bird
+  # cell that must NOT leak into the seaTurtles EOV. Rolled up to the same
+  # resolution tiers the real store carries (H3T_RES_TIERS = 3/5/7) so the live
+  # tile path — which selects a tier by zoom — has rows to read.
+  DBI::dbExecute(con, "
+    CREATE TABLE occ_h3_base AS
+    SELECT CAST(h3_latlng_to_cell(lat, lng, 7) AS BIGINT) AS cell_id,
+           aphiaid, species, records
+    FROM (VALUES
+      (10.0, -50.0, 987097, 'Chelonia mydas',   120),
+      (10.0, -50.0, 987098, 'Caretta caretta',   80),
+      (10.1, -50.1, 987097, 'Chelonia mydas',    45),
+      (20.0, -60.0, 987098, 'Caretta caretta',  200),
+      (20.0, -60.0, 987097, 'Chelonia mydas',    60),
+      (40.0,  60.0, 1840,   'Larus argentatus', 300)
+    ) AS t(lat, lng, aphiaid, species, records);")
+  DBI::dbExecute(con, "
+    CREATE TABLE occ_h3 (res UTINYINT, cell_id BIGINT, aphiaid BIGINT,
+                         species VARCHAR, records BIGINT);")
+  for (r in c(3L, 5L, 7L))
+    DBI::dbExecute(con, sprintf("
+      INSERT INTO occ_h3
+      SELECT %d AS res, CAST(h3_cell_to_parent(cell_id, %d) AS BIGINT) AS cell_id,
+             aphiaid, species, SUM(records) AS records
+      FROM occ_h3_base GROUP BY 1, 2, 3, 4;", r, r))
+  DBI::dbExecute(con, "DROP TABLE occ_h3_base;")
+
+  list(con = con, db = db)
+}
+
+# a `fetch` stand-in for obis_taxon_fill_gaps(): serves only ids the fixture's
+# WoRMS knows, and records each call so tests can assert the round structure
+make_fetch_stub <- function(worms) {
+  calls <- list()
+  fn <- function(aphiaid) {
+    ids <- as.integer(aphiaid)
+    calls[[length(calls) + 1L]] <<- ids
+    worms[worms$taxonID %in% ids, , drop = FALSE]
+  }
+  list(fn = fn, calls = function() calls)
+}

@@ -1,5 +1,150 @@
 
 
+## 2026-07-28 EOVs on the h3-db app
+
+Evaluation: EOVs on the h3-db app
+
+I read the thread, pulled Matt's EOV CSVs, and tested the concept against the live global store rather than reasoning about it. Headline: this is mostly already built — and testing it surfaced two live bugs in the app.
+
+1. The EOV definition is tiny, and the existing machinery already handles it
+
+eov_taxonomy/IdentifierList.csv is the whole thing — 7 EOVs, 33 root AphiaIDs
+(3 fish + 1 coral + 19 mangrove + 7 mammal + 1 bird + 1 seagrass + 1 turtle;
+an earlier draft of this note said 38, which was an arithmetic slip — the
+count is asserted in tests/testthat/test-eov-parity.R):
+
+┌─────────────────────────────────────────────────┬────────┬──────────────────────────────────────────────────┐
+│                       EOV                       │ seeds  │                       e.g.                       │
+├─────────────────────────────────────────────────┼────────┼──────────────────────────────────────────────────┤
+│ fish                                            │ 3      │ Agnatha, Chondrichthyes, Osteichthyes            │
+├─────────────────────────────────────────────────┼────────┼──────────────────────────────────────────────────┤
+│ marineMammals                                   │ 7      │ Pinnipedia, Cetacea, Sirenia, …                  │
+├─────────────────────────────────────────────────┼────────┼──────────────────────────────────────────────────┤
+│ mangroves                                       │ 19     │ Avicennia, Rhizophora, …                         │
+├─────────────────────────────────────────────────┼────────┼──────────────────────────────────────────────────┤
+│ hardCorals / seabirds / seagrasses / seaTurtles │ 1 each │ Scleractinia / Aves / Alismatales / Chelonioidea │
+└─────────────────────────────────────────────────┴────────┴──────────────────────────────────────────────────┘
+
+.h3t_aphiaid_ints() already returns a vector, and .h3t_taxon_tree_cte() seeds WHERE taxonID IN (...) (R/taxon.R:11-35). So multi-seed EOVs need zero code change. All seven, live, via obis_h3t_sql(indicator="n", aphiaid=<seeds>):
+
+fish           ids= 3  HTTP 200  1.6s   21,477 cells
+mangroves      ids=19  HTTP 200  0.6s      234 cells
+marineMammals  ids= 7  HTTP 200  0.6s   18,583 cells
+seabirds/seagrasses/seaTurtles/hardCorals ... all <1s
+
+Scale context: 121.9M records, 167,190 species, a 1.56M-row WoRMS table. Fish ES(50) globally — res 3: 1.1s, res 5: 2.4s, res 7: 4.5s. The computational wall Matt and Laura hit is gone. The app's AphiaID box already accepts comma-separated ids (app.R:264), so an EOV map is a copy-paste today.
+
+2. Two app presets are silently returning nothing
+
+This is the real find, and it's the strongest argument for the EOV approach:
+
+preset                            rank-column   AphiaID subtree   verdict
+Bony fishes (Actinopterygii)                0        44,836,418   *** BROKEN
+Corals & anemones (Anthozoa)                0         1,979,610   *** BROKEN
+Seabirds / sharks / mammals / turtles / mollusks / crustaceans — agree within 0.3%
+
+Cause: PRESETS (app.R:80-89) filters class = <name>, but WoRMS doesn't assign those names to class. Actinopterygii is a Gigaclass (OBIS's class is Teleostei, 44.2M records); Anthozoa is a Subphylum (OBIS uses Hexacorallia, 1.5M / Octocorallia). A rank-column match can never hit. AphiaID subtree walking is rank-agnostic and immune to this entire failure class — that's the substantive case for the EOV extension, beyond just adding presets.
+
+Also: the AphiaID help text (app.R:270) says "1837 Aves". 1837 is Mammalia; Aves is 1836.
+
+3. One honest limitation to state up front
+
+6.8% of OBIS is unreachable by taxon-tree walking. 12,021 of 167,190 distinct aphiaids in occ_h3 (7.2%) are absent from the baked WoRMS table → 8.3M of 121.9M records. Every EOV total is a lower bound by roughly that margin. Worth diagnosing before publishing numbers (build_taxon_parquet.R filters nothing, so these are ids OBIS carries that the 2026-07-02 WoRMS export doesn't).
+
+Synonyms are handled better than I expected: the Aves subtree is 3,739 taxa of which 1,070 (29%) are unaccepted synonyms, and the walk includes them (they carry parentNameUsageID), so records tagged with a synonym still land. The edge case is a synonym whose parent chain sits outside the subtree — low risk, not currently covered.
+
+4. Issues to send back to Matt
+
+- marineMammals.csv lists Lontra felina 343992, which WoRMS marks unaccepted → valid 477316 Lutra felina. IdentifierList.csv uses 477316, so the two files disagree. Moot in practice — neither has any OBIS records.
+- seabirds = Aves (1836) is all birds, not seabirds. Defensible in a marine-only snapshot, but it's a definitional choice, not a filter.
+- Phytoplankton isn't in the CSVs. Matt's PACE issue (ioos_code_lab#317) is an unscoped placeholder with no taxa named. His Bacillariophyceae example (148899, 5,974 cells) is diatoms only — a phytoplankton EOV would need a definition drafted.
+
+5. The paper hook is stronger than "EOV presets"
+
+obis_spue_sql() already works — humpback / all-Cetacea effort returned 14,963 cells in 0.4s. Note that marineMammals is a ready-made SPUE denominator: the EOV list gives you standardized, community-endorsed effort footprints. "EOV-as-denominator" (presence-only SPUE normalized by an EOV's survey footprint, across H3 resolutions) is a more novel contribution than a taxon picker, and it's what you already flagged to Matt.
+
+Suggested build (small)
+
+1. Fix the two broken presets + the 1837→1836 typo — independent of EOVs, worth doing now.
+2. Add an EOVS list to app.R routed through the existing aphiaid path (~15 lines, no package change).
+3. Optional but high-value: bake an eov membership table into the store and precompute an idx_h3_eov layer (mirroring idx_h3_taxon, R/h3t.R:290-296). 7 EOVs × res 1–7 is cheap and turns EOV maps from live aggregation into precomputed lookups — that's what makes res-7 EOV tiles snappy.
+
+Want me to implement 1–2 (quick, visible), or go after the 6.8% orphan diagnosis first since it affects any number you'd publish? I can also draft the reply to Matt and Laura with these findings.
+
+----
+
+Good findings! The 6.8% gap may have to do with how the WoRMS download is incomplete, especially for algae. There are functions in @../../CalCOFI/calcofi4r and @../../MarineSensitivity/msens that do individual lookups. That would be the way to handle this: bulk join from WoRMS download, supplemented by individual lookups using the WoRMS API service.
+
+Let's go for all 3 after this update!
+
+----
+
+All four pieces are done and verified. Nothing is committed — changes are staged in the working tree for your review.
+
+What I built
+
+1. WoRMS gap-fill (R/taxon_gapfill.R, new) — bulk-join-then-supplement, exactly as you described:
+- obis_taxon_orphans() reports the gap; wm_aphia_records() does batched parallel REST lookups (AphiaRecordsByAphiaIDs, 50/request) following the msens::wm_rest() pattern; obis_taxon_fill_gaps() drives it.
+- The key design point I hit while testing: the fill must run to transitive closure. Inserting an orphan species isn't enough — the walk descends parentNameUsageID, so if the orphan's ancestors are also missing it stays disconnected and remains unreachable. Each round re-chases newly-dangling parents.
+- My first run silently stopped at max_rounds = 12 leaving 1821 (Chordata) dangling. A real WoRMS chain needs 14 rounds, so the default is now 40, and it warns and returns closed = FALSE instead of implying a whole tree. There's a regression test for that exact failure.
+- fetch is an injectable seam, so the closure logic tests offline; one live test exercises the real API.
+
+2. EOV layer (R/eov.R, new) — obis_eov_seeds(), obis_eov_sql(), obis_eov_bake() adding eov membership + precomputed idx_h3_eov (res 1–7). Wired into build_obis_h3_duckdb() as step 5, skipped with a note when taxon is absent.
+
+3. App fixes (apps/h3-db/app.R) — presets converted from rank-column matches to AphiaID subtree seeds, plus a grouped EOV picker.
+
+Verification
+
+- 201 package tests pass, zero skips (up from 166), including a new test-eov-parity.R pinning .h3t_idx_eov_sql cell-for-cell to calc_indicators().
+- Both migration scripts run end-to-end: gap-fill against live WoRMS reaches closure (0 dangling); migrate_add_eov.R builds a store whose precomputed and live paths agree exactly (3,097 cells, 10,539 records, identical mean ES50).
+- Against the live global store, all 9 presets now return data — the two that returned zero are fixed — and all 7 EOVs answer in ≤1.1s.
+- The app boots; the dropdown renders both groups.
+
+Two things worth flagging:
+
+- Preset labels are unchanged on purpose. They're the bookmarked preset= values, so the link you already sent Matt and Laura still resolves. Because the seeds are AphiaIDs now, "Bony fishes (Actinopterygii)" and "Corals & anemones (Anthozoa)" are accurate labels again rather than needing renaming.
+- My "38 AphiaIDs" from the evaluation was wrong — it's 33. The test caught it. I corrected the figure in .claude/obisindicator-notes.md, and the count is now asserted in the test suite.
+
+Left to you (server-side)
+
+EOV_PRECOMPUTED <- FALSE in app.R — EOVs take the live subtree path, which works today. Flip it to TRUE after running, in this order (gap-fill first, since EOV membership is only as complete as taxon):
+
+Rscript data-raw/migrate_fill_taxon_gaps.R <in> <gapfilled>
+Rscript data-raw/migrate_add_eov.R <gapfilled> <out>
+
+Round 1 of the gap-fill is ~241 requests for the 12,021 orphans, then ~14 small ancestor rounds — a couple of minutes. I deliberately did not add eov/idx_h3_eov to the app's Schema modal yet, since advertising tables the served store lacks would break users' custom SQL; that's a one-line follow-up once the migration lands.
+
+Want me to draft the reply to Matt and Laura? The measured findings — the rank-column failure mode, the 6.8% coverage gap and its fix, and marineMammals as a ready-made SPUE denominator — make a concrete response to their computational-limits problem.
+
+----
+
+Please run locally or server side (using `ssh msens`) and getting actual gap coverage, git commit and push all, then draft email response to Matt and Laura with full findings and links ready
+
+## 2026-07-28 update mapgl to fix anti-meridian rendering
+
+
+oh no, looks like the server got the old mapgl, not the needed one that fixes the anti-meridian problem - [fix(h3t): render H3 hexagons crossing the antimeridian by bbest · Pull Request #211 · walkerke/mapgl](https://github.com/walkerke/mapgl/pull/211); and better yet perhaps latest from https://github.com/bbest/mapgl that should have this fix in it (plus more up to date with walkerke/mapgl). https://app.marinesensitivity.org/h3-db/ [Image #1]
+
+----
+
+Fixed and verified live. The globe renders continuously across the antimeridian now:
+
+h3-db globe centered on 180, no tear (/var/folders/xj/0t97bxlx4ng6s_zbmkkcfzg40000gn/T/claude-chrome-screenshots-Ir3Uft/screenshot-1785250916648-4.jpg)
+
+What was actually wrong — not just a stale pin. The image had correctly installed bbest/mapgl@1e52f60, but msens/DESCRIPTION carried Remotes: walkerke/mapgl, and twelve Shiny apps call librarian::shelf(MarineSensitivity/msens) at startup as the shiny user. So an app start reinstalled msens from GitHub, resolved that field, and overwrote the fork inside the running container — timestamps show it happened 2026-07-26, a day after the image was built. The Dockerfile pin could never have held.
+
+Changes
+- msens/DESCRIPTION → Remotes: bbest/mapgl@484e869f. This landed on GitHub in your parallel commit 7d05260, which swept the edit in with the 0.11.0 drawn_features_sf work rather than as the separate commit you picked — nothing further to commit, but flagging that it isn't split.
+- server/rstudio/Dockerfile (89a2e52) → pin bumped 1e52f60 → 484e869f and moved into its own trailing layer. Worth knowing: bbest/mapgl main does not have the fix — it's a plain sync of upstream. The branch fix/h3t-antimeridian is the one that's both fixed and fully caught up with walkerke (0 commits behind).
+- Image rebuilt, container recreated. Verified RemoteSha: 484e869f, and h3j_h3t.js md5 in the container matches the fork exactly and differs from upstream.
+
+Two things worth your attention
+
+1. The fix looked broken for a while because of browser cache. The widget path is version-keyed (h3j-h3t-0.9.7/h3j_h3t.js) and both builds are 0.5.0.9000, so the URL never changed. The page was executing a cached 181,357-byte pre-fix copy while curl returned the correct 182,158-byte file. Anyone who loaded h3-db recently will need a hard reload; shiny-server sends no Cache-Control, so heuristic freshness clears it within roughly a day on its own.
+2. species_v8 was returning a hard 500 and I fixed it (5f5cfc6), since my recreate is what exposed it. The image's DuckDB extension bake was a no-op in two independent ways: duckdb R 1.5.5 ignores DUCKDB_EXTENSION_DIRECTORY (it uses ~/.duckdb, else a temp dir), so /opt/duckdb/extensions shipped empty — find returned 0 files; and shiny-server's su -l shiny resets the environment, so a container ENV never reached an app anyway. Every app start was re-downloading httpfs, and it died the first time that download failed. Now installed into ~/.duckdb for shiny and root. All five apps return 200 (h3-db, scores, species, scores_v8, species_v8).
+
+msens tests are green (330 pass, 0 fail).
+
 ## 2026-07-15 children taxa, api, SPUE, scaling vignettes
 
 Read the email thread with Matt Biddle SU: "OBIS biodiversity by H3 hexagon". See if you can tease out the children taxa for

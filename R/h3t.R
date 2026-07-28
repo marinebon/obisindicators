@@ -303,6 +303,18 @@ build_obis_h3_duckdb <- function(
   DBI::dbExecute(con, "ALTER TABLE idx_h3_taxon_c RENAME TO idx_h3_taxon;")
 
   DBI::dbExecute(con, "DROP TABLE occ_h3_base;")
+
+  # 5. precomputed EOV indicators — only possible once the WoRMS `taxon` table
+  # is present (it is baked separately; see data-raw/migrate_add_taxon.R), since
+  # each EOV is the descendant subtree of its seed AphiaIDs. Skipped with a note
+  # rather than failing, so a taxon-less build still succeeds.
+  if ("taxon" %in% DBI::dbListTables(con)) {
+    obis_eov_bake(con, esn = esn)
+  } else {
+    message("skipping idx_h3_eov: no `taxon` table yet — bake taxonomy first, ",
+            "then run data-raw/migrate_add_eov.R")
+  }
+
   DBI::dbExecute(con, "CHECKPOINT;")
   message("done: ", path_duckdb)
   invisible(path_duckdb)
