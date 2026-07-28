@@ -32,6 +32,9 @@ pkg_root <- if (length(.file) == 1) {
   Sys.getenv("OBIS_PKG_ROOT", "/share/github/marinebon/obisindicators")
 }
 source(file.path(pkg_root, "R", "h3t.R"))
+source(file.path(pkg_root, "R", "taxon.R"))
+source(file.path(pkg_root, "R", "taxon_gapfill.R"))
+source(file.path(pkg_root, "R", "eov.R"))
 
 dir_obis      <- Sys.getenv("OBIS_DIR",      "/share/data/obis")
 stamp         <- format(Sys.Date(), "v%Y%m%d")
@@ -79,6 +82,69 @@ bake_taxon <- function(path_duckdb) {
                  big.mark = ","), " rows")
 }
 
+# Finish the taxonomy layers on a freshly built store: close the WoRMS coverage
+# gap from the REST API, then bake the EOV membership + precomputed indicators.
+#
+# These MUST run here rather than inside build_obis_h3_duckdb(): each EOV is a
+# subtree of the `taxon` table, and taxon is baked by bake_taxon() *after* the
+# core build returns — so the EOV step inside build_obis_h3_duckdb() finds no
+# `taxon` and skips itself. Without this, a fresh global build silently ships a
+# store with NO eov/idx_h3_eov and the ~7% taxon coverage gap reinstated, i.e.
+# it would REGRESS a running service (the seagrasses EOV was undercounted 8.3x
+# by exactly that gap). See NEWS.md 0.5.0.
+finish_taxonomy <- function(path_duckdb) {
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = path_duckdb, read_only = FALSE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(con, "INSTALL h3 FROM community; LOAD h3;")
+
+  if (!"taxon" %in% DBI::dbListTables(con)) {
+    warning("no `taxon` table — skipping gap-fill and EOV layers; this store ",
+            "CANNOT serve aphiaid/EOV/SPUE queries", call. = FALSE)
+    return(invisible(FALSE))
+  }
+
+  message("closing the WoRMS taxon coverage gap from the REST API ...")
+  gf <- obis_taxon_fill_gaps(con)
+  if (!isTRUE(gf$closed))
+    stop("taxon gap-fill did not reach closure — refusing to declare this ",
+         "store complete (re-run, or raise max_rounds)")
+
+  obis_eov_bake(con, esn = esn)
+
+  # post-condition: assert the store really has everything, rather than trusting
+  # that the steps above each "looked fine" (same discipline as deploy_obis_h3.sh)
+  want <- c("occ_h3", "idx_h3", "idx_h3_taxon", "taxon", "eov", "idx_h3_eov")
+  have <- DBI::dbListTables(con)
+  missing <- setdiff(want, have)
+  if (length(missing))
+    stop("store is INCOMPLETE — missing table(s): ", paste(missing, collapse = ", "))
+  # idx_h3_taxon is built from the DwC rank columns, so it is legitimately empty
+  # when the SOURCE carries none (the shipped occ_* demo data is species-only).
+  # Require it to be populated only when occ_h3 actually has ranks to roll up —
+  # that way an empty layer is caught for the real OBIS global source (where it
+  # would break every class=/order= query) without failing a regional build.
+  has_ranks <- DBI::dbGetQuery(con, glue(
+    "SELECT COUNT(*) AS n FROM occ_h3 WHERE res = {H3T_RES_BASE} AND (",
+    paste(sprintf('"%s" IS NOT NULL', H3T_IDX_RANKS), collapse = " OR "), ")"))$n > 0
+  for (tb in want) {
+    n <- DBI::dbGetQuery(con, glue("SELECT COUNT(*) AS n FROM {tb}"))$n
+    optional <- identical(tb, "idx_h3_taxon") && !has_ranks
+    if (n < 1 && !optional)
+      stop("store is INCOMPLETE — table `", tb, "` is empty")
+    message("  ", tb, ": ", format(n, big.mark = ","), " rows",
+            if (n < 1 && optional) "  (source has no rank columns — expected)" else "")
+  }
+  orphans <- DBI::dbGetQuery(con, "
+    SELECT COUNT(*) AS n FROM (
+      SELECT DISTINCT aphiaid FROM occ_h3
+      WHERE aphiaid IS NOT NULL AND aphiaid NOT IN (SELECT taxonID FROM taxon))")$n
+  if (orphans > 0)
+    stop("store is INCOMPLETE — ", orphans, " occ_h3 aphiaid(s) still missing ",
+         "from `taxon` after the gap-fill")
+  message("store verified complete: 0 unreachable aphiaids")
+  invisible(TRUE)
+}
+
 # ---- 1. Demo store from shipped South Atlantic data (always) ---------------
 load(file.path(pkg_root, "data", "occ_SAtlantic.rda"))
 path_demo <- file.path(dir_obis, glue("obis_h3_satlantic_{stamp}.duckdb"))
@@ -102,6 +168,16 @@ if (has_local || force_s3) {
     "s3://obis-open-data/occurrence/*.parquet"
   }
 
+  # FAIL FAST: the global build is hours of sync + compute, and a store without
+  # `taxon` cannot carry the EOV/aphiaid layers. Check the precondition before
+  # spending the time, not after.
+  if (!file.exists(taxon_pq))
+    stop("global build needs the WoRMS taxonomy but no taxon.parquet at ",
+         taxon_pq, "\n  Build it first: Rscript data-raw/build_taxon_parquet.R",
+         "\n  (override the path with OBIS_TAXON_PARQUET)")
+  if (!requireNamespace("httr2", quietly = TRUE))
+    stop("global build needs `httr2` for the WoRMS taxon gap-fill; install it first")
+
   path_global <- file.path(dir_obis, glue("obis_h3_global_{stamp}.duckdb"))
   build_obis_h3_duckdb(
     src              = src_global,
@@ -111,7 +187,8 @@ if (has_local || force_s3) {
     temp_dir         = tmp_dir,
     max_temp_dir_size = max_tmp)
 
-  bake_taxon(path_global)   # add WoRMS taxon table for children-taxa queries
+  bake_taxon(path_global)      # WoRMS taxon table for children-taxa queries
+  finish_taxonomy(path_global) # gap-fill + EOV layers, then verify completeness
   symlink_to(path_global)
 
   # This script BUILDS; it does not deploy. It used to shell out to

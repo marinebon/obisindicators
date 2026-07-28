@@ -269,6 +269,102 @@ Fix both on the server. I don't know how the OBIS parquet is gone. Please do a f
 
 ----
 
+Both fixed. Here's what I found and did.
+
+Where the OBIS parquet went — solved, and it wasn't an accident
+
+It was deliberately deleted on ~Jun 24, right after the global build was validated, to reclaim space. From the server's own session transcript:
+
+delete the 91 GB of source parquets now that the global build is validated
+reclaimed — disk now at 34% (72G/215G). The `occurrence/` directory is gone.
+
+Run as docker exec rstudio rm -rf /share/data/obis/occurrence/ (via the container, since the host lacks write permission to /share). No cron job, no systemd timer, no script does this — I checked all three.
+
+The related finding: nothing in the repo reproduces that build. The "watcher: waiting for aws sync" wrapper from the log isn't a committed script — it only exists in msens_notes.md and a Claude Code transcript. The whole sync+build was an ad-hoc interactive run. That's now fixed by the deploy script below.
+
+Disk check — a full rebuild does not fit
+
+┌─────────────────────────┬──────────────────────────┐
+│                         │                          │
+├─────────────────────────┼──────────────────────────┤
+│ Needed for sync + spill │ ~110 GB                  │
+├─────────────────────────┼──────────────────────────┤
+│ Free on /share          │ 49 GB (after my cleanup) │
+└─────────────────────────┴──────────────────────────┘
+
+Easy reclaim gets you to roughly 76 GB — still ~34 GB short:
+
+- docker: 21.7 GB images + 2.0 GB build cache
+- retiring the oldest store …taxon_v20260715 (3.3 GB)
+
+The remaining bulk is other projects' data (/share/data/derived 74 GB, /share/data/big 29 GB), which I left alone. So a full local-parquet rebuild needs growing the xvdb volume, or a chunked sync→ingest→delete loop, or OBIS_GLOBAL=true S3 streaming (slow, and defeats the purpose). I did not start a rebuild.
+
+I did clean up my own staging from yesterday — dropped the 1.9 GB gap-fill intermediate, kept the small logs as provenance. Rollback stores hp_v20260717 and taxon_v20260715 are untouched.
+
+The build fix — strategy: separate build from deploy, and assert the post-condition
+
+The root problem was trusting exit codes. system() return values were never checked, so even where docker did exist a failed restart was invisible.
+
+- build_obis_h3_duckdb.R now builds only. It never touches docker, writes a RESTART_REQUIRED sentinel naming the built store, and prints a banner saying the deploy isn't done.
+- data-raw/deploy_obis_h3.sh is the new host-side entrypoint under set -euo pipefail: preflight → sync → build → swap → restart → verify → flush → clear sentinel, ending with a printed rollback command.
+
+The anti-silent-failure guarantee is that it verifies a post-condition rather than trusting a command: the mtime h3t reports at /h3t/health must equal the mtime of the file just published. It also uses restart, never up -d (which no-ops on a cache-identical image — the exact trap that bit me yesterday).
+
+I tested both directions live:
+
+positive:  store mtime 1785252553 == h3t reports 1785252553  → deploy complete
+negative:  store mtime 1577836800 vs h3t 1785252553
+           ERROR: h3t is STILL serving a different store … exit 1  ✓
+disk guard: avail=47 GB, required=110 GB → WOULD ABORT ✓
+
+The negative test ran against a scratch OBIS_DIR, so production paths were never touched — and I confirmed afterwards that h3t is healthy, the symlink is correct, and no stale sentinel remains.
+
+Pushed as b05b70c, with CLAUDE.md updated to make deploy_obis_h3.sh the documented entrypoint.
+
+One thing worth your call: the disk can't support the rebuild today, so if you want fresh OBIS data the practical next step is growing the EBS volume. Want me to size that up?
+
+----
+
+Yes, grow the EBS volume 200 GB
+
+----
+
+Volume grown, online, no downtime.
+
+┌────────────────────┬────────┬────────┐
+│                    │ before │ after  │
+├────────────────────┼────────┼────────┤
+│ /share (xvdb, gp3) │ 200 GB │ 400 GB │
+├────────────────────┼────────┼────────┤
+│ Free               │ 49 GB  │ 247 GB │
+├────────────────────┼────────┼────────┤
+│ Use                │ 76%    │ 39%    │
+└────────────────────┴────────┴────────┘
+
+Since /share was already 200 GB, I read your instruction as +200 GB → 400 GB total — the only reading that isn't a no-op.
+
+vol-02dc063a93bec76c8 went modifying → optimizing, the kernel picked up 400G immediately, and xfs grew in place (data blocks changed from 52428800 to 104857600). No partition table on the device, so no growpart was needed — xfs sits directly on the raw volume.
+
+Verified afterwards: h3t still healthy, symlink still pointing at obis_h3_global_eov_v20260728.duckdb, correct mtime. The grow didn't disturb the running service.
+
+The deploy script's sync guard now passes — 247 GB available against the 110 GB requirement, so a full local-parquet rebuild can proceed:
+
+data-raw/deploy_obis_h3.sh          # sync → build → swap → restart → verify
+
+Two things to note:
+
+- Cost: gp3 storage in us-east-1 is $0.08/GB-month, so +200 GB is roughly **+$16/month**. The 3000 IOPS and 125 MB/s baseline are included at any size, so no additional performance charges.
+- One-way: EBS volumes can't be shrunk, and AWS blocks further modification of this volume for about 6 hours.
+
+I did not kick off the rebuild — that's a multi-hour sync of ~96 GB plus the build, and you may want to pick the timing. Say the word and I'll start it, or schedule it off-hours.
+
+----
+
+Kick off the rebuild please and monitor it over the hours
+
+----
+
+Confirmed a serious sequencing bug: bake_taxon() runs after build_obis_h3_duckdb(), so the EOV step (which requires taxon) is skipped — and nothing runs the gap-fill. A rebuild would ship a store with no EOV layers and the seagrass undercount back. Let me fix that before launching.
 
 
 ## 2026-07-28 update mapgl to fix anti-meridian rendering
