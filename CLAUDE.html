@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -56,7 +56,7 @@
 <li><p><strong>DuckDB / served tiles (<code>h3t</code>)</strong> — the same indicator math re-expressed in SQL so it can be precomputed into a DuckDB store and served as on-demand H3 map tiles. Lives in <code>R/h3t.R</code>. See <code><a href="articles/h3t.html">vignette("h3t")</a></code>.</p></li>
 </ol><div class="section level3">
 <h3 id="the-parity-contract-do-not-break">The parity contract (do not break)<a class="anchor" aria-label="anchor" href="#the-parity-contract-do-not-break"></a></h3>
-<p>The SQL in <code>R/h3t.R</code> (<code>.h3t_idx_sql</code>, <code>.h3t_idx_taxon_sql</code>, and the live paths in <code>obis_h3t_sql</code>) is a <strong>translation of <code><a href="reference/calc_indicators.html">calc_indicators()</a></code> with <code>esn = 50</code></strong>. <code>tests/testthat/test-h3t-parity.R</code> builds a small DuckDB store from shipped <code>occ_SAtlantic</code> and asserts the SQL output matches <code><a href="reference/calc_indicators.html">calc_indicators()</a></code> cell-for-cell (exact for <code>n</code>/<code>sp</code>, tight tolerance for shannon/simpson, 1e-3 for <code>es</code> due to <code>lgamma</code> float). <strong>If you change the indicator formula in one place, change it in the other and keep this test green.</strong> The ES(n) term appears in four spots: <code><a href="reference/calc_indicators.html">calc_indicators()</a></code> (<code>R/analyze.R</code>), <code>.h3t_idx_sql</code>, <code>.h3t_idx_taxon_sql</code>, and the <code>es</code> branch of <code>obis_h3t_sql</code>.</p>
+<p>The SQL in <code>R/h3t.R</code> (<code>.h3t_idx_sql</code>, <code>.h3t_idx_taxon_sql</code>, and the live paths in <code>obis_h3t_sql</code>) is a <strong>translation of <code><a href="reference/calc_indicators.html">calc_indicators()</a></code> with <code>esn = 50</code></strong>. <code>tests/testthat/test-h3t-parity.R</code> builds a small DuckDB store from shipped <code>occ_SAtlantic</code> and asserts the SQL output matches <code><a href="reference/calc_indicators.html">calc_indicators()</a></code> cell-for-cell (exact for <code>n</code>/<code>sp</code>, tight tolerance for shannon/simpson, 1e-3 for <code>es</code> due to <code>lgamma</code> float). <strong>If you change the indicator formula in one place, change it in the others and keep these tests green.</strong> The ES(n) term appears in <strong>five</strong> spots: <code><a href="reference/calc_indicators.html">calc_indicators()</a></code> (<code>R/analyze.R</code>), <code>.h3t_idx_sql</code>, <code>.h3t_idx_taxon_sql</code>, the <code>es</code> branch of <code>obis_h3t_sql</code> (all <code>R/h3t.R</code>), and <code>.h3t_idx_eov_sql</code> (<code>R/eov.R</code>, pinned by <code>test-eov-parity.R</code>).</p>
 </div>
 </div>
 <div class="section level2">
@@ -81,6 +81,12 @@
 <li>
 <code>obis_spue_sql(num_aphiaid, den_aphiaid)</code> — the effort proxy: per-cell <code>records(target subtree) / records(effort subtree)</code>, restricted to the effort taxon’s footprint (a presence-only SPUE). <code><a href="reference/calc_spue.html">calc_spue()</a></code> is its <strong>pinned R reference</strong> (<code>test-spue-parity.R</code>), same discipline as <code><a href="reference/calc_indicators.html">calc_indicators()</a></code>.</li>
 </ul><p>The <code>taxon</code> table is produced by <code>data-raw/build_taxon_parquet.R</code> (WoRMS DwC <code>taxon.txt</code> → <code>taxon.parquet</code>, stripping the <code>urn:lsid:…:taxname:</code> prefix to an integer <code>taxonID</code> = AphiaID) and baked into <code>obis_h3.duckdb</code> by <code>data-raw/migrate_add_taxon.R</code> (or <code>bake_taxon()</code> in the build driver). AphiaIDs are integer-validated (<code>.h3t_aphiaid_ints</code>), the injection guard for the id-list.</p>
+<p><strong>The bulk download is not a complete cover</strong> (<code>R/taxon_gapfill.R</code>). On the 2026-07 global store 12,021 of 167,190 distinct <code>occ_h3.aphiaid</code> values (~7%, 8.3M of 121.9M records) were absent from <code>taxon</code> — notably algae, whose WoRMS records come from thematic databases the DwC export lags — making them invisible to every children/EOV/SPUE query. <code><a href="reference/obis_taxon_orphans.html">obis_taxon_orphans()</a></code> reports the gap and <code><a href="reference/obis_taxon_fill_gaps.html">obis_taxon_fill_gaps()</a></code> closes it by supplementing the bulk join with per-id WoRMS REST lookups (<code><a href="reference/wm_aphia_records.html">wm_aphia_records()</a></code>, the <code>AphiaRecordsByAphiaIDs</code> operation at 50 ids/request, in parallel — same pattern as <code>msens::wm_rest()</code>). <strong>The fill must run to transitive closure</strong>: inserting an orphan whose ancestors are also missing leaves it disconnected from any seed above it, so each round re-chases newly-dangling parents. It warns and returns <code>closed = FALSE</code> rather than implying a whole tree when <code>max_rounds</code> is hit (a real WoRMS chain needs ~14 rounds; the default is 40). <code>fetch</code> is the injectable seam the tests use to run offline.</p>
+</div>
+<div class="section level2">
+<h2 id="eovs-reovr">EOVs (<code>R/eov.R</code>)<a class="anchor" aria-label="anchor" href="#eovs-reovr"></a></h2>
+<p>GOOS/IOOS biology &amp; ecosystems <strong>Essential Ocean Variables</strong> are defined taxonomically, and the IOOS Marine Life Data Network publishes that definition as root AphiaIDs per EOV (<a href="https://github.com/ioos/marine_life_data_network/tree/main/eov_taxonomy" class="external-link"><code>eov_taxonomy/IdentifierList.csv</code></a>) — 33 seeds across 7 EOVs. That is exactly a multi-seed <code>aphiaid</code> subtree, so <code>OBIS_EOV</code> holds the seeds, <code><a href="reference/obis_eov_sql.html">obis_eov_sql()</a></code> builds the tile SQL, and <code><a href="reference/obis_eov_bake.html">obis_eov_bake()</a></code> adds two layers: <code>eov</code> (<code>eov, taxonID</code> membership, seeds expanded over <code>taxon</code>) and <code>idx_h3_eov</code> (precomputed indicators per <code>(eov, res)</code>, res 1–7, clustered by <code>(eov, res, cell_id)</code>; no <code>hex_prune</code> — like <code>idx_h3_taxon</code> it is already small). Routing mirrors <code>obis_h3t_sql</code>: one EOV and no years → <code>idx_h3_eov</code>; years, several EOVs, or <code>live = TRUE</code> → live subtree.</p>
+<p><strong>Why seeds-and-subtree rather than the DwC rank columns</strong>: the rank a name occupies is not stable, so a <code>class = &lt;name&gt;</code> filter silently matches <em>nothing</em> when OBIS files the name elsewhere. Measured on the global store: <code>class='Actinopterygii'</code> → 0 records (WoRMS ranks it a Gigaclass; OBIS’s class is <code>Teleostei</code>, 44.2M) and <code>class='Anthozoa'</code> → 0 (a Subphylum; OBIS uses <code>Hexacorallia</code>/<code>Octocorallia</code>). Both were live bugs in the h3-db app’s presets. Subtree walking is rank-agnostic and immune. EOV membership is only as complete as <code>taxon</code>, so run the gap-fill first.</p>
 <div class="section level3">
 <h3 id="h3t-gotchas">h3t gotchas<a class="anchor" aria-label="anchor" href="#h3t-gotchas"></a></h3>
 <ul><li>
@@ -119,11 +125,18 @@
 <span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/build_taxon_parquet.R <span class="pp">[</span><span class="ss">taxon.txt</span><span class="pp">]</span> <span class="pp">[</span><span class="ss">taxon.parquet</span><span class="pp">]</span></span>
 <span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_taxon.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> <span class="pp">[</span><span class="ss">taxon.parquet</span><span class="pp">]</span></span>
 <span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a></span>
-<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="co"># add the coarse-parent `hex_prune` key + (res, hex_prune, cell_id) clustering to</span></span>
-<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="co"># occ_h3/idx_h3 in an EXISTING store so the h3t server prunes each tile (no S3</span></span>
-<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="co"># re-read, writes a new file; drops any interim lat/lng cols). rebuilds needn't</span></span>
-<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a><span class="co"># run this — build_obis_h3_duckdb() bakes hex_prune natively.</span></span>
-<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_spatial_cluster.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span></span></code></pre></div>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="co"># close the taxon coverage gap from the WoRMS REST API (run AFTER migrate_add_taxon.R</span></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="co"># and BEFORE migrate_add_eov.R — EOV membership is only as complete as `taxon`)</span></span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_fill_taxon_gaps.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> <span class="pp">[</span><span class="ss">min_records</span><span class="pp">]</span></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a></span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="co"># add the EOV layers (`eov` membership + precomputed `idx_h3_eov`) to a store</span></span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_eov.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> [eov ...]</span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a></span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a><span class="co"># add the coarse-parent `hex_prune` key + (res, hex_prune, cell_id) clustering to</span></span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a><span class="co"># occ_h3/idx_h3 in an EXISTING store so the h3t server prunes each tile (no S3</span></span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a><span class="co"># re-read, writes a new file; drops any interim lat/lng cols). rebuilds needn't</span></span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a><span class="co"># run this — build_obis_h3_duckdb() bakes hex_prune natively.</span></span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_spatial_cluster.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span></span></code></pre></div>
 <ul><li>CI: <code>.github/workflows/run_tests.yml</code> runs <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_local()</a></code> on every push/PR; <code>pkgdown.yaml</code> builds the site (allowed to fail without blocking).</li>
 <li>
 <code>inst/sql/*.sql</code> are <strong>canonical, human-readable references</strong> of what the R functions generate (<code>build_obis_h3.sql</code>, <code>tile_templates.sql</code>) — the R code is the source of truth; keep the SQL comments in sync when the R changes.</li>
@@ -139,6 +152,10 @@
 <code>R/h3t.R</code> — the entire DuckDB build + tile-SQL/URL layer.</li>
 <li>
 <code>R/taxon.R</code> — WoRMS children resolution + the SPUE effort proxy.</li>
+<li>
+<code>R/taxon_gapfill.R</code> — WoRMS REST supplement closing the <code>taxon</code> coverage gap.</li>
+<li>
+<code>R/eov.R</code> — Essential Ocean Variables as multi-seed AphiaID subtrees.</li>
 <li>
 <code>R/visualize.R</code> — <code><a href="reference/gmap_indicator.html">gmap_indicator()</a></code> static ggplot maps.</li>
 <li>

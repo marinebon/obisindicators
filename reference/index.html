@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -108,7 +108,7 @@
       </dl></div><div class="section level2">
       <h2 id="taxonomy-effort-proxy">Taxonomy &amp; effort proxy<a class="anchor" aria-label="anchor" href="#taxonomy-effort-proxy"></a></h2>
 
-      <div class="section-desc"><p>Resolve children taxa (any rank) and the sightings-per-unit-effort (SPUE) proxy.</p></div>
+      <div class="section-desc"><p>Resolve children taxa (any rank), close the WoRMS coverage gap from the REST API, and the sightings-per-unit-effort (SPUE) proxy.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -138,10 +138,68 @@
 
         <dt>
 
+          <code><a href="obis_taxon_fill_gaps.html">obis_taxon_fill_gaps()</a></code>
+
+        </dt>
+        <dd>Fill gaps in the <code>taxon</code> table from the WoRMS REST API</dd>
+
+        <dt>
+
+          <code><a href="obis_taxon_orphans.html">obis_taxon_orphans()</a></code>
+
+        </dt>
+        <dd>AphiaIDs present in <code>occ_h3</code> but missing from the <code>taxon</code> table</dd>
+
+        <dt>
+
           <code><a href="obis_taxon_subtree_sql.html">obis_taxon_subtree_sql()</a></code>
 
         </dt>
         <dd>Standalone SQL for the AphiaID subtree (descendant taxonIDs)</dd>
+
+        <dt>
+
+          <code><a href="wm_aphia_records.html">wm_aphia_records()</a></code>
+
+        </dt>
+        <dd>Look up WoRMS taxon records by AphiaID</dd>
+      </dl></div><div class="section level2">
+      <h2 id="essential-ocean-variables">Essential Ocean Variables<a class="anchor" aria-label="anchor" href="#essential-ocean-variables"></a></h2>
+
+      <div class="section-desc"><p>GOOS/IOOS biology &amp; ecosystems EOVs as WoRMS AphiaID subtrees, per the IOOS Marine Life Data Network definitions.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="obis_eov_aphiaid.html">obis_eov_aphiaid()</a></code>
+
+        </dt>
+        <dd>AphiaID seeds for one or more EOVs</dd>
+
+        <dt>
+
+          <code><a href="obis_eov_bake.html">obis_eov_bake()</a></code>
+
+        </dt>
+        <dd>Bake the EOV membership and precomputed-indicator layers into a store</dd>
+
+        <dt>
+
+          <code><a href="obis_eov_seeds.html">obis_eov_seeds()</a></code>
+
+        </dt>
+        <dd>Essential Ocean Variable (EOV) taxonomic seeds</dd>
+
+        <dt>
+
+          <code><a href="obis_eov_sql.html">obis_eov_sql()</a></code>
+
+        </dt>
+        <dd>Build an h3t tile SQL query for an Essential Ocean Variable</dd>
       </dl></div><div class="section level2">
       <h2 id="visualize">Visualize<a class="anchor" aria-label="anchor" href="#visualize"></a></h2>
 

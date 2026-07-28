@@ -16,16 +16,23 @@
 <url><loc>https://marinebon.org/obisindicators/authors.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/index.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/news/index.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/OBIS_EOV.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/calc_indicators.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/calc_spue.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/gmap_indicator.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/index.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/make_hex_res.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_eov_aphiaid.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_eov_bake.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_eov_seeds.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_eov_sql.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/obis_h3t_sql.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/obis_h3t_url.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/obis_spue_sql.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/obis_taxon_children.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_taxon_fill_gaps.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_taxon_orphans.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/obis_taxon_subtree_sql.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/occ_1960s.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/occ_1970s.html</loc></url>
@@ -36,5 +43,6 @@
 <url><loc>https://marinebon.org/obisindicators/reference/occ_2010s.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/occ_SAtlantic.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/occ_fk.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/wm_aphia_records.html</loc></url>
 </urlset>
 

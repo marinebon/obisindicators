@@ -26,18 +26,49 @@ Build an H3 grid, and serve indicators as H3 hexagon tiles.
 
 ## Taxonomy & effort proxy
 
-Resolve children taxa (any rank) and the sightings-per-unit-effort
-(SPUE) proxy.
+Resolve children taxa (any rank), close the WoRMS coverage gap from the
+REST API, and the sightings-per-unit-effort (SPUE) proxy.
 
 - [`calc_spue()`](https://marinebon.org/obisindicators/reference/calc_spue.md)
   : Sightings-per-unit-effort (SPUE) effort proxy, per H3 cell (R
   reference)
+
 - [`obis_spue_sql()`](https://marinebon.org/obisindicators/reference/obis_spue_sql.md)
   : Build an h3t tile SQL query for the SPUE effort proxy
+
 - [`obis_taxon_children()`](https://marinebon.org/obisindicators/reference/obis_taxon_children.md)
   : Resolve the descendant taxa of a WoRMS AphiaID
+
+- [`obis_taxon_fill_gaps()`](https://marinebon.org/obisindicators/reference/obis_taxon_fill_gaps.md)
+  :
+
+  Fill gaps in the `taxon` table from the WoRMS REST API
+
+- [`obis_taxon_orphans()`](https://marinebon.org/obisindicators/reference/obis_taxon_orphans.md)
+  :
+
+  AphiaIDs present in `occ_h3` but missing from the `taxon` table
+
 - [`obis_taxon_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_taxon_subtree_sql.md)
   : Standalone SQL for the AphiaID subtree (descendant taxonIDs)
+
+- [`wm_aphia_records()`](https://marinebon.org/obisindicators/reference/wm_aphia_records.md)
+  : Look up WoRMS taxon records by AphiaID
+
+## Essential Ocean Variables
+
+GOOS/IOOS biology & ecosystems EOVs as WoRMS AphiaID subtrees, per the
+IOOS Marine Life Data Network definitions.
+
+- [`obis_eov_aphiaid()`](https://marinebon.org/obisindicators/reference/obis_eov_aphiaid.md)
+  : AphiaID seeds for one or more EOVs
+- [`obis_eov_bake()`](https://marinebon.org/obisindicators/reference/obis_eov_bake.md)
+  : Bake the EOV membership and precomputed-indicator layers into a
+  store
+- [`obis_eov_seeds()`](https://marinebon.org/obisindicators/reference/obis_eov_seeds.md)
+  : Essential Ocean Variable (EOV) taxonomic seeds
+- [`obis_eov_sql()`](https://marinebon.org/obisindicators/reference/obis_eov_sql.md)
+  : Build an h3t tile SQL query for an Essential Ocean Variable
 
 ## Visualize
 

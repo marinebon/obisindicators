@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -43,6 +43,32 @@
       <small>Source: <a href="https://github.com/marinebon/obisindicators/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.5.0" id="obisindicators-050">obisindicators 0.5.0<a class="anchor" aria-label="anchor" href="#obisindicators-050"></a></h2>
+<ul><li>
+<p><strong>Essential Ocean Variables (EOVs)</strong> — new <code>R/eov.R</code> maps the GOOS/IOOS biology &amp; ecosystems EOVs onto the H3 store. The <a href="https://github.com/ioos/marine_life_data_network/tree/main/eov_taxonomy" class="external-link">IOOS Marine Life Data Network</a> defines each EOV as a handful of root WoRMS AphiaIDs (33 seeds across 7 EOVs: fish, hardCorals, mangroves, marineMammals, seabirds, seagrasses, seaTurtles), which is exactly a multi-seed version of the existing subtree walk.</p>
+<ul><li>
+<code><a href="../reference/obis_eov_seeds.html">obis_eov_seeds()</a></code> / <code><a href="../reference/obis_eov_aphiaid.html">obis_eov_aphiaid()</a></code> — the EOV definitions.</li>
+<li>
+<code><a href="../reference/obis_eov_sql.html">obis_eov_sql()</a></code> — tile SQL for an EOV, routing to a precomputed layer when it can and to the live AphiaID-subtree path when it must (year filters, several EOVs at once, or a store without the layer baked).</li>
+<li>
+<code><a href="../reference/obis_eov_bake.html">obis_eov_bake()</a></code> — adds <code>eov</code> (membership) and <code>idx_h3_eov</code> (precomputed indicators, res 1-7) to a store; now also a step in <code><a href="../reference/build_obis_h3_duckdb.html">build_obis_h3_duckdb()</a></code>, skipped with a note when <code>taxon</code> is absent.</li>
+<li>New driver <code>data-raw/migrate_add_eov.R</code>.</li>
+</ul></li>
+<li>
+<p><strong>WoRMS gap-fill</strong> — new <code>R/taxon_gapfill.R</code> closes a silent coverage hole. The bulk WoRMS <code>taxon.txt</code> download is not a complete cover of the AphiaIDs OBIS carries: on the 2026-07 global store 12,021 of 167,190 distinct <code>occ_h3.aphiaid</code> values (~7%, covering 8.3M of 121.9M records) were absent from <code>taxon</code>, so they were invisible to every <code>aphiaid</code> / EOV / SPUE query.</p>
+<ul><li>
+<code><a href="../reference/obis_taxon_orphans.html">obis_taxon_orphans()</a></code> — report the gap.</li>
+<li>
+<code><a href="../reference/wm_aphia_records.html">wm_aphia_records()</a></code> — batched, parallel WoRMS REST lookups (<code>AphiaRecordsByAphiaIDs</code>, 50 ids/request), the per-id supplement to the bulk download.</li>
+<li>
+<code><a href="../reference/obis_taxon_fill_gaps.html">obis_taxon_fill_gaps()</a></code> — fills orphans <strong>and</strong> iterates to transitive closure, because inserting an orphan whose ancestors are still missing leaves it disconnected from any seed above it. Warns and reports <code>closed = FALSE</code> rather than implying a whole tree if <code>max_rounds</code> is hit.</li>
+<li>New driver <code>data-raw/migrate_fill_taxon_gaps.R</code>.</li>
+<li>Adds <code>httr2</code> to Suggests.</li>
+</ul></li>
+<li><p><strong>Two taxon-group presets in the h3-db app returned zero records</strong> (fixed in <code>MarineSensitivity/apps/h3-db</code>, noted here because it motivated the EOV design): filtering the DwC <code>class</code> column cannot match when WoRMS files the name at another rank — <code>class='Actinopterygii'</code> (a Gigaclass; OBIS’s class is <code>Teleostei</code>, 44.2M records) and <code>class='Anthozoa'</code> (a Subphylum; OBIS uses <code>Hexacorallia</code>/<code>Octocorallia</code>) both matched nothing. AphiaID subtree walking is rank-agnostic and immune to this.</p></li>
+<li><p>Parity: <code>.h3t_idx_eov_sql()</code> is a fifth copy of the <code><a href="../reference/calc_indicators.html">calc_indicators()</a></code> ES(n) term and is pinned cell-for-cell by the new <code>tests/testthat/test-eov-parity.R</code>.</p></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.4.2" id="obisindicators-042">obisindicators 0.4.2<a class="anchor" aria-label="anchor" href="#obisindicators-042"></a></h2>
 <ul><li>

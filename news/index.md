@@ -1,5 +1,66 @@
 # Changelog
 
+## obisindicators 0.5.0
+
+- **Essential Ocean Variables (EOVs)** — new `R/eov.R` maps the
+  GOOS/IOOS biology & ecosystems EOVs onto the H3 store. The [IOOS
+  Marine Life Data
+  Network](https://github.com/ioos/marine_life_data_network/tree/main/eov_taxonomy)
+  defines each EOV as a handful of root WoRMS AphiaIDs (33 seeds across
+  7 EOVs: fish, hardCorals, mangroves, marineMammals, seabirds,
+  seagrasses, seaTurtles), which is exactly a multi-seed version of the
+  existing subtree walk.
+
+  - [`obis_eov_seeds()`](https://marinebon.org/obisindicators/reference/obis_eov_seeds.md)
+    /
+    [`obis_eov_aphiaid()`](https://marinebon.org/obisindicators/reference/obis_eov_aphiaid.md)
+    — the EOV definitions.
+  - [`obis_eov_sql()`](https://marinebon.org/obisindicators/reference/obis_eov_sql.md)
+    — tile SQL for an EOV, routing to a precomputed layer when it can
+    and to the live AphiaID-subtree path when it must (year filters,
+    several EOVs at once, or a store without the layer baked).
+  - [`obis_eov_bake()`](https://marinebon.org/obisindicators/reference/obis_eov_bake.md)
+    — adds `eov` (membership) and `idx_h3_eov` (precomputed indicators,
+    res 1-7) to a store; now also a step in
+    [`build_obis_h3_duckdb()`](https://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md),
+    skipped with a note when `taxon` is absent.
+  - New driver `data-raw/migrate_add_eov.R`.
+
+- **WoRMS gap-fill** — new `R/taxon_gapfill.R` closes a silent coverage
+  hole. The bulk WoRMS `taxon.txt` download is not a complete cover of
+  the AphiaIDs OBIS carries: on the 2026-07 global store 12,021 of
+  167,190 distinct `occ_h3.aphiaid` values (~7%, covering 8.3M of 121.9M
+  records) were absent from `taxon`, so they were invisible to every
+  `aphiaid` / EOV / SPUE query.
+
+  - [`obis_taxon_orphans()`](https://marinebon.org/obisindicators/reference/obis_taxon_orphans.md)
+    — report the gap.
+  - [`wm_aphia_records()`](https://marinebon.org/obisindicators/reference/wm_aphia_records.md)
+    — batched, parallel WoRMS REST lookups (`AphiaRecordsByAphiaIDs`, 50
+    ids/request), the per-id supplement to the bulk download.
+  - [`obis_taxon_fill_gaps()`](https://marinebon.org/obisindicators/reference/obis_taxon_fill_gaps.md)
+    — fills orphans **and** iterates to transitive closure, because
+    inserting an orphan whose ancestors are still missing leaves it
+    disconnected from any seed above it. Warns and reports
+    `closed = FALSE` rather than implying a whole tree if `max_rounds`
+    is hit.
+  - New driver `data-raw/migrate_fill_taxon_gaps.R`.
+  - Adds `httr2` to Suggests.
+
+- **Two taxon-group presets in the h3-db app returned zero records**
+  (fixed in `MarineSensitivity/apps/h3-db`, noted here because it
+  motivated the EOV design): filtering the DwC `class` column cannot
+  match when WoRMS files the name at another rank —
+  `class='Actinopterygii'` (a Gigaclass; OBIS’s class is `Teleostei`,
+  44.2M records) and `class='Anthozoa'` (a Subphylum; OBIS uses
+  `Hexacorallia`/`Octocorallia`) both matched nothing. AphiaID subtree
+  walking is rank-agnostic and immune to this.
+
+- Parity: `.h3t_idx_eov_sql()` is a fifth copy of the
+  [`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md)
+  ES(n) term and is pinned cell-for-cell by the new
+  `tests/testthat/test-eov-parity.R`.
+
 ## obisindicators 0.4.2
 
 - **Vignette H3 tile maps now actually render** (the `mapgl`/MapLibre
