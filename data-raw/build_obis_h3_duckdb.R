@@ -10,11 +10,10 @@
 # Resource guards (both builds): memory_limit=10GB, threads=2, spill to
 # temp_dir.  Adjust via OBIS_MEMORY / OBIS_THREADS / OBIS_TEMP_DIR env vars.
 #
-# After a successful global build the script:
-#   1. Swaps obis_h3.duckdb symlink to the new store.
-#   2. Restarts the h3t tile service (docker compose restart h3t).
-#   3. Flushes the h3tcache (varnishadm ban).
-#   4. Removes temp spill files.
+# This script BUILDS ONLY. It does not repoint the live symlink, restart h3t or
+# flush the cache — that is data-raw/deploy_obis_h3.sh, which runs on the host
+# and verifies the swap actually took effect. Set OBIS_SYMLINK=true to restore
+# the old (unsafe on a live host) auto-symlink behaviour.
 #   Parquet source files are NOT deleted automatically; remove manually once
 #   the new store is validated.
 #
@@ -41,10 +40,25 @@ stamp         <- format(Sys.Date(), "v%Y%m%d")
 mem_limit     <- Sys.getenv("OBIS_MEMORY",   "7GB")   # stays under 8GB docker hard cap
 n_threads     <- as.integer(Sys.getenv("OBIS_THREADS", "2"))
 tmp_dir       <- Sys.getenv("OBIS_TEMP_DIR", file.path(dir_obis, "tmp"))
+esn           <- as.integer(Sys.getenv("OBIS_ESN", "50"))  # ES(n) sample size
 max_tmp       <- Sys.getenv("OBIS_MAX_TEMP", "20GB")  # cap disk spill to prevent crash
 dir.create(dir_obis, showWarnings = FALSE, recursive = TRUE)
 
+# Repointing the LIVE symlink is deployment, and deployment belongs to
+# data-raw/deploy_obis_h3.sh (which swaps, restarts h3t and VERIFIES the swap
+# took). This used to fire unconditionally for the demo store in step 1, so
+# every run of this script briefly repointed production at the 71 MB South
+# Atlantic demo — and when the global build then failed, it STAYED there. h3t
+# keeps serving the old file via its open handle, so nothing looks wrong until
+# the next restart silently brings up demo data globally. Off by default.
+do_symlink <- isTRUE(as.logical(Sys.getenv("OBIS_SYMLINK", "false")))
 symlink_to <- function(target, link = file.path(dir_obis, "obis_h3.duckdb")) {
+  if (!do_symlink) {
+    message("not repointing ", link, " (set OBIS_SYMLINK=true to override).",
+            "\n  Publish with: data-raw/deploy_obis_h3.sh --skip-sync --skip-build ",
+            "--store ", target)
+    return(invisible())
+  }
   unlink(link)
   file.symlink(target, link)
   message("symlink: ", link, " -> ", target)
@@ -92,7 +106,11 @@ bake_taxon <- function(path_duckdb) {
 # store with NO eov/idx_h3_eov and the ~7% taxon coverage gap reinstated, i.e.
 # it would REGRESS a running service (the seagrasses EOV was undercounted 8.3x
 # by exactly that gap). See NEWS.md 0.5.0.
-finish_taxonomy <- function(path_duckdb) {
+# `esn` is a PARAMETER, never a global read from the caller's environment: the
+# first real run died here with "object 'esn' not found" because the driver has
+# no top-level esn, and a local test passed only because its scaffold happened
+# to define one. A default keeps this callable in isolation.
+finish_taxonomy <- function(path_duckdb, esn = 50L) {
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = path_duckdb, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   DBI::dbExecute(con, "INSTALL h3 FROM community; LOAD h3;")
@@ -182,13 +200,14 @@ if (has_local || force_s3) {
   build_obis_h3_duckdb(
     src              = src_global,
     path_duckdb      = path_global,
+    esn              = esn,
     memory_limit     = mem_limit,
     threads          = n_threads,
     temp_dir         = tmp_dir,
     max_temp_dir_size = max_tmp)
 
   bake_taxon(path_global)      # WoRMS taxon table for children-taxa queries
-  finish_taxonomy(path_global) # gap-fill + EOV layers, then verify completeness
+  finish_taxonomy(path_global, esn = esn) # gap-fill + EOV, then verify
   symlink_to(path_global)
 
   # This script BUILDS; it does not deploy. It used to shell out to

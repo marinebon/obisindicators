@@ -112,6 +112,29 @@ if [ -z "$STORE" ]; then
     || die "no obis_h3_global_*.duckdb found in $OBIS_DIR"
 fi
 [ -f "$STORE" ] || die "store not found: $STORE"
+
+# Never publish a store just because the FILE exists. A build that dies partway
+# (e.g. after occ_h3/idx_h3 but before the EOV layers) leaves a plausible-looking
+# .duckdb on disk that is also the NEWEST, so the auto-pick above would select it
+# and quietly regress the service. Check the layers before swapping.
+echo "checking store completeness ..."
+tables=$(sudo docker exec "$BUILD_CONTAINER" Rscript -e \
+  'a <- commandArgs(TRUE); suppressMessages({library(DBI); library(duckdb)});
+   con <- dbConnect(duckdb(), dbdir = a[1], read_only = TRUE);
+   cat(paste(dbListTables(con), collapse = " "))' \
+  "$STORE" </dev/null 2>/dev/null) \
+  || die "could not open $STORE to verify it"
+for t in occ_h3 idx_h3 taxon eov idx_h3_eov; do
+  case " $tables " in
+    *" $t "*) ;;
+    *) die "store is INCOMPLETE — missing table '$t': $STORE
+     found: ${tables:-<none>}
+     Refusing to publish; this would regress the running service.
+     Finish it with finish_taxonomy() (see data-raw/build_obis_h3_duckdb.R)." ;;
+  esac
+done
+echo "store layers ok: $tables"
+
 prev=$(readlink -f "$LINK" 2>/dev/null || echo "(none)")
 echo "current: $prev"
 echo "new:     $STORE"
