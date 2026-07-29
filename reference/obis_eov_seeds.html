@@ -71,23 +71,37 @@ or to their descendant taxa with <code><a href="obis_taxon_children.html">obis_t
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>data frame with one row per seed taxon: <code>eov</code>, <code>label</code>, <code>aphiaid</code>,
-<code>taxon</code>.</p>
+    <p>data frame with one row per seed taxon: <code>eov</code>, <code>label</code>, <code>desc</code>,
+<code>aphiaid</code>, <code>taxon</code>, <code>rank</code>.</p>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu">obis_eov_seeds</span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>          eov       label aphiaid          taxon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1       fish        Fish    1829        Agnatha</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2       fish        Fish 1517375 Chondrichthyes</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3       fish        Fish  152352   Osteichthyes</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4 hardCorals Hard corals    1363   Scleractinia</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5  mangroves   Mangroves  235048   Combretaceae</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6  mangroves   Mangroves  235033      Avicennia</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>          eov       label</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1       fish        Fish</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2       fish        Fish</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3       fish        Fish</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 hardCorals Hard corals</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5  mangroves   Mangroves</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6  mangroves   Mangroves</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                                                                          desc</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1                                All fishes: jawless, cartilaginous and bony.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2                                All fishes: jawless, cartilaginous and bony.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3                                All fishes: jawless, cartilaginous and bony.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4                                                 Reef-building stony corals.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5 Mangrove trees, shrubs and the mangrove fern, as 19 genera plus one family.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6 Mangrove trees, shrubs and the mangrove fern, as 19 genera plus one family.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   aphiaid          taxon        rank</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1    1829        Agnatha Infraphylum</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 1517375 Chondrichthyes  Parvphylum</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3  152352   Osteichthyes  Parvphylum</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4    1363   Scleractinia       Order</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5  235048   Combretaceae      Family</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6  235033      Avicennia       Genus</span>
 <span class="r-in"><span><span class="fu">obis_eov_seeds</span><span class="op">(</span><span class="st">"seaTurtles"</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>          eov       label aphiaid        taxon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 seaTurtles Sea turtles  987094 Chelonioidea</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>          eov       label            desc aphiaid        taxon        rank</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 seaTurtles Sea turtles Marine turtles.  987094 Chelonioidea Superfamily</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

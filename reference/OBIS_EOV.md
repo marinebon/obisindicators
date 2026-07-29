@@ -14,5 +14,6 @@ OBIS_EOV
 
 ## Format
 
-a named list; each element has `label`, `aphiaid`, and `taxon` (the seed
-scientific names, in the same order as `aphiaid`).
+a named list; each element has `label`, `desc` (a one-line plain English
+definition), and the parallel vectors `aphiaid`, `taxon` (seed
+scientific names) and `rank` (each seed's WoRMS rank).

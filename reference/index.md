@@ -65,6 +65,8 @@ IOOS Marine Life Data Network definitions.
 - [`obis_eov_bake()`](https://marinebon.org/obisindicators/reference/obis_eov_bake.md)
   : Bake the EOV membership and precomputed-indicator layers into a
   store
+- [`obis_eov_label()`](https://marinebon.org/obisindicators/reference/obis_eov_label.md)
+  : Human-readable EOV label with its taxonomic definition
 - [`obis_eov_seeds()`](https://marinebon.org/obisindicators/reference/obis_eov_seeds.md)
   : Essential Ocean Variable (EOV) taxonomic seeds
 - [`obis_eov_sql()`](https://marinebon.org/obisindicators/reference/obis_eov_sql.md)

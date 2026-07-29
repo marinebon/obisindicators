@@ -22,21 +22,35 @@ obis_eov_seeds(eov = NULL)
 
 ## Value
 
-data frame with one row per seed taxon: `eov`, `label`, `aphiaid`,
-`taxon`.
+data frame with one row per seed taxon: `eov`, `label`, `desc`,
+`aphiaid`, `taxon`, `rank`.
 
 ## Examples
 
 ``` r
 head(obis_eov_seeds())
-#>          eov       label aphiaid          taxon
-#> 1       fish        Fish    1829        Agnatha
-#> 2       fish        Fish 1517375 Chondrichthyes
-#> 3       fish        Fish  152352   Osteichthyes
-#> 4 hardCorals Hard corals    1363   Scleractinia
-#> 5  mangroves   Mangroves  235048   Combretaceae
-#> 6  mangroves   Mangroves  235033      Avicennia
+#>          eov       label
+#> 1       fish        Fish
+#> 2       fish        Fish
+#> 3       fish        Fish
+#> 4 hardCorals Hard corals
+#> 5  mangroves   Mangroves
+#> 6  mangroves   Mangroves
+#>                                                                          desc
+#> 1                                All fishes: jawless, cartilaginous and bony.
+#> 2                                All fishes: jawless, cartilaginous and bony.
+#> 3                                All fishes: jawless, cartilaginous and bony.
+#> 4                                                 Reef-building stony corals.
+#> 5 Mangrove trees, shrubs and the mangrove fern, as 19 genera plus one family.
+#> 6 Mangrove trees, shrubs and the mangrove fern, as 19 genera plus one family.
+#>   aphiaid          taxon        rank
+#> 1    1829        Agnatha Infraphylum
+#> 2 1517375 Chondrichthyes  Parvphylum
+#> 3  152352   Osteichthyes  Parvphylum
+#> 4    1363   Scleractinia       Order
+#> 5  235048   Combretaceae      Family
+#> 6  235033      Avicennia       Genus
 obis_eov_seeds("seaTurtles")
-#>          eov       label aphiaid        taxon
-#> 1 seaTurtles Sea turtles  987094 Chelonioidea
+#>          eov       label            desc aphiaid        taxon        rank
+#> 1 seaTurtles Sea turtles Marine turtles.  987094 Chelonioidea Superfamily
 ```
