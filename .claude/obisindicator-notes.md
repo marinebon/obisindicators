@@ -1,5 +1,9 @@
 
 
+## 2026-07-29 update groups/EOVs with better documentation
+
+Commit and push to main anything that remains. Next, I want to see better documentation in the About or Schema or a parenthetical in the drop-down of the app on what exactly is the definition of each of the EOVs. There is also inconsistency in the listing of the Taxon groups, sometimes mentioning taxonomic level and sometimes not. I'm speaking of the https://app.marinesensitivity.org/h3-db/ [Image #2]
+
 ## 2026-07-28 EOVs on the h3-db app
 
 Evaluation: EOVs on the h3-db app

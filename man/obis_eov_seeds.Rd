@@ -12,8 +12,8 @@ obis_eov_seeds(eov = NULL)
 \code{"seagrasses"}, \code{"seaTurtles"}.}
 }
 \value{
-data frame with one row per seed taxon: \code{eov}, \code{label}, \code{aphiaid},
-\code{taxon}.
+data frame with one row per seed taxon: \code{eov}, \code{label}, \code{desc},
+\code{aphiaid}, \code{taxon}, \code{rank}.
 }
 \description{
 The root WoRMS AphiaIDs defining each biology & ecosystems EOV, per the IOOS

@@ -5,8 +5,9 @@
 \alias{OBIS_EOV}
 \title{The IOOS Marine Life Data Network EOV definitions}
 \format{
-a named list; each element has \code{label}, \code{aphiaid}, and \code{taxon}
-(the seed scientific names, in the same order as \code{aphiaid}).
+a named list; each element has \code{label}, \code{desc} (a one-line plain
+English definition), and the parallel vectors \code{aphiaid}, \code{taxon} (seed
+scientific names) and \code{rank} (each seed's WoRMS rank).
 }
 \usage{
 OBIS_EOV

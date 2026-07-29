@@ -5,7 +5,9 @@
 # AphiaIDs per EOV:
 #   https://github.com/ioos/marine_life_data_network/tree/main/eov_taxonomy
 # (`IdentifierList.csv`; the per-EOV CSVs there carry the same seeds plus WoRMS
-# classification strings). The whole definition is 38 AphiaIDs across 7 EOVs.
+# classification strings). The whole definition is 33 AphiaIDs across 7 EOVs,
+# spanning nine different WoRMS ranks (Class .. Species) — which is precisely
+# why they are resolved as subtrees rather than by rank-column match.
 #
 # Mapping that onto this package is just a multi-seed version of what
 # R/taxon.R already does: expand each EOV's seeds to their full descendant set
@@ -28,20 +30,26 @@
 #' `eov_taxonomy/IdentifierList.csv`. Each EOV is the union of the descendant
 #' subtrees of its seeds. Accessed through [obis_eov_seeds()].
 #'
-#' @format a named list; each element has `label`, `aphiaid`, and `taxon`
-#'   (the seed scientific names, in the same order as `aphiaid`).
+#' @format a named list; each element has `label`, `desc` (a one-line plain
+#'   English definition), and the parallel vectors `aphiaid`, `taxon` (seed
+#'   scientific names) and `rank` (each seed's WoRMS rank).
 #' @keywords internal
 OBIS_EOV <- list(
   fish = list(
     label   = "Fish",
+    desc    = "All fishes: jawless, cartilaginous and bony.",
     aphiaid = c(1829L, 1517375L, 152352L),
-    taxon   = c("Agnatha", "Chondrichthyes", "Osteichthyes")),
+    taxon   = c("Agnatha", "Chondrichthyes", "Osteichthyes"),
+    rank    = c("Infraphylum", "Parvphylum", "Parvphylum")),
   hardCorals = list(
     label   = "Hard corals",
+    desc    = "Reef-building stony corals.",
     aphiaid = 1363L,
-    taxon   = "Scleractinia"),
+    taxon   = "Scleractinia",
+    rank    = "Order"),
   mangroves = list(
     label   = "Mangroves",
+    desc    = "Mangrove trees, shrubs and the mangrove fern, as 19 genera plus one family.",
     aphiaid = c(235048L, 235033L, 234450L, 234495L, 235086L, 235089L, 235091L,
                 235106L, 235056L, 235060L, 235045L, 235116L, 235063L, 235072L,
                 235075L, 235077L, 235068L, 234488L, 235103L),
@@ -49,28 +57,41 @@ OBIS_EOV <- list(
                 "Kandelia", "Rhizophora", "Sonneratia", "Excoecaria", "Pemphis",
                 "Camptostemon", "Heritiera", "Xylocarpus", "Osbornia",
                 "Pelliciera", "Aegialitis", "Aegiceras", "Acrostichum",
-                "Scyphiphora")),
+                "Scyphiphora"),
+    rank    = c("Family", rep("Genus", 18L))),
   marineMammals = list(
     label   = "Marine mammals",
+    desc    = paste("Seals & sea lions, whales & dolphins, and sirenians, plus four",
+                    "individually-listed carnivores (sea otter, marine otter,",
+                    "North American river otter, polar bear)."),
     # 477316 (Lutra felina) is the ACCEPTED id; the repo's marineMammals.csv
     # still lists the unaccepted synonym 343992. IdentifierList.csv is correct.
     aphiaid = c(148736L, 2688L, 159502L, 242598L, 477316L, 159017L, 137085L),
     taxon   = c("Pinnipedia", "Cetacea", "Sirenia", "Enhydra lutris",
-                "Lutra felina", "Lontra canadensis", "Ursus maritimus")),
+                "Lutra felina", "Lontra canadensis", "Ursus maritimus"),
+    rank    = c("Infraorder", "Infraorder", "Order", "Species", "Species",
+                "Species", "Species")),
   seabirds = list(
     label   = "Seabirds",
-    # NB: the EOV seed is class Aves entire, not a seabird-only subset. In a
-    # marine-only snapshot that is a reasonable proxy, but it IS all birds.
+    desc    = paste("Class Aves entire - i.e. ALL birds, not a seabird-only subset.",
+                    "Against a marine-only snapshot that is a reasonable proxy,",
+                    "but it is a definitional choice made by the EOV list."),
     aphiaid = 1836L,
-    taxon   = "Aves"),
+    taxon   = "Aves",
+    rank    = "Class"),
   seagrasses = list(
     label   = "Seagrasses",
+    desc    = paste("Order Alismatales, the marine flowering plants (also takes in",
+                    "some brackish/freshwater pondweeds)."),
     aphiaid = 153491L,
-    taxon   = "Alismatales"),
+    taxon   = "Alismatales",
+    rank    = "Order"),
   seaTurtles = list(
     label   = "Sea turtles",
+    desc    = "Marine turtles.",
     aphiaid = 987094L,
-    taxon   = "Chelonioidea"))
+    taxon   = "Chelonioidea",
+    rank    = "Superfamily"))
 
 #' Essential Ocean Variable (EOV) taxonomic seeds
 #'
@@ -82,8 +103,8 @@ OBIS_EOV <- list(
 #'   `"fish"`, `"hardCorals"`, `"mangroves"`, `"marineMammals"`, `"seabirds"`,
 #'   `"seagrasses"`, `"seaTurtles"`.
 #'
-#' @return data frame with one row per seed taxon: `eov`, `label`, `aphiaid`,
-#'   `taxon`.
+#' @return data frame with one row per seed taxon: `eov`, `label`, `desc`,
+#'   `aphiaid`, `taxon`, `rank`.
 #' @concept eov
 #' @export
 #' @examples
@@ -94,8 +115,10 @@ obis_eov_seeds <- function(eov = NULL) {
   do.call(rbind, lapply(nms, function(k) data.frame(
     eov              = k,
     label            = OBIS_EOV[[k]]$label,
+    desc             = OBIS_EOV[[k]]$desc,
     aphiaid          = OBIS_EOV[[k]]$aphiaid,
     taxon            = OBIS_EOV[[k]]$taxon,
+    rank             = OBIS_EOV[[k]]$rank,
     stringsAsFactors = FALSE)))
 }
 
@@ -109,6 +132,42 @@ obis_eov_seeds <- function(eov = NULL) {
     stop("unknown EOV: ", paste(bad, collapse = ", "),
          ". Known: ", paste(names(OBIS_EOV), collapse = ", "))
   unique(eov)
+}
+
+#' Human-readable EOV label with its taxonomic definition
+#'
+#' A compact "what is this, taxonomically" string for pickers and legends, e.g.
+#' `"Sea turtles (superfamily Chelonioidea)"`. Lives in the package rather than
+#' the consuming app so a label can never drift from the seeds it describes.
+#'
+#' One seed renders as `rank Name`; a few render as a name list; many collapse to
+#' a count, since a picker cannot usefully show 19 mangrove genera.
+#'
+#' @param eov EOV name(s); see [obis_eov_seeds()].
+#' @param max_taxa list seed names up to this many, then summarise as a count.
+#' @return character vector, one label per EOV, named by EOV.
+#' @concept eov
+#' @export
+#' @examples
+#' obis_eov_label()
+obis_eov_label <- function(eov = NULL, max_taxa = 3L) {
+  nms <- if (is.null(eov)) names(OBIS_EOV) else .obis_eov_names(eov)
+  out <- vapply(nms, function(k) {
+    e <- OBIS_EOV[[k]]
+    n <- length(e$aphiaid)
+    detail <- if (n == 1L) {
+      paste(tolower(e$rank[1]), e$taxon[1])
+    } else if (n <= max_taxa) {
+      paste(e$taxon, collapse = ", ")
+    } else {
+      # too many to list: say how many, and at what rank(s). No nested parens —
+      # the whole string is already parenthesised by the caller.
+      rk <- unique(tolower(e$rank))
+      paste0(n, " seed taxa: ", paste(rk, collapse = "/"))
+    }
+    sprintf("%s (%s)", e$label, detail)
+  }, character(1))
+  stats::setNames(out, nms)
 }
 
 #' AphiaID seeds for one or more EOVs

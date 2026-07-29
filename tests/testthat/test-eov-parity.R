@@ -141,3 +141,41 @@ test_that("the precomputed EOV layer agrees with the live subtree path", {
   expect_equal(as.numeric(m$value.pre), as.numeric(m$value.live))
   expect_equal(as.numeric(m$n.pre),     as.numeric(m$n.live))
 })
+
+test_that("EOV seeds carry a rank and a plain-English definition", {
+  s <- obis_eov_seeds()
+  expect_true(all(c("desc", "rank") %in% names(s)))
+  expect_false(anyNA(s$rank))
+  expect_false(anyNA(s$desc))
+  expect_true(all(nzchar(s$desc)))
+
+  # the seeds deliberately span many ranks — that is the whole reason they are
+  # resolved as subtrees rather than by a rank-column match
+  expect_gt(length(unique(s$rank)), 5)
+  expect_equal(s$rank[s$taxon == "Aves"], "Class")
+  expect_equal(s$rank[s$taxon == "Chelonioidea"], "Superfamily")
+  expect_equal(s$rank[s$taxon == "Scleractinia"], "Order")
+  expect_setequal(s$rank[s$eov == "fish"], c("Infraphylum", "Parvphylum"))
+})
+
+test_that("obis_eov_label() describes each EOV without nesting parentheses", {
+  l <- obis_eov_label()
+  expect_length(l, 7)
+  expect_setequal(names(l), names(obisindicators:::OBIS_EOV))
+
+  # single seed -> "rank Name"; a few -> the names; many -> a count
+  expect_equal(unname(l["seaTurtles"]), "Sea turtles (superfamily Chelonioidea)")
+  expect_equal(unname(l["seabirds"]),   "Seabirds (class Aves)")
+  expect_match(l[["fish"]], "Agnatha, Chondrichthyes, Osteichthyes")
+  expect_match(l[["mangroves"]], "19 seed taxa")
+
+  # a nested "((" would render badly in a dropdown
+  expect_false(any(grepl("((", l, fixed = TRUE)))
+  # every label opens exactly one parenthetical
+  expect_true(all(vapply(gregexpr("(", l, fixed = TRUE),
+                         function(m) length(m[m > 0]), integer(1)) == 1L))
+
+  expect_equal(unname(obis_eov_label("fish", max_taxa = 1L)),
+               "Fish (3 seed taxa: infraphylum/parvphylum)")
+  expect_error(obis_eov_label("bogus"), "unknown EOV")
+})
