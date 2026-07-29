@@ -366,6 +366,49 @@ Kick off the rebuild please and monitor it over the hours
 
 Confirmed a serious sequencing bug: bake_taxon() runs after build_obis_h3_duckdb(), so the EOV step (which requires taxon) is skipped — and nothing runs the gap-fill. A rebuild would ship a store with no EOV layers and the seagrass undercount back. Let me fix that before launching.
 
+----
+
+Rebuild complete and live. It took a failure and a resume to get there.
+
+Deployed
+
+┌──────────────────────┬───────────────────────────┬──────────────────┬────────────┐
+│        metric        │ live before (Jul-17 data) │ now (fresh sync) │   delta    │
+├──────────────────────┼───────────────────────────┼──────────────────┼────────────┤
+│ Occurrence records   │ 121,922,979               │ 127,329,658      │ +5,406,679 │
+├──────────────────────┼───────────────────────────┼──────────────────┼────────────┤
+│ Distinct species     │ 167,190                   │ 167,416          │ +226       │
+├──────────────────────┼───────────────────────────┼──────────────────┼────────────┤
+│ Seagrass records     │ 260,236                   │ 311,078          │ +50,842    │
+├──────────────────────┼───────────────────────────┼──────────────────┼────────────┤
+│ Unreachable aphiaids │ 0                         │ 0                │ —          │
+└──────────────────────┴───────────────────────────┴──────────────────┴────────────┘
+
+All seven EOVs serve from the precomputed layer in 0.13–0.54s. Every pre-existing path still works (idx_h3, idx_h3_taxon, live subtree, SPUE). The deploy's own layer gate and mtime assertion both passed.
+
+A nice internal cross-check: idx_h3_eov: seabirds = 9,196 cells and idx_h3_taxon class=Aves = 9,191 — the two independent routes agreeing to within the subtree-vs-rank-column difference we established.
+
+What went wrong, and what it exposed
+
+The 3-hour sync and build succeeded; it died on the final step from my bug — finish_taxonomy() read esn from the caller's environment, which the driver never defines. My local test had passed only because the test scaffold defined esn itself. That's the lesson worth keeping: the test wasn't faithful to the real calling environment, so it validated something production never provides.
+
+Chasing it surfaced a latent landmine unrelated to my change: the driver called symlink_to(path_demo) on every run, repointing the live symlink at the 71 MB South Atlantic demo store before the global build. When the build failed, production stayed pointed there. Nothing looked wrong — h3t keeps serving through its open file handle — but any restart would have silently brought up demo data globally. That's been latent in this script the whole time.
+
+Fixed across 4c8324a / 86032cc:
+- esn is a parameter with a default, plus one OBIS_ESN config threaded to both layers so ES(n) can't diverge
+- the build script no longer repoints the live symlink — that's deployment's job
+- deploy_obis_h3.sh verifies the candidate store's layers before swapping (it auto-picks the newest, which after a partial build is the incomplete one)
+- OBIS_FINISH_ONLY resume path, which is what saved the 3-hour rebuild
+- widened the monitor filter — the old one missed the failure entirely because Error in (function (cond) doesn't start with ERROR
+
+Two follow-ups
+
+I deliberately kept the 93 GB of parquet on disk (151 GB still free). Deleting it after validation is exactly what created the "where did it go" mystery, and keeping it is why we grew the volume — the next rebuild can skip the sync with --skip-sync.
+
+The email draft is updated to the new figures (127.3M records / 167,416 species). I kept the seagrass finding as the same-snapshot 31,360 → 260,236 comparison so the gap-fill effect stays isolated from the data refresh, with a parenthetical noting the app now reads 311,078. Still unsent.
+
+Rollback remains one command if anything looks off — the previous store is untouched on disk.
+
 
 ## 2026-07-28 update mapgl to fix anti-meridian rendering
 
