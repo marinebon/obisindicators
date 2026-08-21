@@ -235,7 +235,20 @@ Rscript data-raw/migrate_add_spatial_cluster.R <in.duckdb> <out.duckdb>
 - `R/taxon.R` — WoRMS children resolution + the SPUE effort proxy.
 - `R/taxon_gapfill.R` — WoRMS REST supplement closing the `taxon` coverage gap.
 - `R/eov.R` — Essential Ocean Variables as multi-seed AphiaID subtrees.
-- `R/visualize.R` — `gmap_indicator()` static ggplot maps.
+- `R/visualize.R` — `gmap_indicator()` static ggplot maps, plus `hex_sf()`,
+  `gmap_cells()`, `plot_scale_curves()`, `plot_spue_sdm()`.
+- `R/store.R` — analysis-side access to a store: `obis_store_connect()`,
+  `obis_store_stats()`, `obis_h3t_query()` (run tile SQL at a fixed res, keyed
+  on the hex string), `obis_cell_indicators()` (all indicators per cell for any
+  filter; precomputed layer when possible, else the live SQL per indicator —
+  **no new indicator math**), `obis_bench()` / `obis_bench_queries()`.
+- `R/scale.R`, `R/compare.R`, `R/temporal.R`, `R/place.R` — the paper's
+  analyses (scale curves, rank-vs-subtree, EOV totals, SPUE vs SDM raster,
+  periods, place roll-ups), all tested on `tests/testthat/helper-paper.R`'s
+  synthetic fixture in `test-paper-helpers.R`.
+- `paper/` — Quarto notebooks, one per manuscript figure/table, driven by
+  `OBIS_H3_DUCKDB`; `paper/build_demo_store.R` builds a regional demo store from
+  a local OBIS export + WoRMS table (Gulf of Mexico + Caribbean by default).
 - `R/data.R` — roxygen docs for the shipped `occ_*` datasets.
 - roxygen `@concept` tags (`read`/`analyze`/`h3t`/`taxon`/`visualize`/`data`) drive
   the pkgdown reference index in `_pkgdown.yml` — tag new exported functions.

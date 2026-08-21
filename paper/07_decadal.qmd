@@ -1,0 +1,57 @@
+---
+title: "Fig. 5 — decadal change in ES(50) per EOV"
+subtitle: "Indicators per decade and cell; change where both decades are reliable"
+---
+
+```{r setup}
+source("_common.R")
+res_t  <- as.integer(Sys.getenv("PAPER_RES_TIME", if (grepl("demo", STORE)) 3L else 2L))
+starts <- seq(1960L, 2020L, by = 10L)
+```
+
+Store: `r store_label` · resolution: H3 `r res_t` · decades `r min(starts)`s–`r max(starts)`s
+
+```{r periods}
+pd <- bind_rows(lapply(EOV_ORDER, function(e) {
+  d <- calc_period_indicators(con, res = res_t, eov = e, starts = starts, esn = 50L)
+  if (nrow(d)) cbind(eov = e, d) else NULL
+}))
+summ <- pd |>
+  group_by(eov, period) |>
+  summarize(cells = n(), cells_reliable = sum(n >= 50), records = sum(as.numeric(n)),
+            median_es = median(es[n >= 50], na.rm = TRUE), .groups = "drop")
+summ
+write.csv(pd,   file.path(dir_fig, "fig5_period_cells.csv"),   row.names = FALSE)
+write.csv(summ, file.path(dir_fig, "fig5_period_summary.csv"), row.names = FALSE)
+```
+
+```{r fig5a, fig.height=6}
+long <- bind_rows(
+  transmute(summ, eov, period, metric = "cells reliable (n ≥ 50)", value = cells_reliable),
+  transmute(summ, eov, period, metric = "records", value = records),
+  transmute(summ, eov, period, metric = "median ES(50)", value = median_es))
+p <- ggplot(long, aes(x = period, y = value, color = eov)) +
+  geom_line() + geom_point(size = 1.5) +
+  facet_wrap(~ metric, scales = "free_y") +
+  labs(x = "decade", y = NULL, color = NULL, title = "Per-decade coverage and ES(50) by EOV",
+       caption = store_label) +
+  theme_minimal(base_size = 11) + theme(legend.position = "bottom")
+save_fig(p, "fig5a_decadal_summary", summ, width = 11, height = 5)
+p
+```
+
+## Change maps, 1980s → 2010s
+
+```{r fig5b, fig.height=5, results="asis"}
+for (e in unique(pd$eov)) {
+  ch <- calc_period_change(filter(pd, eov == e), from = 1980L, to = 2010L, esn = 50L)
+  if (nrow(ch$cells) < 3) next
+  cat("\n\n### ", obis_eov_label(e), " — cells reliable in both: ", ch$coverage$both,
+      " (only 1980s: ", ch$coverage$only_from, "; only 2010s: ", ch$coverage$only_to, ")\n\n", sep = "")
+  p <- gmap_cells(ch$cells, "delta", label = "Δ ES(50)") +
+    labs(title = paste0(obis_eov_label(e, max_taxa = 1L), ": ES(50) 2010s − 1980s"),
+         caption = store_label)
+  save_fig(p, paste0("fig5b_change_", e), ch$cells, width = 9, height = 5)
+  print(p)
+}
+```

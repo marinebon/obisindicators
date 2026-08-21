@@ -5,3 +5,9 @@
 inst/doc
 docs
 .DS_Store
+paper/figures/*.png
+paper/figures/*.csv
+paper/_out
+paper/*_files
+paper/*.html
+paper/_freeze

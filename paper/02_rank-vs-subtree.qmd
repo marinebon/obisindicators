@@ -1,0 +1,40 @@
+---
+title: "Table 3 — Darwin Core rank columns vs WoRMS AphiaID subtrees"
+subtitle: "The same taxon group counted two ways"
+---
+
+```{r setup}
+source("_common.R")
+```
+
+Store: `r store_label`
+
+A user who filters `class = 'Actinopterygii'` gets nothing, because WoRMS files
+Actinopterygii as a gigaclass and OBIS's `class` column carries Teleostei. The
+AphiaID subtree is rank-agnostic. Each preset below is counted both ways on the
+base resolution tier of `occ_h3`.
+
+```{r table3}
+rv <- calc_rank_vs_subtree(con)
+rv |>
+  mutate(across(c(records_rank, records_tree), ~ format(.x, big.mark = ",")),
+         ratio = round(ratio, 3))
+write.csv(rv, file.path(dir_fig, "tab3_rank_vs_subtree.csv"), row.names = FALSE)
+```
+
+```{r fig-table3}
+long <- bind_rows(
+  transmute(rv, label, method = "DwC rank column", records = records_rank),
+  transmute(rv, label, method = "AphiaID subtree", records = records_tree))
+p <- ggplot(long, aes(x = reorder(label, -records), y = pmax(records, 0.5), fill = method)) +
+  geom_col(position = position_dodge(width = .8), width = .7) +
+  scale_y_log10(labels = scales::label_comma()) +
+  labs(x = NULL, y = "records (log)", fill = NULL,
+       title = "Records found by rank-column filter vs AphiaID subtree",
+       subtitle = "zero-height bars are groups the rank column cannot express",
+       caption = store_label) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 25, hjust = 1))
+save_fig(p, "tab3_rank_vs_subtree", long, width = 9, height = 5)
+p
+```

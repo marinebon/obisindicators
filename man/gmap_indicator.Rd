@@ -9,7 +9,8 @@ gmap_indicator(
   column = "shannon",
   label = "Shannon index",
   trans = "identity",
-  crs = "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+  crs = "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs",
+  bbox = NULL
 )
 }
 \arguments{
@@ -27,6 +28,9 @@ the object itself. Built-in transformations include "asn", "atanh",
 "reciprocal", "reverse", "sqrt" and "time". See \code{ggplot2::continuous_scale}}
 
 \item{crs}{coordinate reference system; see \code{sf::st_crs()}}
+
+\item{bbox}{optional \code{sf::st_bbox()} (in lon/lat) to frame the map; default
+the extent of \code{grid}.}
 }
 \value{
 ggplot2 plot

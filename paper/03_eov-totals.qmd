@@ -1,0 +1,62 @@
+---
+title: "Table 4 & Fig. 1 — EOV totals and the taxonomy coverage gap"
+subtitle: "Records, species and cells per EOV; before/after gap-fill when a pre-fill store is given"
+---
+
+```{r setup}
+source("_common.R")
+before_path <- Sys.getenv("OBIS_H3_DUCKDB_BEFORE")
+has_before  <- nzchar(before_path) && file.exists(before_path)
+```
+
+Store: `r store_label` · before-store: `r if (has_before) basename(before_path) else "none (set OBIS_H3_DUCKDB_BEFORE)"`
+
+## Coverage gap on this store
+
+```{r orphans}
+orph <- obis_taxon_orphans(con)
+tibble(orphan_aphiaids = nrow(orph), orphan_records = sum(orph$records))
+head(arrange(orph, desc(records)), 15)
+```
+
+## Table 4 — totals per EOV
+
+```{r totals}
+tot <- calc_eov_totals(con)
+tot |> mutate(across(c(records, species, cells), ~ format(.x, big.mark = ",")),
+              pct_records = round(pct_records, 2))
+write.csv(tot, file.path(dir_fig, "tab4_eov_totals.csv"), row.names = FALSE)
+```
+
+```{r compare, eval=has_before}
+con_b  <- obis_store_connect(before_path)
+before <- calc_eov_totals(con_b)
+cmp    <- compare_eov_totals(before, tot)
+cmp |> mutate(across(c(records_before, records_after, records_delta), ~ format(.x, big.mark = ",")),
+              records_pct = round(records_pct, 1))
+write.csv(cmp, file.path(dir_fig, "tab4_eov_totals_before_after.csv"), row.names = FALSE)
+```
+
+## Fig. 1 — seagrasses before/after gap-fill
+
+```{r fig1, fig.height=5}
+res_map <- RES_MAP
+after_sg <- obis_cell_indicators(con, res_map, eov = "seagrasses")
+p_after  <- gmap_cells(after_sg, "n", label = "records", trans = "log10") +
+  labs(title = if (has_before) "after gap-fill" else "seagrasses EOV (this store)")
+if (has_before) {
+  before_sg <- obis_cell_indicators(con_b, res_map, eov = "seagrasses")
+  p_before  <- gmap_cells(before_sg, "n", label = "records", trans = "log10") +
+    labs(title = "before gap-fill (bulk WoRMS export only)")
+  p <- patchwork::wrap_plots(p_before, p_after, ncol = 2) +
+    patchwork::plot_annotation(caption = store_label)
+  save_fig(p, "fig1_seagrass_before_after",
+           bind_rows(mutate(before_sg, when = "before"), mutate(after_sg, when = "after")),
+           width = 12, height = 5)
+  DBI::dbDisconnect(con_b, shutdown = TRUE)
+} else {
+  p <- p_after + labs(caption = store_label)
+  save_fig(p, "fig1_seagrass", after_sg, width = 8, height = 5)
+}
+p
+```

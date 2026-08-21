@@ -19,8 +19,15 @@ reference:
   desc: "Functions for reading data."
   contents:
   - has_concept("read")
+- title: "Store"
+  desc: >
+    Connect to, summarize, query and benchmark an obis_h3 DuckDB store from R.
+  contents:
+  - has_concept("store")
 - title: "Analyze"
-  desc: "Functions for calculating indicators."
+  desc: >
+    Calculate indicators, and the paper's analyses: scale curves, rank-column vs
+    subtree, EOV totals, SPUE vs SDM, periods, and place roll-ups.
   contents:
   - has_concept("analyze")
 - title: "H3 grid & tiles"

@@ -1,3 +1,49 @@
+# obisindicators 0.6.0
+
+* **Analysis-side helpers for the paper's figures and case studies** — the
+  tile-SQL builders now have data-frame counterparts, so every figure in
+  `paper/` is a call to a tested, exported function rather than notebook code.
+  No new indicator math: everything runs the SQL already pinned to
+  `calc_indicators()` / `calc_spue()`, or calls those references directly.
+  - Store (`R/store.R`): `obis_store_connect()` (read-only + `LOAD h3`),
+    `obis_store_stats()` (tables, totals, cells by resolution — Table 2),
+    `obis_h3t_query()` (run any tile SQL at a fixed resolution, keyed on the
+    hex string), `obis_cell_indicators()` (n/sp/shannon/es per cell for any
+    filter, reading `idx_h3` / `idx_h3_eov` when it can), `obis_bench()` +
+    `obis_bench_queries()` (cold/warm timings of the four serving paths),
+    `h3_res_table()`.
+  - Scale (`R/scale.R`): `calc_scale_curves()` and `calc_spue_scale()` —
+    occupied cells, records-per-cell quantiles, ES-eligible fraction, medians
+    and reliability floors across H3 resolutions (Fig. 3).
+  - Comparisons (`R/compare.R`): `calc_rank_vs_subtree()` +
+    `obis_rank_presets()` (records by DwC rank column vs AphiaID subtree —
+    Table 3), `calc_eov_totals()` + `compare_eov_totals()` (per-EOV totals and
+    before/after a taxonomy change — Table 4), `calc_spue_cells()`,
+    `h3_raster_to_cells()` (aggregate an SDM raster to H3 by pixel centres or
+    hexagon centroids) and `compare_spue_sdm()` (Spearman + calibration bins,
+    effort-gated — Fig. 4).
+  - Periods (`R/temporal.R`): `calc_period_indicators()` and
+    `calc_period_change()` (decadal ES50/richness per cell, change where both
+    decades are reliable — Fig. 5).
+  - Places (`R/place.R`): `place_cells()` and `calc_place_indicators()` (roll
+    H3 cells up to sanctuary/EEZ polygons and compute indicators with
+    `calc_indicators()` — Fig. 6).
+  - Visualize (`R/visualize.R`): `hex_sf()` (cells → dateline-wrapped
+    polygons), `gmap_cells()` (map a per-cell table with an optional
+    reliability mask), `plot_scale_curves()`, `plot_spue_sdm()`;
+    `gmap_indicator()` gains a `bbox` argument and drops the deprecated
+    `aes_string()`.
+  - Tests: `tests/testthat/test-paper-helpers.R` on a new synthetic fixture
+    (`helper-paper.R`: turtles + birds with DwC ranks and years, baked
+    `idx_h3` and `idx_h3_eov`) asserts exact values for every helper, including
+    precomputed-vs-live agreement of `obis_cell_indicators()`.
+  - `paper/`: Quarto notebooks, one per figure/table (store stats + benchmarks,
+    rank vs subtree, gap-fill EOV totals, EOV maps, scale curves, SPUE vs SDM,
+    decadal change, place roll-ups), driven by `OBIS_H3_DUCKDB`; plus
+    `paper/build_demo_store.R` to build a regional demo store (Gulf of
+    Mexico + Caribbean) from a local OBIS export and a WoRMS table.
+  - Suggests: `terra` (raster aggregation), `patchwork` (figure panels).
+
 # obisindicators 0.5.0
 
 * **Essential Ocean Variables (EOVs)** — new `R/eov.R` maps the GOOS/IOOS

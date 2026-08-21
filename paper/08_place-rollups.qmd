@@ -1,0 +1,67 @@
+---
+title: "Fig. 6 — rolling hexagons up to places"
+subtitle: "EOV indicators per National Marine Sanctuary (or any polygons), from the same store"
+---
+
+```{r setup}
+source("_common.R")
+places_path <- Sys.getenv("PLACES_GPKG")
+places <- if (nzchar(places_path) && file.exists(places_path)) {
+  sf::st_read(places_path, quiet = TRUE)
+} else if (requireNamespace("onmsR", quietly = TRUE)) {
+  onmsR::sanctuaries
+} else {
+  # demo: three Gulf/Caribbean boxes
+  bx <- function(n, xmin, ymin, xmax, ymax) sf::st_sf(name = n, geometry = sf::st_as_sfc(
+    sf::st_bbox(c(xmin = xmin, ymin = ymin, xmax = xmax, ymax = ymax), crs = sf::st_crs(4326))))
+  rbind(bx("Florida Keys", -83, 24, -80, 26), bx("NW Gulf", -97, 26, -90, 30), bx("Lesser Antilles", -64, 12, -60, 18))
+}
+name_col <- intersect(c("sanctuary", "name", "NAME", "nms"), names(places))[1]
+res_p    <- as.integer(Sys.getenv("PAPER_RES_PLACE", "6"))
+# keep places that intersect the store's footprint (cells at res 2)
+foot <- hex_sf(obis_cell_indicators(con, 2)$cell)
+places <- places[lengths(sf::st_intersects(sf::st_transform(places, 4326), foot)) > 0, ]
+```
+
+Store: `r store_label` · places: `r nrow(places)` polygons (`r name_col`) · fill resolution: H3 `r res_p`
+
+```{r rollup}
+pi <- bind_rows(lapply(c("all taxa", EOV_ORDER), function(e) {
+  d <- calc_place_indicators(con, places, name_col, res = res_p,
+                             eov = if (e == "all taxa") NULL else e, esn = 50L)
+  cbind(group = e, d)
+}))
+pi |> select(group, place, n_cells, n_cells_occupied, n, sp, es, hill_1) |>
+  mutate(es = round(es, 2), hill_1 = round(hill_1, 2))
+write.csv(pi, file.path(dir_fig, "fig6_place_indicators.csv"), row.names = FALSE)
+```
+
+```{r fig6, fig.height=7}
+d <- pi |> filter(!is.na(n)) |>
+  mutate(reliable = n >= 50, place = reorder(place, -n))
+p <- ggplot(d, aes(x = place, y = es, fill = group, alpha = reliable)) +
+  geom_col(position = position_dodge(width = .85), width = .8) +
+  scale_alpha_manual(values = c(`TRUE` = 1, `FALSE` = .35), guide = "none") +
+  labs(x = NULL, y = "ES(50)", fill = NULL,
+       title = "ES(50) per place and EOV (faded = fewer than 50 records)",
+       caption = store_label) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
+save_fig(p, "fig6_place_es50", d, width = 11, height = 6)
+p
+```
+
+```{r fig6-map}
+# where the places sit on the all-taxa ES(50) surface (RES_MAP keeps the polygon
+# count modest; drawing tens of thousands of hexagons twice is slow)
+allr <- obis_cell_indicators(con, RES_MAP)
+robin <- "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+bb    <- sf::st_bbox(sf::st_transform(hex_sf(allr$cell), robin))
+p <- gmap_cells(allr, "es", label = "ES(50)", mask = allr$n >= 50) +
+  geom_sf(data = sf::st_transform(places, 4326), fill = NA, color = "cyan", linewidth = .4) +
+  # re-assert the frame: an added sf layer otherwise widens coord_sf to the world
+  coord_sf(crs = robin, xlim = bb[c("xmin", "xmax")], ylim = bb[c("ymin", "ymax")]) +
+  labs(title = sprintf("Places over the all-taxa ES(50) surface (res %d)", RES_MAP), caption = store_label)
+save_fig(p, "fig6_places_map", width = 10, height = 6)
+knitr::include_graphics(file.path(dir_fig, "fig6_places_map.png"))
+```

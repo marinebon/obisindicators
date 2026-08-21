@@ -1,0 +1,52 @@
+---
+title: "Table 2 & 5 — the store and its serving paths"
+subtitle: "Rows, totals, cells by resolution; cold/warm timings of the four query paths"
+---
+
+```{r setup}
+source("_common.R")
+```
+
+Store: `r store_label`
+
+## Table 2 — what the store holds
+
+```{r stats}
+s <- obis_store_stats(con)
+s$totals
+s$tables
+s$cells_by_res |>
+  mutate(area_km2 = round(area_km2), edge_km = round(edge_km, 1))
+write.csv(s$tables,       file.path(dir_fig, "tab2_tables.csv"),       row.names = FALSE)
+write.csv(s$totals,       file.path(dir_fig, "tab2_totals.csv"),       row.names = FALSE)
+write.csv(s$cells_by_res, file.path(dir_fig, "tab2_cells_by_res.csv"), row.names = FALSE)
+```
+
+## Table 5 — query latency by serving path
+
+The four paths a tile can take: precomputed all-taxa (`idx_h3`), precomputed
+EOV (`idx_h3_eov`), live EOV subtree over `occ_h3`, and the SPUE effort proxy
+(two recursive subtrees). Cold = first run; warm = median of 3 repeats (what
+the Varnish-fronted service sees after the first viewer).
+
+```{r bench}
+q <- obis_bench_queries(res = c(3L, 5L, 7L), eov = "fish",
+                        num_aphiaid = 137092L, den_aphiaid = 2688L)  # humpback / Cetacea
+b <- obis_bench(con, q, reps = 3L) |>
+  mutate(path = sub(" res \\d$", "", label),
+         res  = as.integer(sub(".* res (\\d)$", "\\1", label)))
+b |> select(path, res, rows, cold_s, warm_s) |> mutate(across(c(cold_s, warm_s), ~ round(.x, 3)))
+
+p <- ggplot(b, aes(x = res, y = warm_s, color = path)) +
+  geom_linerange(aes(ymin = warm_s, ymax = cold_s), position = position_dodge(width = .6), linewidth = .5) +
+  geom_point(aes(y = cold_s), position = position_dodge(width = .6), shape = 21, fill = "white", size = 2.2) +
+  geom_point(position = position_dodge(width = .6), size = 3) +
+  scale_x_continuous(breaks = unique(b$res)) +
+  scale_y_log10(labels = function(x) paste0(x, " s")) +
+  labs(x = "H3 resolution", y = "seconds (log)", color = NULL,
+       title = "Query latency by serving path (filled = warm median, hollow = cold first run)",
+       caption = store_label) +
+  theme_minimal(base_size = 11) + theme(legend.position = "bottom")
+save_fig(p, "tab5_bench", b, width = 9, height = 5)
+p
+```
