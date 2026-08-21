@@ -289,7 +289,32 @@ Rscript data-raw/migrate_add_spatial_cluster.R <in.duckdb> <out.duckdb>
 - `R/eov.R` — Essential Ocean Variables as multi-seed AphiaID subtrees.
 - `R/visualize.R` —
   [`gmap_indicator()`](https://marinebon.org/obisindicators/reference/gmap_indicator.md)
-  static ggplot maps.
+  static ggplot maps, plus
+  [`hex_sf()`](https://marinebon.org/obisindicators/reference/hex_sf.md),
+  [`gmap_cells()`](https://marinebon.org/obisindicators/reference/gmap_cells.md),
+  [`plot_scale_curves()`](https://marinebon.org/obisindicators/reference/plot_scale_curves.md),
+  [`plot_spue_sdm()`](https://marinebon.org/obisindicators/reference/plot_spue_sdm.md).
+- `R/store.R` — analysis-side access to a store:
+  [`obis_store_connect()`](https://marinebon.org/obisindicators/reference/obis_store_connect.md),
+  [`obis_store_stats()`](https://marinebon.org/obisindicators/reference/obis_store_stats.md),
+  [`obis_h3t_query()`](https://marinebon.org/obisindicators/reference/obis_h3t_query.md)
+  (run tile SQL at a fixed res, keyed on the hex string),
+  [`obis_cell_indicators()`](https://marinebon.org/obisindicators/reference/obis_cell_indicators.md)
+  (all indicators per cell for any filter; precomputed layer when
+  possible, else the live SQL per indicator — **no new indicator
+  math**),
+  [`obis_bench()`](https://marinebon.org/obisindicators/reference/obis_bench.md)
+  /
+  [`obis_bench_queries()`](https://marinebon.org/obisindicators/reference/obis_bench_queries.md).
+- `R/scale.R`, `R/compare.R`, `R/temporal.R`, `R/place.R` — the paper’s
+  analyses (scale curves, rank-vs-subtree, EOV totals, SPUE vs SDM
+  raster, periods, place roll-ups), all tested on
+  `tests/testthat/helper-paper.R`’s synthetic fixture in
+  `test-paper-helpers.R`.
+- `paper/` — Quarto notebooks, one per manuscript figure/table, driven
+  by `OBIS_H3_DUCKDB`; `paper/build_demo_store.R` builds a regional demo
+  store from a local OBIS export + WoRMS table (Gulf of Mexico +
+  Caribbean by default).
 - `R/data.R` — roxygen docs for the shipped `occ_*` datasets.
 - roxygen `@concept` tags
   (`read`/`analyze`/`h3t`/`taxon`/`visualize`/`data`) drive the pkgdown

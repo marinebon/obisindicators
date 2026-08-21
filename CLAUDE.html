@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -171,7 +171,13 @@
 <li>
 <code>R/eov.R</code> — Essential Ocean Variables as multi-seed AphiaID subtrees.</li>
 <li>
-<code>R/visualize.R</code> — <code><a href="reference/gmap_indicator.html">gmap_indicator()</a></code> static ggplot maps.</li>
+<code>R/visualize.R</code> — <code><a href="reference/gmap_indicator.html">gmap_indicator()</a></code> static ggplot maps, plus <code><a href="reference/hex_sf.html">hex_sf()</a></code>, <code><a href="reference/gmap_cells.html">gmap_cells()</a></code>, <code><a href="reference/plot_scale_curves.html">plot_scale_curves()</a></code>, <code><a href="reference/plot_spue_sdm.html">plot_spue_sdm()</a></code>.</li>
+<li>
+<code>R/store.R</code> — analysis-side access to a store: <code><a href="reference/obis_store_connect.html">obis_store_connect()</a></code>, <code><a href="reference/obis_store_stats.html">obis_store_stats()</a></code>, <code><a href="reference/obis_h3t_query.html">obis_h3t_query()</a></code> (run tile SQL at a fixed res, keyed on the hex string), <code><a href="reference/obis_cell_indicators.html">obis_cell_indicators()</a></code> (all indicators per cell for any filter; precomputed layer when possible, else the live SQL per indicator — <strong>no new indicator math</strong>), <code><a href="reference/obis_bench.html">obis_bench()</a></code> / <code><a href="reference/obis_bench_queries.html">obis_bench_queries()</a></code>.</li>
+<li>
+<code>R/scale.R</code>, <code>R/compare.R</code>, <code>R/temporal.R</code>, <code>R/place.R</code> — the paper’s analyses (scale curves, rank-vs-subtree, EOV totals, SPUE vs SDM raster, periods, place roll-ups), all tested on <code>tests/testthat/helper-paper.R</code>’s synthetic fixture in <code>test-paper-helpers.R</code>.</li>
+<li>
+<code>paper/</code> — Quarto notebooks, one per manuscript figure/table, driven by <code>OBIS_H3_DUCKDB</code>; <code>paper/build_demo_store.R</code> builds a regional demo store from a local OBIS export + WoRMS table (Gulf of Mexico + Caribbean by default).</li>
 <li>
 <code>R/data.R</code> — roxygen docs for the shipped <code>occ_*</code> datasets.</li>
 <li>roxygen <code>@concept</code> tags (<code>read</code>/<code>analyze</code>/<code>h3t</code>/<code>taxon</code>/<code>visualize</code>/<code>data</code>) drive the pkgdown reference index in <code>_pkgdown.yml</code> — tag new exported functions.</li>

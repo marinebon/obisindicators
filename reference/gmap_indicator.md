@@ -10,7 +10,8 @@ gmap_indicator(
   column = "shannon",
   label = "Shannon index",
   trans = "identity",
-  crs = "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+  crs = "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs",
+  bbox = NULL
 )
 ```
 
@@ -42,6 +43,12 @@ gmap_indicator(
 
   coordinate reference system; see
   [`sf::st_crs()`](https://r-spatial.github.io/sf/reference/st_crs.html)
+
+- bbox:
+
+  optional
+  [`sf::st_bbox()`](https://r-spatial.github.io/sf/reference/st_bbox.html)
+  (in lon/lat) to frame the map; default the extent of `grid`.
 
 ## Value
 

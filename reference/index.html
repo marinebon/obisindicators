@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,9 +53,9 @@
 
 
       <dl></dl></div><div class="section level2">
-      <h2 id="analyze">Analyze<a class="anchor" aria-label="anchor" href="#analyze"></a></h2>
+      <h2 id="store">Store<a class="anchor" aria-label="anchor" href="#store"></a></h2>
 
-      <div class="section-desc"><p>Functions for calculating indicators.</p></div>
+      <div class="section-desc"><p>Connect to, summarize, query and benchmark an obis_h3 DuckDB store from R.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -64,10 +64,159 @@
 
       <dl><dt>
 
+          <code><a href="h3_res_table.html">h3_res_table()</a></code>
+
+        </dt>
+        <dd>H3 resolution table</dd>
+
+        <dt>
+
+          <code><a href="obis_bench.html">obis_bench()</a></code>
+
+        </dt>
+        <dd>Benchmark queries against a store</dd>
+
+        <dt>
+
+          <code><a href="obis_bench_queries.html">obis_bench_queries()</a></code>
+
+        </dt>
+        <dd>The paper's default benchmark query set</dd>
+
+        <dt>
+
+          <code><a href="obis_h3t_query.html">obis_h3t_query()</a></code>
+
+        </dt>
+        <dd>Run a tile SQL at a fixed H3 resolution</dd>
+
+        <dt>
+
+          <code><a href="obis_store_connect.html">obis_store_connect()</a></code>
+
+        </dt>
+        <dd>Connect to an obis_h3 DuckDB store</dd>
+
+        <dt>
+
+          <code><a href="obis_store_stats.html">obis_store_stats()</a></code>
+
+        </dt>
+        <dd>Summarize an obis_h3 store (tables, rows, totals)</dd>
+      </dl></div><div class="section level2">
+      <h2 id="analyze">Analyze<a class="anchor" aria-label="anchor" href="#analyze"></a></h2>
+
+      <div class="section-desc"><p>Calculate indicators, and the paper’s analyses: scale curves, rank-column vs subtree, EOV totals, SPUE vs SDM, periods, and place roll-ups.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="calc_eov_totals.html">calc_eov_totals()</a></code>
+
+        </dt>
+        <dd>Records, species and cells per Essential Ocean Variable</dd>
+
+        <dt>
+
           <code><a href="calc_indicators.html">calc_indicators()</a></code>
 
         </dt>
         <dd>Calculate Biodiversity Indicators, including ES50 (Hurlbert index)</dd>
+
+        <dt>
+
+          <code><a href="calc_period_change.html">calc_period_change()</a></code>
+
+        </dt>
+        <dd>Change in an indicator between two periods, where both are reliable</dd>
+
+        <dt>
+
+          <code><a href="calc_period_indicators.html">calc_period_indicators()</a></code>
+
+        </dt>
+        <dd>Indicators per period (e.g. decade) and cell</dd>
+
+        <dt>
+
+          <code><a href="calc_place_indicators.html">calc_place_indicators()</a></code>
+
+        </dt>
+        <dd>Indicators rolled up from H3 cells to places</dd>
+
+        <dt>
+
+          <code><a href="calc_rank_vs_subtree.html">calc_rank_vs_subtree()</a></code>
+
+        </dt>
+        <dd>Records and species by DwC rank column vs by AphiaID subtree</dd>
+
+        <dt>
+
+          <code><a href="calc_scale_curves.html">calc_scale_curves()</a></code>
+
+        </dt>
+        <dd>Scale curves: indicator summaries across H3 resolutions</dd>
+
+        <dt>
+
+          <code><a href="calc_spue_cells.html">calc_spue_cells()</a></code>
+
+        </dt>
+        <dd>SPUE effort proxy per cell at one resolution</dd>
+
+        <dt>
+
+          <code><a href="calc_spue_scale.html">calc_spue_scale()</a></code>
+
+        </dt>
+        <dd>Scale curves for the SPUE effort proxy</dd>
+
+        <dt>
+
+          <code><a href="compare_eov_totals.html">compare_eov_totals()</a></code>
+
+        </dt>
+        <dd>Compare EOV totals between two stores (e.g. before/after taxonomy gap-fill)</dd>
+
+        <dt>
+
+          <code><a href="compare_spue_sdm.html">compare_spue_sdm()</a></code>
+
+        </dt>
+        <dd>Compare the SPUE effort proxy with modeled suitability</dd>
+
+        <dt>
+
+          <code><a href="h3_raster_to_cells.html">h3_raster_to_cells()</a></code>
+
+        </dt>
+        <dd>Aggregate a raster (e.g. an SDM) to H3 cells</dd>
+
+        <dt>
+
+          <code><a href="obis_cell_indicators.html">obis_cell_indicators()</a></code>
+
+        </dt>
+        <dd>Per-cell indicators for a filter at one resolution</dd>
+
+        <dt>
+
+          <code><a href="obis_rank_presets.html">obis_rank_presets()</a></code>
+
+        </dt>
+        <dd>Default taxon-group presets for the rank-vs-subtree comparison</dd>
+
+        <dt>
+
+          <code><a href="place_cells.html">place_cells()</a></code>
+
+        </dt>
+        <dd>H3 cells covering each place polygon</dd>
       </dl></div><div class="section level2">
       <h2 id="h-grid-tiles">H3 grid &amp; tiles<a class="anchor" aria-label="anchor" href="#h-grid-tiles"></a></h2>
 
@@ -219,6 +368,13 @@
 
       <dl><dt>
 
+          <code><a href="gmap_cells.html">gmap_cells()</a></code>
+
+        </dt>
+        <dd>Map a per-cell table of indicators</dd>
+
+        <dt>
+
           <code><a href="gmap_indicator.html">gmap_indicator()</a></code>
 
         </dt>
@@ -226,10 +382,31 @@
 
         <dt>
 
+          <code><a href="hex_sf.html">hex_sf()</a></code>
+
+        </dt>
+        <dd>H3 cells (hex strings) to <code>sf</code> polygons</dd>
+
+        <dt>
+
           <code><a href="make_hex_res.html">make_hex_res()</a></code>
 
         </dt>
         <dd>Make hexagon feature</dd>
+
+        <dt>
+
+          <code><a href="plot_scale_curves.html">plot_scale_curves()</a></code>
+
+        </dt>
+        <dd>Plot scale curves</dd>
+
+        <dt>
+
+          <code><a href="plot_spue_sdm.html">plot_spue_sdm()</a></code>
+
+        </dt>
+        <dd>Plot SPUE-vs-model calibration</dd>
       </dl></div><div class="section level2">
       <h2 id="data">Data<a class="anchor" aria-label="anchor" href="#data"></a></h2>
 

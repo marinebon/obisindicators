@@ -97,12 +97,61 @@ you are gonna have a bad time.
 
 Functions for reading data.
 
+## Store
+
+Connect to, summarize, query and benchmark an obis_h3 DuckDB store from
+R.
+
+- [`h3_res_table()`](https://marinebon.org/obisindicators/reference/h3_res_table.md)
+  : H3 resolution table
+- [`obis_bench()`](https://marinebon.org/obisindicators/reference/obis_bench.md)
+  : Benchmark queries against a store
+- [`obis_bench_queries()`](https://marinebon.org/obisindicators/reference/obis_bench_queries.md)
+  : The paper's default benchmark query set
+- [`obis_h3t_query()`](https://marinebon.org/obisindicators/reference/obis_h3t_query.md)
+  : Run a tile SQL at a fixed H3 resolution
+- [`obis_store_connect()`](https://marinebon.org/obisindicators/reference/obis_store_connect.md)
+  : Connect to an obis_h3 DuckDB store
+- [`obis_store_stats()`](https://marinebon.org/obisindicators/reference/obis_store_stats.md)
+  : Summarize an obis_h3 store (tables, rows, totals)
+
 ## Analyze
 
-Functions for calculating indicators.
+Calculate indicators, and the paper’s analyses: scale curves,
+rank-column vs subtree, EOV totals, SPUE vs SDM, periods, and place
+roll-ups.
 
+- [`calc_eov_totals()`](https://marinebon.org/obisindicators/reference/calc_eov_totals.md)
+  : Records, species and cells per Essential Ocean Variable
 - [`calc_indicators()`](https://marinebon.org/obisindicators/reference/calc_indicators.md)
   : Calculate Biodiversity Indicators, including ES50 (Hurlbert index)
+- [`calc_period_change()`](https://marinebon.org/obisindicators/reference/calc_period_change.md)
+  : Change in an indicator between two periods, where both are reliable
+- [`calc_period_indicators()`](https://marinebon.org/obisindicators/reference/calc_period_indicators.md)
+  : Indicators per period (e.g. decade) and cell
+- [`calc_place_indicators()`](https://marinebon.org/obisindicators/reference/calc_place_indicators.md)
+  : Indicators rolled up from H3 cells to places
+- [`calc_rank_vs_subtree()`](https://marinebon.org/obisindicators/reference/calc_rank_vs_subtree.md)
+  : Records and species by DwC rank column vs by AphiaID subtree
+- [`calc_scale_curves()`](https://marinebon.org/obisindicators/reference/calc_scale_curves.md)
+  : Scale curves: indicator summaries across H3 resolutions
+- [`calc_spue_cells()`](https://marinebon.org/obisindicators/reference/calc_spue_cells.md)
+  : SPUE effort proxy per cell at one resolution
+- [`calc_spue_scale()`](https://marinebon.org/obisindicators/reference/calc_spue_scale.md)
+  : Scale curves for the SPUE effort proxy
+- [`compare_eov_totals()`](https://marinebon.org/obisindicators/reference/compare_eov_totals.md)
+  : Compare EOV totals between two stores (e.g. before/after taxonomy
+  gap-fill)
+- [`compare_spue_sdm()`](https://marinebon.org/obisindicators/reference/compare_spue_sdm.md)
+  : Compare the SPUE effort proxy with modeled suitability
+- [`h3_raster_to_cells()`](https://marinebon.org/obisindicators/reference/h3_raster_to_cells.md)
+  : Aggregate a raster (e.g. an SDM) to H3 cells
+- [`obis_cell_indicators()`](https://marinebon.org/obisindicators/reference/obis_cell_indicators.md)
+  : Per-cell indicators for a filter at one resolution
+- [`obis_rank_presets()`](https://marinebon.org/obisindicators/reference/obis_rank_presets.md)
+  : Default taxon-group presets for the rank-vs-subtree comparison
+- [`place_cells()`](https://marinebon.org/obisindicators/reference/place_cells.md)
+  : H3 cells covering each place polygon
 
 ## H3 grid & tiles
 
@@ -169,10 +218,25 @@ IOOS Marine Life Data Network definitions.
 
 Functions for visualizing indicators.
 
+- [`gmap_cells()`](https://marinebon.org/obisindicators/reference/gmap_cells.md)
+  : Map a per-cell table of indicators
+
 - [`gmap_indicator()`](https://marinebon.org/obisindicators/reference/gmap_indicator.md)
   : Statically map indicators using ggplot
+
+- [`hex_sf()`](https://marinebon.org/obisindicators/reference/hex_sf.md)
+  :
+
+  H3 cells (hex strings) to `sf` polygons
+
 - [`make_hex_res()`](https://marinebon.org/obisindicators/reference/make_hex_res.md)
   : Make hexagon feature
+
+- [`plot_scale_curves()`](https://marinebon.org/obisindicators/reference/plot_scale_curves.md)
+  : Plot scale curves
+
+- [`plot_spue_sdm()`](https://marinebon.org/obisindicators/reference/plot_spue_sdm.md)
+  : Plot SPUE-vs-model calibration
 
 ## Data
 

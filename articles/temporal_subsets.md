@@ -43,15 +43,6 @@ plot_the_hex_grid <- function(occ_df){
 ``` r
 
 plot_the_hex_grid(occ_1960s)
-#> Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
-#> ℹ Please use tidy evaluation idioms with `aes()`.
-#> ℹ See also `vignette("ggplot2-in-packages")` for more information.
-#> ℹ The deprecated feature was likely used in the obisindicators package.
-#>   Please report the issue at
-#>   <https://github.com/marinebon/obisindicators/issues>.
-#> This warning is displayed once per session.
-#> Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
-#> generated.
 ```
 
 ![](temporal_subsets_files/figure-html/dgGEO_to_SEQNUM-1.png)
