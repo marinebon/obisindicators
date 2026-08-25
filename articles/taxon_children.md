@@ -313,8 +313,10 @@ plot of chunk fig4a
 
 Is presence-only SPUE telling us anything about habitat? Compare it with
 an independent modeled suitability surface for the same species: a
-GeoTIFF named by `SDM_TIF` (here the MarineSensitivity merged
-AquaMaps/expert-range model).
+GeoTIFF named by `SDM_TIF` (here the AquaMaps environmental-envelope
+probability surface for the species, 0–100, from the MarineSensitivity
+marine atlas — a *graded* surface; a range mask is constant inside the
+range and gives no correlation).
 [`h3_raster_to_cells()`](https://marinebon.org/obisindicators/reference/h3_raster_to_cells.md)
 aggregates the raster to the same H3 cells and
 [`compare_spue_sdm()`](https://marinebon.org/obisindicators/reference/compare_spue_sdm.md)
@@ -341,15 +343,18 @@ runs <- lapply(res_set, function(rs) {
   list(res = rs, cmp = compare_spue_sdm(spue, sdm, min_effort = min_eff, n_bins = 5L))
 })
 stats <- bind_rows(lapply(runs, function(x) cbind(res = x$res, x$cmp$stats)))
+if (all(is.na(stats$rho)))
+  message("rho is NA at every resolution: the surface is constant within the effort footprint ",
+          "(a range mask rather than a graded suitability) or too few effort-gated cells overlap it")
 knitr::kable(stats |> mutate(across(where(is.numeric), ~ signif(.x, 3))),
              caption = "SPUE vs. modeled suitability by resolution")
 ```
 
-| res | n_cells | rho | p_value | frac_present |
-|----:|--------:|----:|--------:|-------------:|
-|   3 |    2140 |  NA |      NA |        0.761 |
-|   5 |    5020 |  NA |      NA |        0.665 |
-|   7 |    6580 |  NA |      NA |        0.511 |
+| res | n_cells |    rho | p_value | frac_present |
+|----:|--------:|-------:|--------:|-------------:|
+|   3 |    2310 | 0.0087 | 0.67600 |        0.714 |
+|   5 |    5470 | 0.1050 | 0.00000 |        0.606 |
+|   7 |    5980 | 0.0408 | 0.00159 |        0.519 |
 
 SPUE vs. modeled suitability by resolution {.table}
 

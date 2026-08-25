@@ -470,11 +470,13 @@ plot of chunk fig4a
 </div>
 <p>Is presence-only SPUE telling us anything about habitat? Compare it
 with an independent modeled suitability surface for the same species: a
-GeoTIFF named by <code>SDM_TIF</code> (here the MarineSensitivity merged
-AquaMaps/expert-range model). <code><a href="../reference/h3_raster_to_cells.html">h3_raster_to_cells()</a></code>
-aggregates the raster to the same H3 cells and
-<code><a href="../reference/compare_spue_sdm.html">compare_spue_sdm()</a></code> reports an effort-gated Spearman
-correlation plus calibration bins, at each resolution.</p>
+GeoTIFF named by <code>SDM_TIF</code> (here the AquaMaps
+environmental-envelope probability surface for the species, 0–100, from
+the MarineSensitivity marine atlas — a <em>graded</em> surface; a range
+mask is constant inside the range and gives no correlation).
+<code><a href="../reference/h3_raster_to_cells.html">h3_raster_to_cells()</a></code> aggregates the raster to the same H3
+cells and <code><a href="../reference/compare_spue_sdm.html">compare_spue_sdm()</a></code> reports an effort-gated
+Spearman correlation plus calibration bins, at each resolution.</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sdm_tif</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"SDM_TIF"</span><span class="op">)</span></span>
 <span><span class="va">has_sdm</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nzchar</a></span><span class="op">(</span><span class="va">sdm_tif</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">sdm_tif</span><span class="op">)</span></span>
@@ -491,6 +493,9 @@ correlation plus calibration bins, at each resolution.</p>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>res <span class="op">=</span> <span class="va">rs</span>, cmp <span class="op">=</span> <span class="fu"><a href="../reference/compare_spue_sdm.html">compare_spue_sdm</a></span><span class="op">(</span><span class="va">spue</span>, <span class="va">sdm</span>, min_effort <span class="op">=</span> <span class="va">min_eff</span>, n_bins <span class="op">=</span> <span class="fl">5L</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
 <span><span class="va">stats</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">runs</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span>res <span class="op">=</span> <span class="va">x</span><span class="op">$</span><span class="va">res</span>, <span class="va">x</span><span class="op">$</span><span class="va">cmp</span><span class="op">$</span><span class="va">stats</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/all.html" class="external-link">all</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">stats</span><span class="op">$</span><span class="va">rho</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"rho is NA at every resolution: the surface is constant within the effort footprint "</span>,</span>
+<span>          <span class="st">"(a range mask rather than a graded suitability) or too few effort-gated cells overlap it"</span><span class="op">)</span></span>
 <span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">stats</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/where.html" class="external-link">where</a></span><span class="op">(</span><span class="va">is.numeric</span><span class="op">)</span>, <span class="op">~</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">signif</a></span><span class="op">(</span><span class="va">.x</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>             caption <span class="op">=</span> <span class="st">"SPUE vs. modeled suitability by resolution"</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
@@ -505,24 +510,24 @@ correlation plus calibration bins, at each resolution.</p>
 <tbody>
 <tr class="odd">
 <td align="right">3</td>
-<td align="right">2140</td>
-<td align="right">NA</td>
-<td align="right">NA</td>
-<td align="right">0.761</td>
+<td align="right">2310</td>
+<td align="right">0.0087</td>
+<td align="right">0.67600</td>
+<td align="right">0.714</td>
 </tr>
 <tr class="even">
 <td align="right">5</td>
-<td align="right">5020</td>
-<td align="right">NA</td>
-<td align="right">NA</td>
-<td align="right">0.665</td>
+<td align="right">5470</td>
+<td align="right">0.1050</td>
+<td align="right">0.00000</td>
+<td align="right">0.606</td>
 </tr>
 <tr class="odd">
 <td align="right">7</td>
-<td align="right">6580</td>
-<td align="right">NA</td>
-<td align="right">NA</td>
-<td align="right">0.511</td>
+<td align="right">5980</td>
+<td align="right">0.0408</td>
+<td align="right">0.00159</td>
+<td align="right">0.519</td>
 </tr>
 </tbody>
 </table>
