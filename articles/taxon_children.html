@@ -131,9 +131,7 @@ API (see <a href="eov.html"><code>vignette("eov")</code></a>).</li>
 documentation is built, so the database chunks below were run locally by
 <code>data-raw/precompute_articles.R</code> and their output committed
 (the tile maps are live). This render used
-<strong>obis_h3_demo_gulf_filled.duckdb</strong>, a regional demo store
-(Gulf of Mexico + Caribbean, see
-<code>paper/build_demo_store.R</code>).</p>
+<strong>obis_h3_global_v20260728.duckdb</strong>, the global store.</p>
 </blockquote>
 </div>
 <div class="section level2">
@@ -147,18 +145,18 @@ this resolves in a fraction of a second.</p>
 <code class="sourceCode R"><span><span class="co"># Infraorder Cetacea = AphiaID 2688 (a rank that is NOT an occ_h3 column)</span></span>
 <span><span class="va">cet</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_taxon_children.html">obis_taxon_children</a></span><span class="op">(</span><span class="fl">2688</span>, <span class="va">con</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">cet</span><span class="op">)</span>                              <span class="co"># descendant taxa</span></span>
-<span><span class="co">#&gt; [1] 1573</span></span>
+<span><span class="co">#&gt; [1] 1665</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">cet</span><span class="op">$</span><span class="va">taxonRank</span><span class="op">)</span>, decreasing <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt;     Species       Genus  Subspecies      Family   Subfamily    Subgenus </span></span>
-<span><span class="co">#&gt;        1110         207         146          44          29          26 </span></span>
+<span><span class="co">#&gt;        1165         231         152          50          29          26 </span></span>
 <span><span class="co">#&gt; Superfamily  Infraorder     Variety </span></span>
-<span><span class="co">#&gt;           9           1           1</span></span>
+<span><span class="co">#&gt;          10           1           1</span></span>
 <span></span>
 <span><span class="co"># class Bacillariophyceae (diatoms) = 148899: a much broader subtree</span></span>
 <span><span class="va">dia</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_taxon_children.html">obis_taxon_children</a></span><span class="op">(</span><span class="fl">148899</span>, <span class="va">con</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dia</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 13015</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 71531</span></span></code></pre></div>
 <p>The descendant AphiaIDs (<code>cet$taxonID</code>) are exactly the
 set used to filter <code>occ_h3.aphiaid</code>.
 <code><a href="../reference/obis_taxon_subtree_sql.html">obis_taxon_subtree_sql()</a></code> returns that resolution as a
@@ -213,11 +211,11 @@ subtree</caption>
 <td align="left">class</td>
 <td align="left">Aves</td>
 <td align="right">1836</td>
-<td align="left">284,565</td>
-<td align="right">247</td>
-<td align="left">284,620</td>
-<td align="right">251</td>
-<td align="right">1.000</td>
+<td align="left">23,686,770</td>
+<td align="right">889</td>
+<td align="left">23,744,889</td>
+<td align="right">891</td>
+<td align="right">0.998</td>
 </tr>
 <tr class="even">
 <td align="left">Bony fishes</td>
@@ -226,8 +224,8 @@ subtree</caption>
 <td align="right">10194</td>
 <td align="left">0</td>
 <td align="right">0</td>
-<td align="left">5,564,819</td>
-<td align="right">3577</td>
+<td align="left">45,130,960</td>
+<td align="right">16477</td>
 <td align="right">0.000</td>
 </tr>
 <tr class="odd">
@@ -235,10 +233,10 @@ subtree</caption>
 <td align="left">class</td>
 <td align="left">Elasmobranchii</td>
 <td align="right">10193</td>
-<td align="left">42,236</td>
-<td align="right">275</td>
-<td align="left">42,236</td>
-<td align="right">275</td>
+<td align="left">4,001,773</td>
+<td align="right">1144</td>
+<td align="left">4,002,304</td>
+<td align="right">1145</td>
 <td align="right">1.000</td>
 </tr>
 <tr class="even">
@@ -246,10 +244,10 @@ subtree</caption>
 <td align="left">class</td>
 <td align="left">Mammalia</td>
 <td align="right">1837</td>
-<td align="left">125,350</td>
-<td align="right">44</td>
-<td align="left">125,350</td>
-<td align="right">44</td>
+<td align="left">4,866,582</td>
+<td align="right">170</td>
+<td align="left">4,866,582</td>
+<td align="right">170</td>
 <td align="right">1.000</td>
 </tr>
 <tr class="odd">
@@ -257,10 +255,10 @@ subtree</caption>
 <td align="left">order</td>
 <td align="left">Testudines</td>
 <td align="right">2689</td>
-<td align="left">29,926</td>
-<td align="right">6</td>
-<td align="left">29,932</td>
-<td align="right">7</td>
+<td align="left">447,735</td>
+<td align="right">22</td>
+<td align="left">447,743</td>
+<td align="right">22</td>
 <td align="right">1.000</td>
 </tr>
 <tr class="even">
@@ -268,32 +266,32 @@ subtree</caption>
 <td align="left">class</td>
 <td align="left">Anthozoa</td>
 <td align="right">1292</td>
-<td align="left">592</td>
-<td align="right">171</td>
-<td align="left">384,669</td>
-<td align="right">898</td>
-<td align="right">0.002</td>
+<td align="left">0</td>
+<td align="right">0</td>
+<td align="left">1,999,366</td>
+<td align="right">6258</td>
+<td align="right">0.000</td>
 </tr>
 <tr class="odd">
 <td align="left">Mollusks</td>
 <td align="left">phylum</td>
 <td align="left">Mollusca</td>
 <td align="right">51</td>
-<td align="left">304,979</td>
-<td align="right">5972</td>
-<td align="left">305,116</td>
-<td align="right">5976</td>
-<td align="right">1.000</td>
+<td align="left">10,733,645</td>
+<td align="right">34064</td>
+<td align="left">10,739,769</td>
+<td align="right">34079</td>
+<td align="right">0.999</td>
 </tr>
 <tr class="even">
 <td align="left">Crustaceans</td>
 <td align="left">class</td>
 <td align="left">Malacostraca</td>
 <td align="right">1071</td>
-<td align="left">844,218</td>
-<td align="right">3130</td>
-<td align="left">844,298</td>
-<td align="right">3134</td>
+<td align="left">7,669,820</td>
+<td align="right">23968</td>
+<td align="left">7,670,453</td>
+<td align="right">23987</td>
 <td align="right">1.000</td>
 </tr>
 </tbody>
@@ -507,24 +505,24 @@ correlation plus calibration bins, at each resolution.</p>
 <tbody>
 <tr class="odd">
 <td align="right">3</td>
-<td align="right">139</td>
+<td align="right">2140</td>
 <td align="right">NA</td>
 <td align="right">NA</td>
-<td align="right">0.439</td>
+<td align="right">0.761</td>
 </tr>
 <tr class="even">
 <td align="right">5</td>
-<td align="right">190</td>
+<td align="right">5020</td>
 <td align="right">NA</td>
 <td align="right">NA</td>
-<td align="right">0.200</td>
+<td align="right">0.665</td>
 </tr>
 <tr class="odd">
 <td align="right">7</td>
-<td align="right">153</td>
+<td align="right">6580</td>
 <td align="right">NA</td>
 <td align="right">NA</td>
-<td align="right">0.144</td>
+<td align="right">0.511</td>
 </tr>
 </tbody>
 </table>

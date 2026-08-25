@@ -153,11 +153,17 @@
 <span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a><span class="co"># add the EOV layers (`eov` membership + precomputed `idx_h3_eov`) to a store</span></span>
 <span id="cb2-33"><a href="#cb2-33" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_eov.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span> [eov ...]</span>
 <span id="cb2-34"><a href="#cb2-34" tabindex="-1"></a></span>
-<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a><span class="co"># add the coarse-parent `hex_prune` key + (res, hex_prune, cell_id) clustering to</span></span>
-<span id="cb2-36"><a href="#cb2-36" tabindex="-1"></a><span class="co"># occ_h3/idx_h3 in an EXISTING store so the h3t server prunes each tile (no S3</span></span>
-<span id="cb2-37"><a href="#cb2-37" tabindex="-1"></a><span class="co"># re-read, writes a new file; drops any interim lat/lng cols). rebuilds needn't</span></span>
-<span id="cb2-38"><a href="#cb2-38" tabindex="-1"></a><span class="co"># run this — build_obis_h3_duckdb() bakes hex_prune natively.</span></span>
-<span id="cb2-39"><a href="#cb2-39" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_spatial_cluster.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span></span></code></pre></div>
+<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a><span class="co"># precompute the store articles (vignettes/articles/*.Rmd.orig -&gt; .Rmd + figures,</span></span>
+<span id="cb2-36"><a href="#cb2-36" tabindex="-1"></a><span class="co"># and paper/figures/) against the GLOBAL store, inside the rstudio container as</span></span>
+<span id="cb2-37"><a href="#cb2-37" tabindex="-1"></a><span class="co"># uid 1000; then commit vignettes/articles/ + paper/figures/. Run on the HOST.</span></span>
+<span id="cb2-38"><a href="#cb2-38" tabindex="-1"></a><span class="co"># Locally the same thing is `OBIS_H3_DUCKDB=&lt;store&gt; Rscript data-raw/precompute_articles.R`.</span></span>
+<span id="cb2-39"><a href="#cb2-39" tabindex="-1"></a><span class="ex">data-raw/precompute_articles.sh</span> [article ...]     <span class="co"># log: /share/data/obis_eov_work/precompute_articles.log</span></span>
+<span id="cb2-40"><a href="#cb2-40" tabindex="-1"></a></span>
+<span id="cb2-41"><a href="#cb2-41" tabindex="-1"></a><span class="co"># add the coarse-parent `hex_prune` key + (res, hex_prune, cell_id) clustering to</span></span>
+<span id="cb2-42"><a href="#cb2-42" tabindex="-1"></a><span class="co"># occ_h3/idx_h3 in an EXISTING store so the h3t server prunes each tile (no S3</span></span>
+<span id="cb2-43"><a href="#cb2-43" tabindex="-1"></a><span class="co"># re-read, writes a new file; drops any interim lat/lng cols). rebuilds needn't</span></span>
+<span id="cb2-44"><a href="#cb2-44" tabindex="-1"></a><span class="co"># run this — build_obis_h3_duckdb() bakes hex_prune natively.</span></span>
+<span id="cb2-45"><a href="#cb2-45" tabindex="-1"></a><span class="ex">Rscript</span> data-raw/migrate_add_spatial_cluster.R <span class="op">&lt;</span>in.duckdb<span class="op">&gt;</span> <span class="op">&lt;</span>out.duckdb<span class="op">&gt;</span></span></code></pre></div>
 <ul><li>CI: <code>.github/workflows/run_tests.yml</code> runs <code><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">testthat::test_local()</a></code> on every push/PR; <code>pkgdown.yaml</code> builds the site (allowed to fail without blocking).</li>
 <li>
 <code>inst/sql/*.sql</code> are <strong>canonical, human-readable references</strong> of what the R functions generate (<code>build_obis_h3.sql</code>, <code>tile_templates.sql</code>) — the R code is the source of truth; keep the SQL comments in sync when the R changes.</li>

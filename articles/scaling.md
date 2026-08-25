@@ -23,8 +23,7 @@ con <- obis_store_connect()
 > **Precomputed.** The store is not available where this documentation
 > is built, so the chunks below were run locally by
 > `data-raw/precompute_articles.R` and their output committed. This
-> render used **obis_h3_demo_gulf_filled.duckdb**, a regional demo store
-> (Gulf of Mexico + Caribbean, see `paper/build_demo_store.R`). The
+> render used **obis_h3_global_v20260728.duckdb**, the global store. The
 > manuscript’s numbers come from the global store.
 
 ## What the store holds (Table 2)
@@ -44,15 +43,15 @@ knitr::kable(s$totals, caption = "Totals")
 
 | metric        | value     |
 |:--------------|:----------|
-| records       | 8260407   |
-| species       | 27521     |
-| aphiaids      | 27762     |
-| cells_base    | 133069    |
-| year_min      | 1720      |
-| year_max      | 2025      |
-| taxon_rows    | 607919    |
-| eov_members   | 79920     |
-| database_size | 231.0 MiB |
+| records       | 127329658 |
+| species       | 164336    |
+| aphiaids      | 167416    |
+| cells_base    | 3792953   |
+| year_min      | 1103      |
+| year_max      | 2026      |
+| taxon_rows    | 1571870   |
+| eov_members   | 135388    |
+| database_size | 4.0 GiB   |
 
 Totals {.table}
 
@@ -61,14 +60,14 @@ Totals {.table}
 knitr::kable(s$tables, caption = "Tables and row counts")
 ```
 
-| table        |    rows |
-|:-------------|--------:|
-| eov          |   79920 |
-| idx_h3       |  217521 |
-| idx_h3_eov   |  243891 |
-| idx_h3_taxon | 1874492 |
-| occ_h3       | 3740114 |
-| taxon        |  607919 |
+| table        |     rows |
+|:-------------|---------:|
+| eov          |   135388 |
+| idx_h3       |  6481134 |
+| idx_h3_eov   |  7138315 |
+| idx_h3_taxon | 44216189 |
+| occ_h3       | 58889539 |
+| taxon        |  1571870 |
 
 Tables and row counts {.table}
 
@@ -79,15 +78,15 @@ knitr::kable(
   caption = "Occupied cells by H3 resolution")
 ```
 
-| res | n_cells | records | area_km2 | edge_km |
-|----:|--------:|--------:|---------:|--------:|
-|   1 |      31 | 8260407 |   609788 |   483.1 |
-|   2 |     157 | 8260407 |    86802 |   182.5 |
-|   3 |     977 | 8260407 |    12393 |    69.0 |
-|   4 |    5459 | 8260407 |     1770 |    26.1 |
-|   5 |   20169 | 8260407 |      253 |     9.9 |
-|   6 |   57659 | 8260407 |       36 |     3.7 |
-|   7 |  133069 | 8260407 |        5 |     1.4 |
+| res | n_cells |   records | area_km2 | edge_km |
+|----:|--------:|----------:|---------:|--------:|
+|   1 |     842 | 127329658 |   609788 |   483.1 |
+|   2 |    5799 | 127329658 |    86802 |   182.5 |
+|   3 |   36893 | 127329658 |    12393 |    69.0 |
+|   4 |  182038 | 127329658 |     1770 |    26.1 |
+|   5 |  657311 | 127329658 |      253 |     9.9 |
+|   6 | 1805298 | 127329658 |       36 |     3.7 |
+|   7 | 3792953 | 127329658 |        5 |     1.4 |
 
 Occupied cells by H3 resolution {.table}
 
@@ -107,13 +106,13 @@ calc_scale_curves(con, res = 1:7, aphiaid = 2688L, group = "Cetacea") |>
   select(res, n_cells, median_n, frac_eligible, median_es) |>
   mutate(frac_eligible = round(frac_eligible, 3), median_es = round(median_es, 2))
 #>   res n_cells median_n frac_eligible median_es
-#> 1   1      28    252.5         0.750      7.40
-#> 2   2     125     42.0         0.464      7.52
-#> 3   3     527      9.0         0.188      5.24
-#> 4   4    1854      3.0         0.062      2.72
-#> 5   5    4662      2.0         0.027      1.09
-#> 6   6    8911      1.0         0.012      1.00
-#> 7   7   13983      1.0         0.007      1.00
+#> 1   1     702      109         0.623      5.00
+#> 2   2    3507       16         0.286      5.24
+#> 3   3   14973        5         0.111      5.23
+#> 4   4   49968        2         0.053      4.56
+#> 5   5  105334        1         0.035      3.96
+#> 6   6  198771        1         0.021      3.12
+#> 7   7  340290        1         0.012      2.41
 ```
 
 [`calc_scale_curves()`](https://marinebon.org/obisindicators/reference/calc_scale_curves.md)
@@ -132,115 +131,115 @@ sc |>
   select(group, res, n_cells, frac_cells_all, median_n, frac_eligible, median_es, median_sp) |>
   mutate(across(c(frac_cells_all, frac_eligible), ~ round(.x, 3)), median_es = round(median_es, 2))
 #>            group res n_cells frac_cells_all median_n frac_eligible median_es
-#> 1       all taxa   1      31          1.000  35746.0         0.935     36.32
-#> 2       all taxa   2     157          1.000   2888.0         0.949     32.79
-#> 3       all taxa   3     977          1.000    194.0         0.746     30.34
-#> 4       all taxa   4    5459          1.000     22.0         0.388     30.03
-#> 5       all taxa   5   20169          1.000      9.0         0.257     27.17
-#> 6       all taxa   6   57659          1.000      6.0         0.138     24.51
-#> 7       all taxa   7  133069          1.000      4.0         0.072     25.23
-#> 8           fish   1      31          1.000  12392.0         0.903     34.27
-#> 9           fish   2     157          1.000   1195.0         0.885     29.83
-#> 10          fish   3     939          0.961    104.0         0.618     28.63
-#> 11          fish   4    4391          0.804     21.0         0.363     26.09
-#> 12          fish   5   14702          0.729     10.0         0.222     21.04
-#> 13          fish   6   39874          0.692      6.0         0.108     19.70
-#> 14          fish   7   82049          0.617      4.0         0.061     22.48
-#> 15    hardCorals   1      23          0.742   2178.0         0.913     19.28
-#> 16    hardCorals   2      94          0.599    225.5         0.723     17.59
-#> 17    hardCorals   3     342          0.350     40.5         0.474     14.79
-#> 18    hardCorals   4     975          0.179     12.0         0.291     13.15
-#> 19    hardCorals   5    2045          0.101      7.0         0.202     12.69
-#> 20    hardCorals   6    3339          0.058      5.0         0.203     12.89
-#> 21    hardCorals   7    5110          0.038      6.0         0.185     13.01
-#> 22     mangroves   1      10          0.323      6.0         0.300      3.30
-#> 23     mangroves   2      18          0.115      6.0         0.389      2.99
-#> 24     mangroves   3      22          0.023     28.0         0.500      2.89
-#> 25     mangroves   4      31          0.006     97.0         0.613      2.22
-#> 26     mangroves   5      41          0.002     85.0         0.634      2.18
-#> 27     mangroves   6      54          0.001     91.0         0.648      2.23
-#> 28     mangroves   7      70          0.001     95.5         0.686      2.00
-#> 29 marineMammals   1      28          0.903    347.0         0.750      7.63
-#> 30 marineMammals   2     125          0.796     45.0         0.480      7.79
-#> 31 marineMammals   3     536          0.549      9.0         0.201      4.47
-#> 32 marineMammals   4    1902          0.348      3.0         0.081      2.05
-#> 33 marineMammals   5    4891          0.243      2.0         0.047      1.25
-#> 34 marineMammals   6    9748          0.169      1.0         0.027      1.00
-#> 35 marineMammals   7   16645          0.125      1.0         0.012      1.00
-#> 36      seabirds   1      26          0.839    158.0         0.808     15.92
-#> 37      seabirds   2     127          0.809     16.0         0.346     12.85
-#> 38      seabirds   3     451          0.462      3.0         0.224      9.92
-#> 39      seabirds   4    1106          0.203      5.0         0.156      2.12
-#> 40      seabirds   5    2865          0.142      4.0         0.141      1.95
-#> 41      seabirds   6    6873          0.119      3.0         0.115      2.00
-#> 42      seabirds   7   17096          0.128      3.0         0.069      2.00
-#> 43    seagrasses   1      18          0.581     20.5         0.444      2.79
-#> 44    seagrasses   2      35          0.223     17.0         0.400      2.29
-#> 45    seagrasses   3      58          0.059      8.5         0.310      2.29
-#> 46    seagrasses   4      86          0.016      4.0         0.279      2.22
-#> 47    seagrasses   5     114          0.006      4.0         0.325      2.38
-#> 48    seagrasses   6     176          0.003     13.0         0.381      2.00
-#> 49    seagrasses   7     381          0.003     16.0         0.213      2.00
-#> 50    seaTurtles   1      29          0.935    209.0         0.759      3.57
-#> 51    seaTurtles   2     143          0.911     35.0         0.420      3.00
-#> 52    seaTurtles   3     683          0.699      6.0         0.117      2.93
-#> 53    seaTurtles   4    1903          0.349      3.0         0.038      2.96
-#> 54    seaTurtles   5    4184          0.207      2.0         0.021      2.25
-#> 55    seaTurtles   6    7584          0.132      1.0         0.005      2.00
-#> 56    seaTurtles   7   11761          0.088      1.0         0.002      2.00
+#> 1       all taxa   1     842          1.000  10427.5         0.986     31.93
+#> 2       all taxa   2    5799          1.000    707.0         0.847     25.84
+#> 3       all taxa   3   36893          1.000     65.0         0.542     21.59
+#> 4       all taxa   4  182038          1.000     13.0         0.289     20.45
+#> 5       all taxa   5  657311          1.000      5.0         0.149     21.87
+#> 6       all taxa   6 1805298          1.000      2.0         0.099     19.96
+#> 7       all taxa   7 3792953          1.000      2.0         0.066     16.00
+#> 8           fish   1     830          0.986    947.0         0.836     29.64
+#> 9           fish   2    4912          0.847     71.0         0.555     25.47
+#> 10          fish   3   21481          0.582     17.0         0.345     21.99
+#> 11          fish   4   66094          0.363     10.0         0.269     20.43
+#> 12          fish   5  170687          0.260      8.0         0.240     18.43
+#> 13          fish   6  391413          0.217      7.0         0.197     15.13
+#> 14          fish   7  740349          0.195      6.0         0.147     11.52
+#> 15    hardCorals   1     472          0.561     82.5         0.574     20.72
+#> 16    hardCorals   2    1391          0.240     25.0         0.411     18.76
+#> 17    hardCorals   3    3556          0.096     11.0         0.283     17.27
+#> 18    hardCorals   4    7793          0.043      7.0         0.181     15.83
+#> 19    hardCorals   5   14349          0.022      4.0         0.123     15.62
+#> 20    hardCorals   6   22318          0.012      3.0         0.101     15.29
+#> 21    hardCorals   7   31520          0.008      3.0         0.086     14.77
+#> 22     mangroves   1      78          0.093     10.0         0.295      5.27
+#> 23     mangroves   2     126          0.022     10.5         0.333      4.01
+#> 24     mangroves   3     235          0.006     15.0         0.366      3.84
+#> 25     mangroves   4     447          0.002     18.0         0.374      3.76
+#> 26     mangroves   5     968          0.001     15.0         0.294      3.00
+#> 27     mangroves   6    2208          0.001     10.0         0.137      2.54
+#> 28     mangroves   7    5547          0.001      5.0         0.026      2.88
+#> 29 marineMammals   1     730          0.867    212.0         0.718      4.08
+#> 30 marineMammals   2    3884          0.670     33.0         0.433      3.00
+#> 31 marineMammals   3   18589          0.504      8.0         0.263      2.00
+#> 32 marineMammals   4   73360          0.403      4.0         0.127      2.00
+#> 33 marineMammals   5  217692          0.331      3.0         0.043      2.03
+#> 34 marineMammals   6  589527          0.327      2.0         0.015      2.00
+#> 35 marineMammals   7 1183783          0.312      1.0         0.006      1.89
+#> 36      seabirds   1     817          0.970    867.0         0.814     13.91
+#> 37      seabirds   2    5058          0.872     84.0         0.570     11.16
+#> 38      seabirds   3   26361          0.715     17.0         0.349     10.54
+#> 39      seabirds   4  112475          0.618      6.0         0.153     11.07
+#> 40      seabirds   5  379397          0.577      2.0         0.079     10.36
+#> 41      seabirds   6  911344          0.505      2.0         0.054      8.77
+#> 42      seabirds   7 1750076          0.461      1.0         0.031      8.04
+#> 43    seagrasses   1     220          0.261     57.0         0.514      5.29
+#> 44    seagrasses   2     544          0.094     19.0         0.344      4.57
+#> 45    seagrasses   3    1133          0.031     11.0         0.256      4.19
+#> 46    seagrasses   4    2122          0.012      8.0         0.205      4.00
+#> 47    seagrasses   5    3975          0.006      6.0         0.155      4.00
+#> 48    seagrasses   6    7261          0.004      4.0         0.115      3.81
+#> 49    seagrasses   7   12420          0.003      4.0         0.078      3.55
+#> 50    seaTurtles   1     539          0.640     40.0         0.464      2.60
+#> 51    seaTurtles   2    2631          0.454      8.0         0.219      1.79
+#> 52    seaTurtles   3   10772          0.292      2.0         0.098      1.00
+#> 53    seaTurtles   4   25130          0.138      2.0         0.030      1.21
+#> 54    seaTurtles   5   56528          0.086      2.0         0.011      1.97
+#> 55    seaTurtles   6  102901          0.057      1.0         0.004      1.00
+#> 56    seaTurtles   7  152272          0.040      1.0         0.003      1.00
 #>    median_sp
-#> 1     3033.0
-#> 2      581.0
-#> 3       52.0
-#> 4        9.0
-#> 5        5.0
-#> 6        4.0
-#> 7        2.0
-#> 8      905.0
-#> 9      195.0
-#> 10      28.0
-#> 11       8.0
-#> 12       6.0
+#> 1      554.5
+#> 2       80.0
+#> 3       15.0
+#> 4        4.0
+#> 5        2.0
+#> 6        1.0
+#> 7        1.0
+#> 8      109.5
+#> 9       20.0
+#> 10       7.0
+#> 11       4.0
+#> 12       4.0
 #> 13       4.0
-#> 14       3.0
-#> 15      99.0
-#> 16      36.0
-#> 17      10.5
-#> 18       4.0
-#> 19       3.0
-#> 20       2.0
-#> 21       3.0
-#> 22       4.0
+#> 14       4.0
+#> 15      12.0
+#> 16       6.0
+#> 17       3.0
+#> 18       2.0
+#> 19       2.0
+#> 20       1.0
+#> 21       1.0
+#> 22       3.5
 #> 23       3.0
-#> 24       2.5
+#> 24       3.0
 #> 25       3.0
 #> 26       2.0
 #> 27       2.0
 #> 28       2.0
-#> 29      16.0
-#> 30       6.0
+#> 29       6.0
+#> 30       2.0
 #> 31       2.0
-#> 32       2.0
+#> 32       1.0
 #> 33       1.0
 #> 34       1.0
 #> 35       1.0
-#> 36      17.0
-#> 37       5.0
-#> 38       2.0
+#> 36      27.0
+#> 37       9.0
+#> 38       4.0
 #> 39       2.0
 #> 40       1.0
 #> 41       1.0
 #> 42       1.0
 #> 43       5.0
-#> 44       2.0
+#> 44       3.0
 #> 45       2.0
-#> 46       1.0
-#> 47       1.0
+#> 46       2.0
+#> 47       2.0
 #> 48       2.0
 #> 49       2.0
-#> 50       4.0
-#> 51       3.0
-#> 52       2.0
+#> 50       2.0
+#> 51       1.0
+#> 52       1.0
 #> 53       1.0
 #> 54       1.0
 #> 55       1.0
@@ -296,20 +295,20 @@ knitr::kable(
   caption = "Query latency by serving path (seconds)")
 ```
 
-| path                   | res |   rows | cold_s | warm_s |
-|:-----------------------|----:|-------:|-------:|-------:|
-| idx_h3 all-taxa ES50   |   3 |    977 |  0.001 |  0.000 |
-| idx_h3_eov fish ES50   |   3 |    939 |  0.001 |  0.001 |
-| live subtree fish ES50 |   3 |    939 |  0.062 |  0.064 |
-| SPUE 137092/2688       |   3 |    527 |  0.024 |  0.019 |
-| idx_h3 all-taxa ES50   |   5 |  20169 |  0.001 |  0.001 |
-| idx_h3_eov fish ES50   |   5 |  14702 |  0.001 |  0.001 |
-| live subtree fish ES50 |   5 |  14702 |  0.087 |  0.092 |
-| SPUE 137092/2688       |   5 |   4662 |  0.035 |  0.025 |
-| idx_h3 all-taxa ES50   |   7 | 133069 |  0.002 |  0.001 |
-| idx_h3_eov fish ES50   |   7 |  82049 |  0.001 |  0.002 |
-| live subtree fish ES50 |   7 |  82049 |  0.172 |  0.156 |
-| SPUE 137092/2688       |   7 |  13983 |  0.028 |  0.027 |
+| path                   | res |    rows | cold_s | warm_s |
+|:-----------------------|----:|--------:|-------:|-------:|
+| idx_h3 all-taxa ES50   |   3 |   36893 |  0.005 |  0.004 |
+| idx_h3_eov fish ES50   |   3 |   21481 |  0.005 |  0.005 |
+| live subtree fish ES50 |   3 |   21481 |  1.234 |  1.070 |
+| SPUE 137092/2688       |   3 |   14973 |  0.371 |  0.368 |
+| idx_h3 all-taxa ES50   |   5 |  657311 |  0.022 |  0.020 |
+| idx_h3_eov fish ES50   |   5 |  170687 |  0.010 |  0.007 |
+| live subtree fish ES50 |   5 |  170687 |  2.430 |  2.334 |
+| SPUE 137092/2688       |   5 |  105334 |  0.730 |  0.711 |
+| idx_h3 all-taxa ES50   |   7 | 3792953 |  0.107 |  0.106 |
+| idx_h3_eov fish ES50   |   7 |  740349 |  0.016 |  0.015 |
+| live subtree fish ES50 |   7 |  740349 |  4.155 |  3.952 |
+| SPUE 137092/2688       |   7 |  340290 |  1.026 |  1.022 |
 
 Query latency by serving path (seconds) {.table}
 
@@ -361,50 +360,50 @@ ss <- bind_rows(lapply(seq_len(nrow(cases)), function(i)
   calc_spue_scale(con, cases$num[[i]], cases$den[[i]], res = RES, group = cases$group[i])))
 ss |> mutate(across(starts_with("frac_"), ~ round(.x, 3)), median_spue = round(median_spue, 3))
 #>                          group res   area_km2 n_cells_effort effort_records
-#> 1           humpback / Cetacea   1 609788.442             28          94821
-#> 2           humpback / Cetacea   2  86801.780            125          94821
-#> 3           humpback / Cetacea   3  12393.435            527          94821
-#> 4           humpback / Cetacea   4   1770.348           1854          94821
-#> 5           humpback / Cetacea   5    252.904           4662          94821
-#> 6           humpback / Cetacea   6     36.129           8911          94821
-#> 7           humpback / Cetacea   7      5.161          13983          94821
-#> 8  loggerhead / seaTurtles EOV   1 609788.442             29          29926
-#> 9  loggerhead / seaTurtles EOV   2  86801.780            143          29926
-#> 10 loggerhead / seaTurtles EOV   3  12393.435            683          29926
-#> 11 loggerhead / seaTurtles EOV   4   1770.348           1903          29926
-#> 12 loggerhead / seaTurtles EOV   5    252.904           4184          29926
-#> 13 loggerhead / seaTurtles EOV   6     36.129           7584          29926
-#> 14 loggerhead / seaTurtles EOV   7      5.161          11761          29926
+#> 1           humpback / Cetacea   1 609788.442            702        2241724
+#> 2           humpback / Cetacea   2  86801.780           3507        2241724
+#> 3           humpback / Cetacea   3  12393.435          14973        2241724
+#> 4           humpback / Cetacea   4   1770.348          49968        2241724
+#> 5           humpback / Cetacea   5    252.904         105334        2241724
+#> 6           humpback / Cetacea   6     36.129         198771        2241724
+#> 7           humpback / Cetacea   7      5.161         340290        2241724
+#> 8  loggerhead / seaTurtles EOV   1 609788.442            539         447633
+#> 9  loggerhead / seaTurtles EOV   2  86801.780           2631         447633
+#> 10 loggerhead / seaTurtles EOV   3  12393.435          10772         447633
+#> 11 loggerhead / seaTurtles EOV   4   1770.348          25130         447633
+#> 12 loggerhead / seaTurtles EOV   5    252.904          56528         447633
+#> 13 loggerhead / seaTurtles EOV   6     36.129         102901         447633
+#> 14 loggerhead / seaTurtles EOV   7      5.161         152272         447633
 #>    median_effort frac_present median_spue frac_effort_lt_10 frac_effort_lt_30
-#> 1          252.5        0.643       0.006             0.071             0.107
-#> 2           42.0        0.512       0.000             0.328             0.456
-#> 3            9.0        0.287       0.000             0.524             0.736
-#> 4            3.0        0.159       0.000             0.775             0.913
-#> 5            2.0        0.102       0.000             0.897             0.959
-#> 6            1.0        0.085       0.000             0.933             0.978
-#> 7            1.0        0.087       0.000             0.957             0.989
-#> 8          209.0        0.793       0.224             0.138             0.172
-#> 9           35.0        0.720       0.143             0.280             0.448
-#> 10           6.0        0.542       0.062             0.609             0.835
-#> 11           3.0        0.401       0.000             0.815             0.944
-#> 12           2.0        0.334       0.000             0.911             0.967
-#> 13           1.0        0.333       0.000             0.948             0.986
-#> 14           1.0        0.350       0.000             0.974             0.996
+#> 1            109        0.491       0.000             0.168             0.278
+#> 2             16        0.329       0.000             0.396             0.610
+#> 3              5        0.254       0.000             0.692             0.844
+#> 4              2        0.233       0.000             0.842             0.925
+#> 5              1        0.267       0.000             0.875             0.947
+#> 6              1        0.289       0.000             0.908             0.965
+#> 7              1        0.291       0.000             0.937             0.980
+#> 8             40        0.609       0.071             0.234             0.423
+#> 9              8        0.496       0.000             0.555             0.733
+#> 10             2        0.464       0.000             0.744             0.862
+#> 11             2        0.566       0.538             0.792             0.945
+#> 12             2        0.659       1.000             0.924             0.980
+#> 13             1        0.694       1.000             0.968             0.992
+#> 14             1        0.690       1.000             0.983             0.995
 #>    frac_effort_lt_100
-#> 1               0.321
-#> 2               0.640
-#> 3               0.894
-#> 4               0.964
-#> 5               0.986
-#> 6               0.995
-#> 7               0.996
-#> 8               0.345
-#> 9               0.699
-#> 10              0.939
-#> 11              0.975
-#> 12              0.991
+#> 1               0.484
+#> 2               0.809
+#> 3               0.929
+#> 4               0.967
+#> 5               0.980
+#> 6               0.990
+#> 7               0.993
+#> 8               0.660
+#> 9               0.845
+#> 10              0.953
+#> 11              0.984
+#> 12              0.995
 #> 13              0.998
-#> 14              0.999
+#> 14              0.998
 ```
 
 ``` r

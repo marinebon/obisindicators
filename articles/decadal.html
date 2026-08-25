@@ -102,14 +102,13 @@ where <strong>both</strong> decades are reliable
 <p><strong>Precomputed.</strong> The store is not available where this
 documentation is built, so the chunks below were run locally by
 <code>data-raw/precompute_articles.R</code> and their output committed.
-This render used <strong>obis_h3_demo_gulf_filled.duckdb</strong>, a
-regional demo store (Gulf of Mexico + Caribbean, see
-<code>paper/build_demo_store.R</code>).</p>
+This render used <strong>obis_h3_global_v20260728.duckdb</strong>, the
+global store.</p>
 </blockquote>
 <div class="section level2">
 <h2 id="indicators-per-decade-and-cell">Indicators per decade and cell<a class="anchor" aria-label="anchor" href="#indicators-per-decade-and-cell"></a>
 </h2>
-<p>A coarser resolution (H3 3) than the maps in <a href="eov.html"><code>vignette("eov")</code></a>, because splitting
+<p>A coarser resolution (H3 2) than the maps in <a href="eov.html"><code>vignette("eov")</code></a>, because splitting
 records across seven decades thins each cell (see <a href="scaling.html"><code>vignette("scaling")</code></a>).</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">starts</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">1960L</span>, <span class="fl">2020L</span>, by <span class="op">=</span> <span class="fl">10L</span><span class="op">)</span></span>
@@ -125,7 +124,7 @@ records across seven decades thins each cell (see <a href="scaling.html"><code>v
 <span>             caption <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"Per-decade coverage and ES(50) by EOV, H3 resolution %d"</span>, <span class="va">RES_TIME</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
 <caption>Per-decade coverage and ES(50) by EOV, H3 resolution
-3</caption>
+2</caption>
 <thead><tr class="header">
 <th align="left">eov</th>
 <th align="right">period</th>
@@ -138,338 +137,394 @@ records across seven decades thins each cell (see <a href="scaling.html"><code>v
 <tr class="odd">
 <td align="left">fish</td>
 <td align="right">1960</td>
-<td align="right">476</td>
-<td align="right">97</td>
-<td align="right">19309</td>
-<td align="right">38.55</td>
+<td align="right">2621</td>
+<td align="right">569</td>
+<td align="right">873166</td>
+<td align="right">31.75</td>
 </tr>
 <tr class="even">
 <td align="left">fish</td>
 <td align="right">1970</td>
-<td align="right">347</td>
-<td align="right">90</td>
-<td align="right">44497</td>
-<td align="right">36.49</td>
+<td align="right">2048</td>
+<td align="right">699</td>
+<td align="right">1729628</td>
+<td align="right">30.91</td>
 </tr>
 <tr class="odd">
 <td align="left">fish</td>
 <td align="right">1980</td>
-<td align="right">251</td>
-<td align="right">67</td>
-<td align="right">295539</td>
-<td align="right">23.87</td>
+<td align="right">1855</td>
+<td align="right">647</td>
+<td align="right">4493283</td>
+<td align="right">25.25</td>
 </tr>
 <tr class="even">
 <td align="left">fish</td>
 <td align="right">1990</td>
-<td align="right">564</td>
-<td align="right">240</td>
-<td align="right">741988</td>
-<td align="right">9.53</td>
+<td align="right">1983</td>
+<td align="right">770</td>
+<td align="right">7673014</td>
+<td align="right">22.14</td>
 </tr>
 <tr class="odd">
 <td align="left">fish</td>
 <td align="right">2000</td>
-<td align="right">482</td>
-<td align="right">214</td>
-<td align="right">1901917</td>
-<td align="right">11.13</td>
+<td align="right">2405</td>
+<td align="right">1075</td>
+<td align="right">11180145</td>
+<td align="right">22.14</td>
 </tr>
 <tr class="even">
 <td align="left">fish</td>
 <td align="right">2010</td>
-<td align="right">292</td>
-<td align="right">69</td>
-<td align="right">2160115</td>
-<td align="right">28.38</td>
+<td align="right">1727</td>
+<td align="right">732</td>
+<td align="right">14529812</td>
+<td align="right">20.05</td>
 </tr>
 <tr class="odd">
 <td align="left">fish</td>
 <td align="right">2020</td>
-<td align="right">32</td>
-<td align="right">19</td>
-<td align="right">105090</td>
-<td align="right">28.75</td>
+<td align="right">611</td>
+<td align="right">369</td>
+<td align="right">5919572</td>
+<td align="right">15.48</td>
 </tr>
 <tr class="even">
 <td align="left">hardCorals</td>
 <td align="right">1960</td>
-<td align="right">172</td>
-<td align="right">23</td>
-<td align="right">3998</td>
-<td align="right">16.37</td>
+<td align="right">429</td>
+<td align="right">39</td>
+<td align="right">9178</td>
+<td align="right">19.37</td>
 </tr>
 <tr class="odd">
 <td align="left">hardCorals</td>
 <td align="right">1970</td>
-<td align="right">137</td>
-<td align="right">22</td>
-<td align="right">3482</td>
-<td align="right">18.20</td>
+<td align="right">395</td>
+<td align="right">73</td>
+<td align="right">16975</td>
+<td align="right">21.54</td>
 </tr>
 <tr class="even">
 <td align="left">hardCorals</td>
 <td align="right">1980</td>
-<td align="right">89</td>
-<td align="right">13</td>
-<td align="right">2984</td>
-<td align="right">13.68</td>
+<td align="right">406</td>
+<td align="right">100</td>
+<td align="right">25819</td>
+<td align="right">28.00</td>
 </tr>
 <tr class="odd">
 <td align="left">hardCorals</td>
 <td align="right">1990</td>
-<td align="right">79</td>
-<td align="right">51</td>
-<td align="right">42165</td>
-<td align="right">11.53</td>
+<td align="right">452</td>
+<td align="right">135</td>
+<td align="right">108106</td>
+<td align="right">22.07</td>
 </tr>
 <tr class="even">
 <td align="left">hardCorals</td>
 <td align="right">2000</td>
-<td align="right">129</td>
-<td align="right">64</td>
-<td align="right">121049</td>
-<td align="right">13.80</td>
+<td align="right">531</td>
+<td align="right">194</td>
+<td align="right">285517</td>
+<td align="right">14.44</td>
 </tr>
 <tr class="odd">
 <td align="left">hardCorals</td>
 <td align="right">2010</td>
-<td align="right">96</td>
-<td align="right">42</td>
-<td align="right">144203</td>
-<td align="right">13.71</td>
+<td align="right">438</td>
+<td align="right">177</td>
+<td align="right">350381</td>
+<td align="right">8.88</td>
 </tr>
 <tr class="even">
 <td align="left">hardCorals</td>
 <td align="right">2020</td>
-<td align="right">32</td>
-<td align="right">25</td>
-<td align="right">21162</td>
-<td align="right">16.48</td>
-</tr>
-<tr class="odd">
-<td align="left">mangroves</td>
-<td align="right">1990</td>
-<td align="right">1</td>
-<td align="right">1</td>
-<td align="right">2411</td>
-<td align="right">2.99</td>
-</tr>
-<tr class="even">
-<td align="left">mangroves</td>
-<td align="right">2000</td>
-<td align="right">2</td>
-<td align="right">2</td>
-<td align="right">9917</td>
-<td align="right">2.49</td>
-</tr>
-<tr class="odd">
-<td align="left">mangroves</td>
-<td align="right">2010</td>
-<td align="right">14</td>
-<td align="right">10</td>
-<td align="right">25550</td>
-<td align="right">2.94</td>
-</tr>
-<tr class="even">
-<td align="left">mangroves</td>
-<td align="right">2020</td>
-<td align="right">2</td>
-<td align="right">2</td>
-<td align="right">1383</td>
-<td align="right">2.68</td>
-</tr>
-<tr class="odd">
-<td align="left">marineMammals</td>
-<td align="right">1960</td>
-<td align="right">27</td>
-<td align="right">0</td>
-<td align="right">55</td>
-<td align="right">NA</td>
-</tr>
-<tr class="even">
-<td align="left">marineMammals</td>
-<td align="right">1970</td>
-<td align="right">69</td>
-<td align="right">4</td>
-<td align="right">672</td>
-<td align="right">2.00</td>
-</tr>
-<tr class="odd">
-<td align="left">marineMammals</td>
-<td align="right">1980</td>
-<td align="right">152</td>
-<td align="right">11</td>
-<td align="right">3293</td>
-<td align="right">1.98</td>
-</tr>
-<tr class="even">
-<td align="left">marineMammals</td>
-<td align="right">1990</td>
-<td align="right">265</td>
-<td align="right">32</td>
-<td align="right">18248</td>
-<td align="right">2.27</td>
-</tr>
-<tr class="odd">
-<td align="left">marineMammals</td>
-<td align="right">2000</td>
-<td align="right">309</td>
-<td align="right">49</td>
-<td align="right">79892</td>
-<td align="right">2.12</td>
-</tr>
-<tr class="even">
-<td align="left">marineMammals</td>
-<td align="right">2010</td>
-<td align="right">179</td>
-<td align="right">35</td>
-<td align="right">19166</td>
-<td align="right">1.44</td>
-</tr>
-<tr class="odd">
-<td align="left">marineMammals</td>
-<td align="right">2020</td>
-<td align="right">82</td>
-<td align="right">12</td>
-<td align="right">2399</td>
-<td align="right">1.00</td>
-</tr>
-<tr class="even">
-<td align="left">seaTurtles</td>
-<td align="right">1960</td>
-<td align="right">11</td>
-<td align="right">4</td>
-<td align="right">516</td>
-<td align="right">1.00</td>
-</tr>
-<tr class="odd">
-<td align="left">seaTurtles</td>
-<td align="right">1980</td>
-<td align="right">12</td>
-<td align="right">0</td>
-<td align="right">91</td>
-<td align="right">NA</td>
-</tr>
-<tr class="even">
-<td align="left">seaTurtles</td>
-<td align="right">1990</td>
-<td align="right">242</td>
-<td align="right">8</td>
-<td align="right">2555</td>
-<td align="right">2.75</td>
-</tr>
-<tr class="odd">
-<td align="left">seaTurtles</td>
-<td align="right">2000</td>
-<td align="right">514</td>
-<td align="right">46</td>
-<td align="right">11173</td>
-<td align="right">2.00</td>
-</tr>
-<tr class="even">
-<td align="left">seaTurtles</td>
-<td align="right">2010</td>
-<td align="right">495</td>
-<td align="right">32</td>
-<td align="right">14216</td>
-<td align="right">3.00</td>
-</tr>
-<tr class="odd">
-<td align="left">seaTurtles</td>
-<td align="right">2020</td>
-<td align="right">20</td>
-<td align="right">2</td>
-<td align="right">868</td>
-<td align="right">1.38</td>
-</tr>
-<tr class="even">
-<td align="left">seabirds</td>
-<td align="right">1960</td>
-<td align="right">1</td>
-<td align="right">0</td>
-<td align="right">1</td>
-<td align="right">NA</td>
-</tr>
-<tr class="odd">
-<td align="left">seabirds</td>
-<td align="right">1970</td>
+<td align="right">149</td>
 <td align="right">38</td>
-<td align="right">1</td>
-<td align="right">459</td>
-<td align="right">12.45</td>
+<td align="right">29324</td>
+<td align="right">9.45</td>
+</tr>
+<tr class="odd">
+<td align="left">mangroves</td>
+<td align="right">1960</td>
+<td align="right">18</td>
+<td align="right">4</td>
+<td align="right">474</td>
+<td align="right">15.81</td>
 </tr>
 <tr class="even">
-<td align="left">seabirds</td>
+<td align="left">mangroves</td>
+<td align="right">1970</td>
+<td align="right">21</td>
+<td align="right">8</td>
+<td align="right">1330</td>
+<td align="right">14.79</td>
+</tr>
+<tr class="odd">
+<td align="left">mangroves</td>
 <td align="right">1980</td>
-<td align="right">28</td>
-<td align="right">5</td>
-<td align="right">1093</td>
-<td align="right">12.19</td>
-</tr>
-<tr class="odd">
-<td align="left">seabirds</td>
-<td align="right">1990</td>
-<td align="right">122</td>
-<td align="right">33</td>
-<td align="right">5111</td>
-<td align="right">9.97</td>
-</tr>
-<tr class="even">
-<td align="left">seabirds</td>
-<td align="right">2000</td>
-<td align="right">134</td>
-<td align="right">0</td>
-<td align="right">793</td>
-<td align="right">NA</td>
-</tr>
-<tr class="odd">
-<td align="left">seabirds</td>
-<td align="right">2010</td>
-<td align="right">252</td>
-<td align="right">37</td>
-<td align="right">269580</td>
-<td align="right">1.05</td>
-</tr>
-<tr class="even">
-<td align="left">seabirds</td>
-<td align="right">2020</td>
-<td align="right">22</td>
-<td align="right">1</td>
-<td align="right">128</td>
-<td align="right">22.75</td>
-</tr>
-<tr class="odd">
-<td align="left">seagrasses</td>
-<td align="right">1990</td>
-<td align="right">2</td>
-<td align="right">1</td>
-<td align="right">211</td>
-<td align="right">1.00</td>
-</tr>
-<tr class="even">
-<td align="left">seagrasses</td>
-<td align="right">2000</td>
-<td align="right">19</td>
-<td align="right">7</td>
-<td align="right">2169</td>
-<td align="right">3.57</td>
-</tr>
-<tr class="odd">
-<td align="left">seagrasses</td>
-<td align="right">2010</td>
 <td align="right">28</td>
 <td align="right">9</td>
-<td align="right">5732</td>
-<td align="right">2.99</td>
+<td align="right">1234</td>
+<td align="right">18.67</td>
+</tr>
+<tr class="even">
+<td align="left">mangroves</td>
+<td align="right">1990</td>
+<td align="right">47</td>
+<td align="right">12</td>
+<td align="right">8180</td>
+<td align="right">8.46</td>
+</tr>
+<tr class="odd">
+<td align="left">mangroves</td>
+<td align="right">2000</td>
+<td align="right">42</td>
+<td align="right">24</td>
+<td align="right">41486</td>
+<td align="right">2.75</td>
+</tr>
+<tr class="even">
+<td align="left">mangroves</td>
+<td align="right">2010</td>
+<td align="right">42</td>
+<td align="right">16</td>
+<td align="right">34009</td>
+<td align="right">3.67</td>
+</tr>
+<tr class="odd">
+<td align="left">mangroves</td>
+<td align="right">2020</td>
+<td align="right">21</td>
+<td align="right">2</td>
+<td align="right">1516</td>
+<td align="right">2.68</td>
+</tr>
+<tr class="even">
+<td align="left">marineMammals</td>
+<td align="right">1960</td>
+<td align="right">353</td>
+<td align="right">41</td>
+<td align="right">31254</td>
+<td align="right">3.14</td>
+</tr>
+<tr class="odd">
+<td align="left">marineMammals</td>
+<td align="right">1970</td>
+<td align="right">456</td>
+<td align="right">69</td>
+<td align="right">40500</td>
+<td align="right">4.97</td>
+</tr>
+<tr class="even">
+<td align="left">marineMammals</td>
+<td align="right">1980</td>
+<td align="right">794</td>
+<td align="right">174</td>
+<td align="right">79937</td>
+<td align="right">6.56</td>
+</tr>
+<tr class="odd">
+<td align="left">marineMammals</td>
+<td align="right">1990</td>
+<td align="right">1309</td>
+<td align="right">462</td>
+<td align="right">420446</td>
+<td align="right">2.95</td>
+</tr>
+<tr class="even">
+<td align="left">marineMammals</td>
+<td align="right">2000</td>
+<td align="right">1992</td>
+<td align="right">1010</td>
+<td align="right">1539634</td>
+<td align="right">2.00</td>
+</tr>
+<tr class="odd">
+<td align="left">marineMammals</td>
+<td align="right">2010</td>
+<td align="right">1874</td>
+<td align="right">923</td>
+<td align="right">1949809</td>
+<td align="right">2.00</td>
+</tr>
+<tr class="even">
+<td align="left">marineMammals</td>
+<td align="right">2020</td>
+<td align="right">841</td>
+<td align="right">236</td>
+<td align="right">566727</td>
+<td align="right">3.50</td>
+</tr>
+<tr class="odd">
+<td align="left">seaTurtles</td>
+<td align="right">1960</td>
+<td align="right">44</td>
+<td align="right">5</td>
+<td align="right">1215</td>
+<td align="right">1.00</td>
+</tr>
+<tr class="even">
+<td align="left">seaTurtles</td>
+<td align="right">1970</td>
+<td align="right">68</td>
+<td align="right">7</td>
+<td align="right">2278</td>
+<td align="right">4.00</td>
+</tr>
+<tr class="odd">
+<td align="left">seaTurtles</td>
+<td align="right">1980</td>
+<td align="right">98</td>
+<td align="right">7</td>
+<td align="right">2373</td>
+<td align="right">2.00</td>
+</tr>
+<tr class="even">
+<td align="left">seaTurtles</td>
+<td align="right">1990</td>
+<td align="right">631</td>
+<td align="right">120</td>
+<td align="right">26627</td>
+<td align="right">1.00</td>
+</tr>
+<tr class="odd">
+<td align="left">seaTurtles</td>
+<td align="right">2000</td>
+<td align="right">2023</td>
+<td align="right">252</td>
+<td align="right">69536</td>
+<td align="right">1.80</td>
+</tr>
+<tr class="even">
+<td align="left">seaTurtles</td>
+<td align="right">2010</td>
+<td align="right">1497</td>
+<td align="right">348</td>
+<td align="right">264713</td>
+<td align="right">1.00</td>
+</tr>
+<tr class="odd">
+<td align="left">seaTurtles</td>
+<td align="right">2020</td>
+<td align="right">203</td>
+<td align="right">25</td>
+<td align="right">72599</td>
+<td align="right">1.08</td>
+</tr>
+<tr class="even">
+<td align="left">seabirds</td>
+<td align="right">1960</td>
+<td align="right">447</td>
+<td align="right">87</td>
+<td align="right">105855</td>
+<td align="right">11.49</td>
+</tr>
+<tr class="odd">
+<td align="left">seabirds</td>
+<td align="right">1970</td>
+<td align="right">796</td>
+<td align="right">226</td>
+<td align="right">261923</td>
+<td align="right">12.33</td>
+</tr>
+<tr class="even">
+<td align="left">seabirds</td>
+<td align="right">1980</td>
+<td align="right">1166</td>
+<td align="right">465</td>
+<td align="right">1921326</td>
+<td align="right">13.00</td>
+</tr>
+<tr class="odd">
+<td align="left">seabirds</td>
+<td align="right">1990</td>
+<td align="right">1890</td>
+<td align="right">646</td>
+<td align="right">2292579</td>
+<td align="right">9.75</td>
+</tr>
+<tr class="even">
+<td align="left">seabirds</td>
+<td align="right">2000</td>
+<td align="right">3815</td>
+<td align="right">1509</td>
+<td align="right">2557880</td>
+<td align="right">5.90</td>
+</tr>
+<tr class="odd">
+<td align="left">seabirds</td>
+<td align="right">2010</td>
+<td align="right">4277</td>
+<td align="right">1852</td>
+<td align="right">8322502</td>
+<td align="right">7.68</td>
+</tr>
+<tr class="even">
+<td align="left">seabirds</td>
+<td align="right">2020</td>
+<td align="right">2950</td>
+<td align="right">1222</td>
+<td align="right">7696206</td>
+<td align="right">18.55</td>
+</tr>
+<tr class="odd">
+<td align="left">seagrasses</td>
+<td align="right">1960</td>
+<td align="right">23</td>
+<td align="right">2</td>
+<td align="right">659</td>
+<td align="right">2.50</td>
 </tr>
 <tr class="even">
 <td align="left">seagrasses</td>
+<td align="right">1970</td>
+<td align="right">52</td>
+<td align="right">3</td>
+<td align="right">703</td>
+<td align="right">7.87</td>
+</tr>
+<tr class="odd">
+<td align="left">seagrasses</td>
+<td align="right">1980</td>
+<td align="right">89</td>
+<td align="right">18</td>
+<td align="right">4380</td>
+<td align="right">6.94</td>
+</tr>
+<tr class="even">
+<td align="left">seagrasses</td>
+<td align="right">1990</td>
+<td align="right">111</td>
+<td align="right">25</td>
+<td align="right">30889</td>
+<td align="right">4.35</td>
+</tr>
+<tr class="odd">
+<td align="left">seagrasses</td>
+<td align="right">2000</td>
+<td align="right">192</td>
+<td align="right">66</td>
+<td align="right">80068</td>
+<td align="right">3.80</td>
+</tr>
+<tr class="even">
+<td align="left">seagrasses</td>
+<td align="right">2010</td>
+<td align="right">326</td>
+<td align="right">94</td>
+<td align="right">141857</td>
+<td align="right">3.88</td>
+</tr>
+<tr class="odd">
+<td align="left">seagrasses</td>
 <td align="right">2020</td>
-<td align="right">15</td>
-<td align="right">11</td>
-<td align="right">4631</td>
-<td align="right">2.00</td>
+<td align="right">309</td>
+<td align="right">83</td>
+<td align="right">51186</td>
+<td align="right">3.23</td>
 </tr>
 </tbody>
 </table>
@@ -514,13 +569,13 @@ only in one decade or the other are reported, not mapped).</p>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">p</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 <div class="section level3">
-<h3 id="fish-agnatha-chondrichthyes-osteichthyes-cells-reliable-in-both-15-only-1980s-52-only-2010s-54">Fish (Agnatha, Chondrichthyes, Osteichthyes) — cells reliable in
-both: 15 (only 1980s: 52; only 2010s: 54)<a class="anchor" aria-label="anchor" href="#fish-agnatha-chondrichthyes-osteichthyes-cells-reliable-in-both-15-only-1980s-52-only-2010s-54"></a>
+<h3 id="fish-agnatha-chondrichthyes-osteichthyes-cells-reliable-in-both-387-only-1980s-260-only-2010s-345">Fish (Agnatha, Chondrichthyes, Osteichthyes) — cells reliable in
+both: 387 (only 1980s: 260; only 2010s: 345)<a class="anchor" aria-label="anchor" href="#fish-agnatha-chondrichthyes-osteichthyes-cells-reliable-in-both-387-only-1980s-260-only-2010s-345"></a>
 </h3>
 </div>
 <div class="section level3">
-<h3 id="hard-corals-order-scleractinia-cells-reliable-in-both-3-only-1980s-10-only-2010s-39">Hard corals (order Scleractinia) — cells reliable in both: 3 (only
-1980s: 10; only 2010s: 39)<a class="anchor" aria-label="anchor" href="#hard-corals-order-scleractinia-cells-reliable-in-both-3-only-1980s-10-only-2010s-39"></a>
+<h3 id="hard-corals-order-scleractinia-cells-reliable-in-both-43-only-1980s-57-only-2010s-134">Hard corals (order Scleractinia) — cells reliable in both: 43 (only
+1980s: 57; only 2010s: 134)<a class="anchor" aria-label="anchor" href="#hard-corals-order-scleractinia-cells-reliable-in-both-43-only-1980s-57-only-2010s-134"></a>
 </h3>
 <div class="figure">
 <img src="figures/decadal-fig5b-1.png" alt="plot of chunk fig5b" width="100%"><p class="caption">
@@ -529,16 +584,56 @@ plot of chunk fig5b
 </div>
 </div>
 <div class="section level3">
-<h3 id="marine-mammals-7-seed-taxa-infraorderorderspecies-cells-reliable-in-both-11-only-1980s-0-only-2010s-24">Marine mammals (7 seed taxa: infraorder/order/species) — cells
-reliable in both: 11 (only 1980s: 0; only 2010s: 24)<a class="anchor" aria-label="anchor" href="#marine-mammals-7-seed-taxa-infraorderorderspecies-cells-reliable-in-both-11-only-1980s-0-only-2010s-24"></a>
+<h3 id="mangroves-19-seed-taxa-familygenus-cells-reliable-in-both-4-only-1980s-5-only-2010s-12">Mangroves (19 seed taxa: family/genus) — cells reliable in both: 4
+(only 1980s: 5; only 2010s: 12)<a class="anchor" aria-label="anchor" href="#mangroves-19-seed-taxa-familygenus-cells-reliable-in-both-4-only-1980s-5-only-2010s-12"></a>
 </h3>
 <div class="figure">
 <img src="figures/decadal-fig5b-2.png" alt="plot of chunk fig5b" width="100%"><p class="caption">
 plot of chunk fig5b
 </p>
 </div>
+</div>
+<div class="section level3">
+<h3 id="marine-mammals-7-seed-taxa-infraorderorderspecies-cells-reliable-in-both-141-only-1980s-33-only-2010s-782">Marine mammals (7 seed taxa: infraorder/order/species) — cells
+reliable in both: 141 (only 1980s: 33; only 2010s: 782)<a class="anchor" aria-label="anchor" href="#marine-mammals-7-seed-taxa-infraorderorderspecies-cells-reliable-in-both-141-only-1980s-33-only-2010s-782"></a>
+</h3>
 <div class="figure">
 <img src="figures/decadal-fig5b-3.png" alt="plot of chunk fig5b" width="100%"><p class="caption">
+plot of chunk fig5b
+</p>
+</div>
+</div>
+<div class="section level3">
+<h3 id="seabirds-class-aves-cells-reliable-in-both-408-only-1980s-57-only-2010s-1444">Seabirds (class Aves) — cells reliable in both: 408 (only 1980s: 57;
+only 2010s: 1444)<a class="anchor" aria-label="anchor" href="#seabirds-class-aves-cells-reliable-in-both-408-only-1980s-57-only-2010s-1444"></a>
+</h3>
+<div class="figure">
+<img src="figures/decadal-fig5b-4.png" alt="plot of chunk fig5b" width="100%"><p class="caption">
+plot of chunk fig5b
+</p>
+</div>
+</div>
+<div class="section level3">
+<h3 id="seagrasses-order-alismatales-cells-reliable-in-both-13-only-1980s-5-only-2010s-81">Seagrasses (order Alismatales) — cells reliable in both: 13 (only
+1980s: 5; only 2010s: 81)<a class="anchor" aria-label="anchor" href="#seagrasses-order-alismatales-cells-reliable-in-both-13-only-1980s-5-only-2010s-81"></a>
+</h3>
+<div class="figure">
+<img src="figures/decadal-fig5b-5.png" alt="plot of chunk fig5b" width="100%"><p class="caption">
+plot of chunk fig5b
+</p>
+</div>
+</div>
+<div class="section level3">
+<h3 id="sea-turtles-superfamily-chelonioidea-cells-reliable-in-both-6-only-1980s-1-only-2010s-342">Sea turtles (superfamily Chelonioidea) — cells reliable in both: 6
+(only 1980s: 1; only 2010s: 342)<a class="anchor" aria-label="anchor" href="#sea-turtles-superfamily-chelonioidea-cells-reliable-in-both-6-only-1980s-1-only-2010s-342"></a>
+</h3>
+<div class="figure">
+<img src="figures/decadal-fig5b-6.png" alt="plot of chunk fig5b" width="100%"><p class="caption">
+plot of chunk fig5b
+</p>
+</div>
+<div class="figure">
+<img src="figures/decadal-fig5b-7.png" alt="plot of chunk fig5b" width="100%"><p class="caption">
 plot of chunk fig5b
 </p>
 </div>

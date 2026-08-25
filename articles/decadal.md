@@ -27,12 +27,11 @@ con <- obis_store_connect()   # the store named by OBIS_H3_DUCKDB
 > **Precomputed.** The store is not available where this documentation
 > is built, so the chunks below were run locally by
 > `data-raw/precompute_articles.R` and their output committed. This
-> render used **obis_h3_demo_gulf_filled.duckdb**, a regional demo store
-> (Gulf of Mexico + Caribbean, see `paper/build_demo_store.R`).
+> render used **obis_h3_global_v20260728.duckdb**, the global store.
 
 ## Indicators per decade and cell
 
-A coarser resolution (H3 3) than the maps in
+A coarser resolution (H3 2) than the maps in
 [`vignette("eov")`](https://marinebon.org/obisindicators/articles/eov.md),
 because splitting records across seven decades thins each cell (see
 [`vignette("scaling")`](https://marinebon.org/obisindicators/articles/scaling.md)).
@@ -52,52 +51,59 @@ knitr::kable(summ |> mutate(median_es = round(median_es, 2)),
              caption = sprintf("Per-decade coverage and ES(50) by EOV, H3 resolution %d", RES_TIME))
 ```
 
-| eov           | period | cells | cells_reliable | records | median_es |
-|:--------------|-------:|------:|---------------:|--------:|----------:|
-| fish          |   1960 |   476 |             97 |   19309 |     38.55 |
-| fish          |   1970 |   347 |             90 |   44497 |     36.49 |
-| fish          |   1980 |   251 |             67 |  295539 |     23.87 |
-| fish          |   1990 |   564 |            240 |  741988 |      9.53 |
-| fish          |   2000 |   482 |            214 | 1901917 |     11.13 |
-| fish          |   2010 |   292 |             69 | 2160115 |     28.38 |
-| fish          |   2020 |    32 |             19 |  105090 |     28.75 |
-| hardCorals    |   1960 |   172 |             23 |    3998 |     16.37 |
-| hardCorals    |   1970 |   137 |             22 |    3482 |     18.20 |
-| hardCorals    |   1980 |    89 |             13 |    2984 |     13.68 |
-| hardCorals    |   1990 |    79 |             51 |   42165 |     11.53 |
-| hardCorals    |   2000 |   129 |             64 |  121049 |     13.80 |
-| hardCorals    |   2010 |    96 |             42 |  144203 |     13.71 |
-| hardCorals    |   2020 |    32 |             25 |   21162 |     16.48 |
-| mangroves     |   1990 |     1 |              1 |    2411 |      2.99 |
-| mangroves     |   2000 |     2 |              2 |    9917 |      2.49 |
-| mangroves     |   2010 |    14 |             10 |   25550 |      2.94 |
-| mangroves     |   2020 |     2 |              2 |    1383 |      2.68 |
-| marineMammals |   1960 |    27 |              0 |      55 |        NA |
-| marineMammals |   1970 |    69 |              4 |     672 |      2.00 |
-| marineMammals |   1980 |   152 |             11 |    3293 |      1.98 |
-| marineMammals |   1990 |   265 |             32 |   18248 |      2.27 |
-| marineMammals |   2000 |   309 |             49 |   79892 |      2.12 |
-| marineMammals |   2010 |   179 |             35 |   19166 |      1.44 |
-| marineMammals |   2020 |    82 |             12 |    2399 |      1.00 |
-| seaTurtles    |   1960 |    11 |              4 |     516 |      1.00 |
-| seaTurtles    |   1980 |    12 |              0 |      91 |        NA |
-| seaTurtles    |   1990 |   242 |              8 |    2555 |      2.75 |
-| seaTurtles    |   2000 |   514 |             46 |   11173 |      2.00 |
-| seaTurtles    |   2010 |   495 |             32 |   14216 |      3.00 |
-| seaTurtles    |   2020 |    20 |              2 |     868 |      1.38 |
-| seabirds      |   1960 |     1 |              0 |       1 |        NA |
-| seabirds      |   1970 |    38 |              1 |     459 |     12.45 |
-| seabirds      |   1980 |    28 |              5 |    1093 |     12.19 |
-| seabirds      |   1990 |   122 |             33 |    5111 |      9.97 |
-| seabirds      |   2000 |   134 |              0 |     793 |        NA |
-| seabirds      |   2010 |   252 |             37 |  269580 |      1.05 |
-| seabirds      |   2020 |    22 |              1 |     128 |     22.75 |
-| seagrasses    |   1990 |     2 |              1 |     211 |      1.00 |
-| seagrasses    |   2000 |    19 |              7 |    2169 |      3.57 |
-| seagrasses    |   2010 |    28 |              9 |    5732 |      2.99 |
-| seagrasses    |   2020 |    15 |             11 |    4631 |      2.00 |
+| eov           | period | cells | cells_reliable |  records | median_es |
+|:--------------|-------:|------:|---------------:|---------:|----------:|
+| fish          |   1960 |  2621 |            569 |   873166 |     31.75 |
+| fish          |   1970 |  2048 |            699 |  1729628 |     30.91 |
+| fish          |   1980 |  1855 |            647 |  4493283 |     25.25 |
+| fish          |   1990 |  1983 |            770 |  7673014 |     22.14 |
+| fish          |   2000 |  2405 |           1075 | 11180145 |     22.14 |
+| fish          |   2010 |  1727 |            732 | 14529812 |     20.05 |
+| fish          |   2020 |   611 |            369 |  5919572 |     15.48 |
+| hardCorals    |   1960 |   429 |             39 |     9178 |     19.37 |
+| hardCorals    |   1970 |   395 |             73 |    16975 |     21.54 |
+| hardCorals    |   1980 |   406 |            100 |    25819 |     28.00 |
+| hardCorals    |   1990 |   452 |            135 |   108106 |     22.07 |
+| hardCorals    |   2000 |   531 |            194 |   285517 |     14.44 |
+| hardCorals    |   2010 |   438 |            177 |   350381 |      8.88 |
+| hardCorals    |   2020 |   149 |             38 |    29324 |      9.45 |
+| mangroves     |   1960 |    18 |              4 |      474 |     15.81 |
+| mangroves     |   1970 |    21 |              8 |     1330 |     14.79 |
+| mangroves     |   1980 |    28 |              9 |     1234 |     18.67 |
+| mangroves     |   1990 |    47 |             12 |     8180 |      8.46 |
+| mangroves     |   2000 |    42 |             24 |    41486 |      2.75 |
+| mangroves     |   2010 |    42 |             16 |    34009 |      3.67 |
+| mangroves     |   2020 |    21 |              2 |     1516 |      2.68 |
+| marineMammals |   1960 |   353 |             41 |    31254 |      3.14 |
+| marineMammals |   1970 |   456 |             69 |    40500 |      4.97 |
+| marineMammals |   1980 |   794 |            174 |    79937 |      6.56 |
+| marineMammals |   1990 |  1309 |            462 |   420446 |      2.95 |
+| marineMammals |   2000 |  1992 |           1010 |  1539634 |      2.00 |
+| marineMammals |   2010 |  1874 |            923 |  1949809 |      2.00 |
+| marineMammals |   2020 |   841 |            236 |   566727 |      3.50 |
+| seaTurtles    |   1960 |    44 |              5 |     1215 |      1.00 |
+| seaTurtles    |   1970 |    68 |              7 |     2278 |      4.00 |
+| seaTurtles    |   1980 |    98 |              7 |     2373 |      2.00 |
+| seaTurtles    |   1990 |   631 |            120 |    26627 |      1.00 |
+| seaTurtles    |   2000 |  2023 |            252 |    69536 |      1.80 |
+| seaTurtles    |   2010 |  1497 |            348 |   264713 |      1.00 |
+| seaTurtles    |   2020 |   203 |             25 |    72599 |      1.08 |
+| seabirds      |   1960 |   447 |             87 |   105855 |     11.49 |
+| seabirds      |   1970 |   796 |            226 |   261923 |     12.33 |
+| seabirds      |   1980 |  1166 |            465 |  1921326 |     13.00 |
+| seabirds      |   1990 |  1890 |            646 |  2292579 |      9.75 |
+| seabirds      |   2000 |  3815 |           1509 |  2557880 |      5.90 |
+| seabirds      |   2010 |  4277 |           1852 |  8322502 |      7.68 |
+| seabirds      |   2020 |  2950 |           1222 |  7696206 |     18.55 |
+| seagrasses    |   1960 |    23 |              2 |      659 |      2.50 |
+| seagrasses    |   1970 |    52 |              3 |      703 |      7.87 |
+| seagrasses    |   1980 |    89 |             18 |     4380 |      6.94 |
+| seagrasses    |   1990 |   111 |             25 |    30889 |      4.35 |
+| seagrasses    |   2000 |   192 |             66 |    80068 |      3.80 |
+| seagrasses    |   2010 |   326 |             94 |   141857 |      3.88 |
+| seagrasses    |   2020 |   309 |             83 |    51186 |      3.23 |
 
-Per-decade coverage and ES(50) by EOV, H3 resolution 3 {.table}
+Per-decade coverage and ES(50) by EOV, H3 resolution 2 {.table}
 
 ``` r
 
@@ -145,21 +151,45 @@ for (e in unique(pd$eov)) {
 }
 ```
 
-### Fish (Agnatha, Chondrichthyes, Osteichthyes) — cells reliable in both: 15 (only 1980s: 52; only 2010s: 54)
+### Fish (Agnatha, Chondrichthyes, Osteichthyes) — cells reliable in both: 387 (only 1980s: 260; only 2010s: 345)
 
-### Hard corals (order Scleractinia) — cells reliable in both: 3 (only 1980s: 10; only 2010s: 39)
+### Hard corals (order Scleractinia) — cells reliable in both: 43 (only 1980s: 57; only 2010s: 134)
 
 ![plot of chunk fig5b](figures/decadal-fig5b-1.png)
 
 plot of chunk fig5b
 
-### Marine mammals (7 seed taxa: infraorder/order/species) — cells reliable in both: 11 (only 1980s: 0; only 2010s: 24)
+### Mangroves (19 seed taxa: family/genus) — cells reliable in both: 4 (only 1980s: 5; only 2010s: 12)
 
 ![plot of chunk fig5b](figures/decadal-fig5b-2.png)
 
 plot of chunk fig5b
 
+### Marine mammals (7 seed taxa: infraorder/order/species) — cells reliable in both: 141 (only 1980s: 33; only 2010s: 782)
+
 ![plot of chunk fig5b](figures/decadal-fig5b-3.png)
+
+plot of chunk fig5b
+
+### Seabirds (class Aves) — cells reliable in both: 408 (only 1980s: 57; only 2010s: 1444)
+
+![plot of chunk fig5b](figures/decadal-fig5b-4.png)
+
+plot of chunk fig5b
+
+### Seagrasses (order Alismatales) — cells reliable in both: 13 (only 1980s: 5; only 2010s: 81)
+
+![plot of chunk fig5b](figures/decadal-fig5b-5.png)
+
+plot of chunk fig5b
+
+### Sea turtles (superfamily Chelonioidea) — cells reliable in both: 6 (only 1980s: 1; only 2010s: 342)
+
+![plot of chunk fig5b](figures/decadal-fig5b-6.png)
+
+plot of chunk fig5b
+
+![plot of chunk fig5b](figures/decadal-fig5b-7.png)
 
 plot of chunk fig5b
 

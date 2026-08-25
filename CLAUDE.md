@@ -255,6 +255,12 @@ Rscript data-raw/migrate_fill_taxon_gaps.R <in.duckdb> <out.duckdb> [min_records
 # add the EOV layers (`eov` membership + precomputed `idx_h3_eov`) to a store
 Rscript data-raw/migrate_add_eov.R <in.duckdb> <out.duckdb> [eov ...]
 
+# precompute the store articles (vignettes/articles/*.Rmd.orig -> .Rmd + figures,
+# and paper/figures/) against the GLOBAL store, inside the rstudio container as
+# uid 1000; then commit vignettes/articles/ + paper/figures/. Run on the HOST.
+# Locally the same thing is `OBIS_H3_DUCKDB=<store> Rscript data-raw/precompute_articles.R`.
+data-raw/precompute_articles.sh [article ...]     # log: /share/data/obis_eov_work/precompute_articles.log
+
 # add the coarse-parent `hex_prune` key + (res, hex_prune, cell_id) clustering to
 # occ_h3/idx_h3 in an EXISTING store so the h3t server prunes each tile (no S3
 # re-read, writes a new file; drops any interim lat/lng cols). rebuilds needn't

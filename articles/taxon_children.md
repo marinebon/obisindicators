@@ -44,9 +44,8 @@ con <- obis_store_connect()   # the store named by OBIS_H3_DUCKDB
 > **Precomputed.** The store is not available where this documentation
 > is built, so the database chunks below were run locally by
 > `data-raw/precompute_articles.R` and their output committed (the tile
-> maps are live). This render used **obis_h3_demo_gulf_filled.duckdb**,
-> a regional demo store (Gulf of Mexico + Caribbean, see
-> `paper/build_demo_store.R`).
+> maps are live). This render used **obis_h3_global_v20260728.duckdb**,
+> the global store.
 
 ## Resolve the children of a taxon
 
@@ -60,18 +59,18 @@ rows) this resolves in a fraction of a second.
 # Infraorder Cetacea = AphiaID 2688 (a rank that is NOT an occ_h3 column)
 cet <- obis_taxon_children(2688, con)
 nrow(cet)                              # descendant taxa
-#> [1] 1573
+#> [1] 1665
 sort(table(cet$taxonRank), decreasing = TRUE)
 #> 
 #>     Species       Genus  Subspecies      Family   Subfamily    Subgenus 
-#>        1110         207         146          44          29          26 
+#>        1165         231         152          50          29          26 
 #> Superfamily  Infraorder     Variety 
-#>           9           1           1
+#>          10           1           1
 
 # class Bacillariophyceae (diatoms) = 148899: a much broader subtree
 dia <- obis_taxon_children(148899, con)
 nrow(dia)
-#> [1] 13015
+#> [1] 71531
 ```
 
 The descendant AphiaIDs (`cet$taxonID`) are exactly the set used to
@@ -104,14 +103,14 @@ knitr::kable(
 
 | label | rank | name | aphiaid | records_rank | species_rank | records_tree | species_tree | ratio |
 |:---|:---|:---|---:|:---|---:|:---|---:|---:|
-| Seabirds | class | Aves | 1836 | 284,565 | 247 | 284,620 | 251 | 1.000 |
-| Bony fishes | class | Actinopterygii | 10194 | 0 | 0 | 5,564,819 | 3577 | 0.000 |
-| Sharks & rays | class | Elasmobranchii | 10193 | 42,236 | 275 | 42,236 | 275 | 1.000 |
-| Marine mammals | class | Mammalia | 1837 | 125,350 | 44 | 125,350 | 44 | 1.000 |
-| Sea turtles | order | Testudines | 2689 | 29,926 | 6 | 29,932 | 7 | 1.000 |
-| Corals & anemones | class | Anthozoa | 1292 | 592 | 171 | 384,669 | 898 | 0.002 |
-| Mollusks | phylum | Mollusca | 51 | 304,979 | 5972 | 305,116 | 5976 | 1.000 |
-| Crustaceans | class | Malacostraca | 1071 | 844,218 | 3130 | 844,298 | 3134 | 1.000 |
+| Seabirds | class | Aves | 1836 | 23,686,770 | 889 | 23,744,889 | 891 | 0.998 |
+| Bony fishes | class | Actinopterygii | 10194 | 0 | 0 | 45,130,960 | 16477 | 0.000 |
+| Sharks & rays | class | Elasmobranchii | 10193 | 4,001,773 | 1144 | 4,002,304 | 1145 | 1.000 |
+| Marine mammals | class | Mammalia | 1837 | 4,866,582 | 170 | 4,866,582 | 170 | 1.000 |
+| Sea turtles | order | Testudines | 2689 | 447,735 | 22 | 447,743 | 22 | 1.000 |
+| Corals & anemones | class | Anthozoa | 1292 | 0 | 0 | 1,999,366 | 6258 | 0.000 |
+| Mollusks | phylum | Mollusca | 51 | 10,733,645 | 34064 | 10,739,769 | 34079 | 0.999 |
+| Crustaceans | class | Malacostraca | 1071 | 7,669,820 | 23968 | 7,670,453 | 23987 | 1.000 |
 
 Records by Darwin Core rank-column filter vs. AphiaID subtree {.table
 style="width:100%;"}
@@ -348,9 +347,9 @@ knitr::kable(stats |> mutate(across(where(is.numeric), ~ signif(.x, 3))),
 
 | res | n_cells | rho | p_value | frac_present |
 |----:|--------:|----:|--------:|-------------:|
-|   3 |     139 |  NA |      NA |        0.439 |
-|   5 |     190 |  NA |      NA |        0.200 |
-|   7 |     153 |  NA |      NA |        0.144 |
+|   3 |    2140 |  NA |      NA |        0.761 |
+|   5 |    5020 |  NA |      NA |        0.665 |
+|   7 |    6580 |  NA |      NA |        0.511 |
 
 SPUE vs. modeled suitability by resolution {.table}
 
