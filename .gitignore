@@ -5,9 +5,6 @@
 inst/doc
 docs
 .DS_Store
-paper/figures/*.png
-paper/figures/*.csv
-paper/_out
-paper/*_files
-paper/*.html
-paper/_freeze
+# local renders of the precomputed articles (pkgdown builds them into docs/)
+vignettes/articles/*.html
+vignettes/articles/*_files

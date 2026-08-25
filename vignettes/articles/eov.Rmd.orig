@@ -1,0 +1,221 @@
+---
+title: "Essential Ocean Variables from the OBIS store"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Essential Ocean Variables from the OBIS store}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r knit-setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>", warning = FALSE, message = FALSE,
+  fig.path = "figures/eov-", fig.width = 9, fig.height = 6,
+  out.width = "100%", dpi = 110)
+```
+
+The GOOS / IOOS biology & ecosystems **Essential Ocean Variables** (EOVs) are
+defined taxonomically, and the
+[IOOS Marine Life Data Network](https://github.com/ioos/marine_life_data_network/tree/main/eov_taxonomy)
+publishes that definition as root WoRMS AphiaIDs per EOV — 33 seeds across
+seven EOVs: fish, hard corals, mangroves, marine mammals, seabirds, seagrasses
+and sea turtles. That is exactly a multi-seed version of the subtree walk in
+[`vignette("taxon_children")`](taxon_children.html), so an EOV map from the
+`obis_h3` store is one query away. This article shows the definitions, the
+taxonomy coverage gap that silently empties EOVs unless it is closed, and the
+per-EOV maps — Table 4 and Figures 1–2 of the OBIS → H3 → EOV manuscript.
+
+```{r setup}
+library(obisindicators)
+library(dplyr)
+library(ggplot2)
+
+con <- obis_store_connect()   # the store named by OBIS_H3_DUCKDB
+```
+
+```{r paper, include = FALSE}
+# store_label, RES_MAP, EOV_ORDER, save_fig() -> paper/figures/ (manuscript copies)
+source("../../paper/_common.R", local = TRUE)
+before_path <- Sys.getenv("OBIS_H3_DUCKDB_BEFORE")
+has_before  <- nzchar(before_path) && file.exists(before_path)
+```
+
+> **Precomputed.** The store is not available where this documentation is
+> built, so the chunks below were run locally by
+> `data-raw/precompute_articles.R` and their output committed. This render used
+> **`r store_label`**, `r store_note`; before/after comparisons use
+> `r if (has_before) paste0("**", basename(before_path), "**") else "no before-store (set OBIS_H3_DUCKDB_BEFORE)"`.
+
+## The definitions
+
+`obis_eov_seeds()` returns the seed AphiaIDs per EOV; `obis_eov_label()` turns
+an EOV key into a readable label; `obis_eov_aphiaid()` gives the seeds to pass
+wherever an `aphiaid` filter is accepted.
+
+```{r seeds}
+knitr::kable(obis_eov_seeds(), caption = "EOV seed taxa (IOOS MLDN eov_taxonomy)")
+obis_eov_label("marineMammals")
+obis_eov_aphiaid("seaTurtles")
+```
+
+**Why seeds-and-subtree rather than the Darwin Core rank columns**: the rank a
+name occupies is not stable, so a `class = <name>` filter silently matches
+*nothing* when OBIS files the name elsewhere (Table 3 in
+[`vignette("taxon_children")`](taxon_children.html)). Subtree walking is
+rank-agnostic and immune.
+
+`obis_eov_sql()` builds the tile SQL for an EOV. With one EOV and no year
+filter it routes to the **precomputed** `idx_h3_eov` layer (as fast as the
+all-taxa path); with years, several EOVs, or a store without the layer baked it
+falls back to the live subtree aggregation over `occ_h3`.
+
+```{r eov-sql}
+cat(obis_eov_sql("seaTurtles"))
+```
+
+`obis_eov_bake()` adds the two layers to a store: `eov` (membership: each EOV's
+seeds expanded over `taxon`) and `idx_h3_eov` (indicators per EOV and
+resolution 1–7).
+
+## The taxonomy coverage gap
+
+EOV membership is only as complete as the `taxon` table. The bulk WoRMS
+download is **not** a complete cover of the AphiaIDs OBIS carries — on the
+2026-07 global store about 7% of distinct species-level AphiaIDs (8.3 M of
+121.9 M records) were absent, notably algae, whose WoRMS records come from
+thematic databases the Darwin Core export lags. Every one of those is invisible
+to every subtree, EOV and SPUE query until `obis_taxon_fill_gaps()` supplements
+the bulk join with WoRMS REST lookups, to transitive closure.
+
+`obis_taxon_orphans()` reports the gap on a store:
+
+```{r orphans}
+orph <- obis_taxon_orphans(con)
+tibble(orphan_aphiaids = nrow(orph), orphan_records = sum(orph$records))
+head(arrange(orph, desc(records)), 10)
+```
+
+## Totals per EOV (Table 4)
+
+```{r totals}
+tot <- calc_eov_totals(con)
+knitr::kable(
+  tot |> mutate(across(c(records, species, cells), ~ format(.x, big.mark = ",")),
+                pct_records = round(pct_records, 2)),
+  caption = "Records, species and occupied cells per EOV")
+```
+
+```{r totals-save, include = FALSE}
+save_tab(tot, "tab4_eov_totals")
+```
+
+With a store from *before* the gap-fill, `compare_eov_totals()` shows what the
+fill recovered per EOV:
+
+```{r compare, eval = has_before}
+con_b  <- obis_store_connect(before_path)
+before <- calc_eov_totals(con_b)
+cmp    <- compare_eov_totals(before, tot)
+knitr::kable(
+  cmp |> mutate(across(c(records_before, records_after, records_delta), ~ format(.x, big.mark = ",")),
+                records_pct = round(records_pct, 1)),
+  caption = "EOV totals before and after the WoRMS gap-fill")
+```
+
+```{r compare-save, eval = has_before, include = FALSE}
+save_tab(cmp, "tab4_eov_totals_before_after")
+```
+
+## Seagrasses before and after the gap-fill (Fig. 1)
+
+Seagrasses were the EOV most affected: most of their AphiaIDs were among the
+orphans, so the EOV was nearly empty before the fill.
+
+```{r fig1, fig.height = 5}
+after_sg <- obis_cell_indicators(con, RES_MAP, eov = "seagrasses")
+p_after  <- gmap_cells(after_sg, "n", label = "records", trans = "log10") +
+  labs(title = if (has_before) "after gap-fill" else "seagrasses EOV (this store)")
+if (has_before) {
+  before_sg <- obis_cell_indicators(con_b, RES_MAP, eov = "seagrasses")
+  p_before  <- gmap_cells(before_sg, "n", label = "records", trans = "log10") +
+    labs(title = "before gap-fill (bulk WoRMS export only)")
+  p <- patchwork::wrap_plots(p_before, p_after, ncol = 2) +
+    patchwork::plot_annotation(caption = store_label)
+} else {
+  p <- p_after + labs(caption = store_label)
+}
+p
+```
+
+```{r fig1-save, include = FALSE}
+if (has_before) {
+  save_fig(p, "fig1_seagrass_before_after",
+           bind_rows(mutate(before_sg, when = "before"), mutate(after_sg, when = "after")),
+           width = 12, height = 5)
+  DBI::dbDisconnect(con_b, shutdown = TRUE)
+} else {
+  save_fig(p, "fig1_seagrass", after_sg, width = 8, height = 5)
+}
+```
+
+## The seven EOVs: records, ES(50) and coverage (Fig. 2)
+
+`obis_cell_indicators()` returns every indicator per cell for an EOV at one
+resolution (H3 `r RES_MAP` here, ~`r format(round(h3_res_table(RES_MAP)$area_km2), big.mark = ",")`
+km² per hexagon), reading the precomputed layer when it can. ES(50) is only
+meaningful where a cell has at least 50 records, so each EOV gets three panels:
+records, ES(50) masked to eligible cells, and the eligible-cell coverage
+itself.
+
+```{r pull}
+eovs <- bind_rows(lapply(EOV_ORDER, function(e) {
+  d <- obis_cell_indicators(con, RES_MAP, eov = e)
+  if (nrow(d)) cbind(eov = e, d) else NULL
+}))
+summ <- eovs |>
+  group_by(eov) |>
+  summarize(cells = n(), records = sum(as.numeric(n)),
+            cells_es_eligible = sum(n >= 50), frac_eligible = mean(n >= 50),
+            median_es = median(es[n >= 50], na.rm = TRUE), .groups = "drop")
+knitr::kable(summ |> mutate(frac_eligible = round(frac_eligible, 3), median_es = round(median_es, 2)),
+             caption = sprintf("Per-EOV coverage at H3 resolution %d", RES_MAP))
+```
+
+```{r pull-save, include = FALSE}
+save_tab(eovs, "fig2_eov_cells")
+save_tab(summ, "fig2_eov_summary")
+```
+
+```{r panels, fig.height = 4, results = "asis"}
+for (e in unique(eovs$eov)) {
+  d <- filter(eovs, eov == e)
+  d$eligible <- as.numeric(d$n >= 50)
+  p1 <- gmap_cells(d, "n",  label = "records", trans = "log10") + labs(title = "records")
+  p2 <- gmap_cells(d, "es", label = "ES(50)", mask = d$n >= 50) + labs(title = "ES(50), n ≥ 50")
+  p3 <- gmap_cells(d, "eligible", label = "ES-eligible") + labs(title = "coverage (n ≥ 50)")
+  p  <- patchwork::wrap_plots(p1, p2, p3, ncol = 3) +
+    patchwork::plot_annotation(title = obis_eov_label(e), caption = store_label)
+  save_fig(p, paste0("fig2_", e), width = 15, height = 4.5)
+  cat("\n\n### ", obis_eov_label(e), "\n\n", sep = "")
+  print(p)
+}
+```
+
+### ES(50) across all EOVs
+
+```{r all-es50, fig.height = 10}
+plots <- lapply(unique(eovs$eov), function(e) {
+  d <- filter(eovs, eov == e)
+  gmap_cells(d, "es", label = "ES(50)", mask = d$n >= 50) + labs(title = obis_eov_label(e, max_taxa = 1L))
+})
+p <- patchwork::wrap_plots(plots, ncol = 2) + patchwork::plot_annotation(caption = store_label)
+p
+```
+
+```{r all-es50-save, include = FALSE}
+save_fig(p, "fig2_es50_all_eovs", width = 12, height = 14)
+```
+
+```{r disconnect}
+DBI::dbDisconnect(con, shutdown = TRUE)
+```

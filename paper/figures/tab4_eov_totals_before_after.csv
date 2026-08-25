@@ -1,0 +1,8 @@
+"eov","label","records_before","records_after","records_delta","records_pct","species_before","species_after","cells_before","cells_after"
+"fish","Fish",5606448,5607473,1025,0.0182825204122111,3855,3874,81971,82049
+"hardCorals","Hard corals",346660,347292,632,0.182311198292275,269,350,5092,5110
+"mangroves","Mangroves",39287,39291,4,0.0101814849695828,8,9,70,70
+"marineMammals","Marine mammals",125340,125340,0,0,46,46,16645,16645
+"seabirds","Seabirds",283605,284620,1015,0.357892138714057,174,251,17082,17096
+"seagrasses","Seagrasses",24,12875,12851,53545.8333333333,4,14,8,381
+"seaTurtles","Sea turtles",29926,29926,0,0,7,7,11761,11761

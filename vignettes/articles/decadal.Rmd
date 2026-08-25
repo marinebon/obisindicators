@@ -1,0 +1,191 @@
+---
+title: "Decadal change in ES(50) per EOV"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Decadal change in ES(50) per EOV}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+
+
+`occ_h3` carries the year of each record, so any indicator can be computed per
+period and cell. This article does that per decade for each Essential Ocean
+Variable and maps where ES(50) changed between two decades — Figure 5 of the
+OBIS → H3 → EOV manuscript. It is the store-backed counterpart of
+[`vignette("temporal_subsets")`](temporal_subsets.html), which does the same on
+the shipped `occ_*` samples in memory.
+
+Two rules keep the comparison honest. ES(50) needs at least 50 records in a
+cell-decade to be reliable, so the "reliable cells" count is reported alongside
+the raw record count. And change is only computed where **both** decades are
+reliable (`calc_period_change()`), so a map of Δ ES(50) never mixes "fewer
+species" with "fewer surveys".
+
+
+``` r
+library(obisindicators)
+library(dplyr)
+library(ggplot2)
+
+con <- obis_store_connect()   # the store named by OBIS_H3_DUCKDB
+```
+
+
+
+> **Precomputed.** The store is not available where this documentation is
+> built, so the chunks below were run locally by
+> `data-raw/precompute_articles.R` and their output committed. This render used
+> **obis_h3_demo_gulf_filled.duckdb**, a regional demo store (Gulf of Mexico + Caribbean, see `paper/build_demo_store.R`).
+
+## Indicators per decade and cell
+
+A coarser resolution (H3 3) than the maps in
+[`vignette("eov")`](eov.html), because splitting records across seven decades
+thins each cell (see [`vignette("scaling")`](scaling.html)).
+
+
+``` r
+starts <- seq(1960L, 2020L, by = 10L)
+pd <- bind_rows(lapply(EOV_ORDER, function(e) {
+  d <- calc_period_indicators(con, res = RES_TIME, eov = e, starts = starts, esn = 50L)
+  if (nrow(d)) cbind(eov = e, d) else NULL
+}))
+summ <- pd |>
+  group_by(eov, period) |>
+  summarize(cells = n(), cells_reliable = sum(n >= 50), records = sum(as.numeric(n)),
+            median_es = median(es[n >= 50], na.rm = TRUE), .groups = "drop")
+knitr::kable(summ |> mutate(median_es = round(median_es, 2)),
+             caption = sprintf("Per-decade coverage and ES(50) by EOV, H3 resolution %d", RES_TIME))
+```
+
+
+
+Table: Per-decade coverage and ES(50) by EOV, H3 resolution 3
+
+|eov           | period| cells| cells_reliable| records| median_es|
+|:-------------|------:|-----:|--------------:|-------:|---------:|
+|fish          |   1960|   476|             97|   19309|     38.55|
+|fish          |   1970|   347|             90|   44497|     36.49|
+|fish          |   1980|   251|             67|  295539|     23.87|
+|fish          |   1990|   564|            240|  741988|      9.53|
+|fish          |   2000|   482|            214| 1901917|     11.13|
+|fish          |   2010|   292|             69| 2160115|     28.38|
+|fish          |   2020|    32|             19|  105090|     28.75|
+|hardCorals    |   1960|   172|             23|    3998|     16.37|
+|hardCorals    |   1970|   137|             22|    3482|     18.20|
+|hardCorals    |   1980|    89|             13|    2984|     13.68|
+|hardCorals    |   1990|    79|             51|   42165|     11.53|
+|hardCorals    |   2000|   129|             64|  121049|     13.80|
+|hardCorals    |   2010|    96|             42|  144203|     13.71|
+|hardCorals    |   2020|    32|             25|   21162|     16.48|
+|mangroves     |   1990|     1|              1|    2411|      2.99|
+|mangroves     |   2000|     2|              2|    9917|      2.49|
+|mangroves     |   2010|    14|             10|   25550|      2.94|
+|mangroves     |   2020|     2|              2|    1383|      2.68|
+|marineMammals |   1960|    27|              0|      55|        NA|
+|marineMammals |   1970|    69|              4|     672|      2.00|
+|marineMammals |   1980|   152|             11|    3293|      1.98|
+|marineMammals |   1990|   265|             32|   18248|      2.27|
+|marineMammals |   2000|   309|             49|   79892|      2.12|
+|marineMammals |   2010|   179|             35|   19166|      1.44|
+|marineMammals |   2020|    82|             12|    2399|      1.00|
+|seaTurtles    |   1960|    11|              4|     516|      1.00|
+|seaTurtles    |   1980|    12|              0|      91|        NA|
+|seaTurtles    |   1990|   242|              8|    2555|      2.75|
+|seaTurtles    |   2000|   514|             46|   11173|      2.00|
+|seaTurtles    |   2010|   495|             32|   14216|      3.00|
+|seaTurtles    |   2020|    20|              2|     868|      1.38|
+|seabirds      |   1960|     1|              0|       1|        NA|
+|seabirds      |   1970|    38|              1|     459|     12.45|
+|seabirds      |   1980|    28|              5|    1093|     12.19|
+|seabirds      |   1990|   122|             33|    5111|      9.97|
+|seabirds      |   2000|   134|              0|     793|        NA|
+|seabirds      |   2010|   252|             37|  269580|      1.05|
+|seabirds      |   2020|    22|              1|     128|     22.75|
+|seagrasses    |   1990|     2|              1|     211|      1.00|
+|seagrasses    |   2000|    19|              7|    2169|      3.57|
+|seagrasses    |   2010|    28|              9|    5732|      2.99|
+|seagrasses    |   2020|    15|             11|    4631|      2.00|
+
+
+
+
+
+
+``` r
+long <- bind_rows(
+  transmute(summ, eov, period, metric = "cells reliable (n ≥ 50)", value = cells_reliable),
+  transmute(summ, eov, period, metric = "records", value = records),
+  transmute(summ, eov, period, metric = "median ES(50)", value = median_es))
+p <- ggplot(long, aes(x = period, y = value, color = eov)) +
+  geom_line() + geom_point(size = 1.5) +
+  facet_wrap(~ metric, scales = "free_y") +
+  labs(x = "decade", y = NULL, color = NULL, title = "Per-decade coverage and ES(50) by EOV",
+       caption = store_label) +
+  theme_minimal(base_size = 11) + theme(legend.position = "bottom")
+p
+```
+
+<div class="figure">
+<img src="figures/decadal-fig5a-1.png" alt="plot of chunk fig5a" width="100%" />
+<p class="caption">plot of chunk fig5a</p>
+</div>
+
+
+
+Records climb steeply into the 2000s and 2010s for every EOV — that is
+observation effort, not biodiversity — which is exactly why the change maps
+below gate on reliability in both decades rather than comparing raw counts.
+
+## Change maps, 1980s → 2010s
+
+`calc_period_change()` returns the per-cell difference for cells reliable in
+both decades, plus a coverage summary (cells reliable only in one decade or the
+other are reported, not mapped).
+
+
+``` r
+for (e in unique(pd$eov)) {
+  ch <- calc_period_change(filter(pd, eov == e), from = 1980L, to = 2010L, esn = 50L)
+  if (nrow(ch$cells) < 3) next
+  cat("\n\n### ", obis_eov_label(e), " — cells reliable in both: ", ch$coverage$both,
+      " (only 1980s: ", ch$coverage$only_from, "; only 2010s: ", ch$coverage$only_to, ")\n\n", sep = "")
+  p <- gmap_cells(ch$cells, "delta", label = "Δ ES(50)") +
+    labs(title = paste0(obis_eov_label(e, max_taxa = 1L), ": ES(50) 2010s − 1980s"),
+         caption = store_label)
+  save_fig(p, paste0("fig5b_change_", e), ch$cells, width = 9, height = 5)
+  print(p)
+}
+```
+
+
+
+### Fish (Agnatha, Chondrichthyes, Osteichthyes) — cells reliable in both: 15 (only 1980s: 52; only 2010s: 54)
+
+
+
+### Hard corals (order Scleractinia) — cells reliable in both: 3 (only 1980s: 10; only 2010s: 39)
+
+<div class="figure">
+<img src="figures/decadal-fig5b-1.png" alt="plot of chunk fig5b" width="100%" />
+<p class="caption">plot of chunk fig5b</p>
+</div>
+
+### Marine mammals (7 seed taxa: infraorder/order/species) — cells reliable in both: 11 (only 1980s: 0; only 2010s: 24)
+
+<div class="figure">
+<img src="figures/decadal-fig5b-2.png" alt="plot of chunk fig5b" width="100%" />
+<p class="caption">plot of chunk fig5b</p>
+</div><div class="figure">
+<img src="figures/decadal-fig5b-3.png" alt="plot of chunk fig5b" width="100%" />
+<p class="caption">plot of chunk fig5b</p>
+</div>
+
+EOVs with fewer than three cells reliable in both decades are skipped — on a
+regional demo store that is most of them; the global store fills in the rest.
+
+
+``` r
+DBI::dbDisconnect(con, shutdown = TRUE)
+```

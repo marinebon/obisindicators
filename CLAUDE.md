@@ -246,9 +246,20 @@ Rscript data-raw/migrate_add_spatial_cluster.R <in.duckdb> <out.duckdb>
   analyses (scale curves, rank-vs-subtree, EOV totals, SPUE vs SDM raster,
   periods, place roll-ups), all tested on `tests/testthat/helper-paper.R`'s
   synthetic fixture in `test-paper-helpers.R`.
-- `paper/` — Quarto notebooks, one per manuscript figure/table, driven by
-  `OBIS_H3_DUCKDB`; `paper/build_demo_store.R` builds a regional demo store from
-  a local OBIS export + WoRMS table (Gulf of Mexico + Caribbean by default).
+- `vignettes/articles/*.Rmd.orig` — **precomputed articles** against an
+  `obis_h3` store (`scaling`, `taxon_children`, `eov`, `decadal`, `places`).
+  The `.Rmd.orig` is the source; `data-raw/precompute_articles.R` knits it
+  locally (needs `OBIS_H3_DUCKDB`; optional `OBIS_H3_DUCKDB_BEFORE`, `SDM_TIF`,
+  `PLACES_GPKG`) into the committed `.Rmd` + `figures/` that pkgdown renders on
+  CI without a store. **Edit the `.orig`, never the knitted `.Rmd`**, and
+  commit both plus `paper/figures/`. Chunk headers suffixed with `` `r ''` ``
+  pass through un-knitted so the mapgl tile maps stay live on the site. The
+  directory is `.Rbuildignore`d (pkgdown-only, not package vignettes).
+- `paper/` — the manuscript's figure gallery/index (`README.md`) and outputs
+  (`figures/`, print PNG + CSV per figure, written by the articles via
+  `paper/_common.R`); `paper/build_demo_store.R` builds a regional demo store
+  from a local OBIS export + WoRMS table (Gulf of Mexico + Caribbean by
+  default; `--fill` gives the post-gap-fill store).
 - `R/data.R` — roxygen docs for the shipped `occ_*` datasets.
 - roxygen `@concept` tags (`read`/`analyze`/`h3t`/`taxon`/`visualize`/`data`) drive
   the pkgdown reference index in `_pkgdown.yml` — tag new exported functions.

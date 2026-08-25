@@ -1,0 +1,120 @@
+---
+title: "Decadal change in ES(50) per EOV"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Decadal change in ES(50) per EOV}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r knit-setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>", warning = FALSE, message = FALSE,
+  fig.path = "figures/decadal-", fig.width = 9, fig.height = 6,
+  out.width = "100%", dpi = 110)
+```
+
+`occ_h3` carries the year of each record, so any indicator can be computed per
+period and cell. This article does that per decade for each Essential Ocean
+Variable and maps where ES(50) changed between two decades — Figure 5 of the
+OBIS → H3 → EOV manuscript. It is the store-backed counterpart of
+[`vignette("temporal_subsets")`](temporal_subsets.html), which does the same on
+the shipped `occ_*` samples in memory.
+
+Two rules keep the comparison honest. ES(50) needs at least 50 records in a
+cell-decade to be reliable, so the "reliable cells" count is reported alongside
+the raw record count. And change is only computed where **both** decades are
+reliable (`calc_period_change()`), so a map of Δ ES(50) never mixes "fewer
+species" with "fewer surveys".
+
+```{r setup}
+library(obisindicators)
+library(dplyr)
+library(ggplot2)
+
+con <- obis_store_connect()   # the store named by OBIS_H3_DUCKDB
+```
+
+```{r paper, include = FALSE}
+# store_label, RES_TIME, EOV_ORDER, save_fig() -> paper/figures/ (manuscript copies)
+source("../../paper/_common.R", local = TRUE)
+```
+
+> **Precomputed.** The store is not available where this documentation is
+> built, so the chunks below were run locally by
+> `data-raw/precompute_articles.R` and their output committed. This render used
+> **`r store_label`**, `r store_note`.
+
+## Indicators per decade and cell
+
+A coarser resolution (H3 `r RES_TIME`) than the maps in
+[`vignette("eov")`](eov.html), because splitting records across seven decades
+thins each cell (see [`vignette("scaling")`](scaling.html)).
+
+```{r periods}
+starts <- seq(1960L, 2020L, by = 10L)
+pd <- bind_rows(lapply(EOV_ORDER, function(e) {
+  d <- calc_period_indicators(con, res = RES_TIME, eov = e, starts = starts, esn = 50L)
+  if (nrow(d)) cbind(eov = e, d) else NULL
+}))
+summ <- pd |>
+  group_by(eov, period) |>
+  summarize(cells = n(), cells_reliable = sum(n >= 50), records = sum(as.numeric(n)),
+            median_es = median(es[n >= 50], na.rm = TRUE), .groups = "drop")
+knitr::kable(summ |> mutate(median_es = round(median_es, 2)),
+             caption = sprintf("Per-decade coverage and ES(50) by EOV, H3 resolution %d", RES_TIME))
+```
+
+```{r periods-save, include = FALSE}
+save_tab(pd,   "fig5_period_cells")
+save_tab(summ, "fig5_period_summary")
+```
+
+```{r fig5a, fig.height = 5}
+long <- bind_rows(
+  transmute(summ, eov, period, metric = "cells reliable (n ≥ 50)", value = cells_reliable),
+  transmute(summ, eov, period, metric = "records", value = records),
+  transmute(summ, eov, period, metric = "median ES(50)", value = median_es))
+p <- ggplot(long, aes(x = period, y = value, color = eov)) +
+  geom_line() + geom_point(size = 1.5) +
+  facet_wrap(~ metric, scales = "free_y") +
+  labs(x = "decade", y = NULL, color = NULL, title = "Per-decade coverage and ES(50) by EOV",
+       caption = store_label) +
+  theme_minimal(base_size = 11) + theme(legend.position = "bottom")
+p
+```
+
+```{r fig5a-save, include = FALSE}
+save_fig(p, "fig5a_decadal_summary", summ, width = 11, height = 5)
+```
+
+Records climb steeply into the 2000s and 2010s for every EOV — that is
+observation effort, not biodiversity — which is exactly why the change maps
+below gate on reliability in both decades rather than comparing raw counts.
+
+## Change maps, 1980s → 2010s
+
+`calc_period_change()` returns the per-cell difference for cells reliable in
+both decades, plus a coverage summary (cells reliable only in one decade or the
+other are reported, not mapped).
+
+```{r fig5b, fig.height = 5, results = "asis"}
+for (e in unique(pd$eov)) {
+  ch <- calc_period_change(filter(pd, eov == e), from = 1980L, to = 2010L, esn = 50L)
+  if (nrow(ch$cells) < 3) next
+  cat("\n\n### ", obis_eov_label(e), " — cells reliable in both: ", ch$coverage$both,
+      " (only 1980s: ", ch$coverage$only_from, "; only 2010s: ", ch$coverage$only_to, ")\n\n", sep = "")
+  p <- gmap_cells(ch$cells, "delta", label = "Δ ES(50)") +
+    labs(title = paste0(obis_eov_label(e, max_taxa = 1L), ": ES(50) 2010s − 1980s"),
+         caption = store_label)
+  save_fig(p, paste0("fig5b_change_", e), ch$cells, width = 9, height = 5)
+  print(p)
+}
+```
+
+EOVs with fewer than three cells reliable in both decades are skipped — on a
+regional demo store that is most of them; the global store fills in the rest.
+
+```{r disconnect}
+DBI::dbDisconnect(con, shutdown = TRUE)
+```

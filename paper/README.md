@@ -1,39 +1,55 @@
-# paper/ — figures and case studies for the OBIS → H3 → EOV manuscript
+# paper/ — figures and tables for the OBIS → H3 → EOV manuscript
 
-Each notebook produces one figure/table of the manuscript by calling exported,
-tested functions of `obisindicators` (no analysis logic lives in the notebooks).
-Outputs land in `figures/` as PNG + the CSV behind each plot.
+Every figure and table of the manuscript is produced by one of the
+**precomputed articles** in `vignettes/articles/` — the same pages published at
+[marinebon.org/obisindicators/articles](https://marinebon.org/obisindicators/articles/)
+— by calling exported, tested functions of `obisindicators` (no analysis logic
+lives in the notebooks). Manuscript copies land here in `figures/` as a
+print-resolution PNG plus the CSV behind each plot, so any figure can be
+regenerated from its data.
 
-| notebook | manuscript item | functions |
+| manuscript item | article (source `.Rmd.orig`) | functions | output |
+|---|---|---|---|
+| Table 2 (store), Table 5 (latency) | [`scaling`](../vignettes/articles/scaling.Rmd) | `obis_store_stats()`, `obis_bench()`, `obis_bench_queries()` | `tab2_*.csv`, `tab5_bench.{png,csv}` |
+| Fig. 3 (scale curves, SPUE denominator) | [`scaling`](../vignettes/articles/scaling.Rmd) | `calc_scale_curves()`, `calc_spue_scale()`, `plot_scale_curves()` | `fig3a_scale_curves`, `fig3b_spue_scale` |
+| Table 3 (rank column vs subtree) | [`taxon_children`](../vignettes/articles/taxon_children.Rmd) | `calc_rank_vs_subtree()`, `obis_rank_presets()` | `tab3_rank_vs_subtree` |
+| Fig. 4 (SPUE maps; SPUE vs SDM) | [`taxon_children`](../vignettes/articles/taxon_children.Rmd) | `calc_spue_cells()`, `h3_raster_to_cells()`, `compare_spue_sdm()`, `plot_spue_sdm()` | `fig4a_spue_maps`, `fig4b_spue_vs_sdm`, `fig4c_spue_sdm_maps`, `fig4_spue_sdm_stats.csv` |
+| Table 4 + Fig. 1 (EOV totals; gap-fill, seagrasses) | [`eov`](../vignettes/articles/eov.Rmd) | `calc_eov_totals()`, `compare_eov_totals()`, `obis_taxon_orphans()` | `tab4_eov_totals*.csv`, `fig1_seagrass_before_after` |
+| Fig. 2 (seven EOVs: records, ES50, coverage) | [`eov`](../vignettes/articles/eov.Rmd) | `obis_cell_indicators()`, `gmap_cells()` | `fig2_<eov>.png`, `fig2_es50_all_eovs`, `fig2_eov_*.csv` |
+| Fig. 5 (decadal change) | [`decadal`](../vignettes/articles/decadal.Rmd) | `calc_period_indicators()`, `calc_period_change()` | `fig5a_decadal_summary`, `fig5b_change_<eov>`, `fig5_period_*.csv` |
+| Fig. 6 (place roll-ups) | [`places`](../vignettes/articles/places.Rmd) | `place_cells()`, `calc_place_indicators()` | `fig6_place_es50`, `fig6_places_map`, `fig6_place_indicators.csv` |
+
+## Gallery
+
+| | | |
 |---|---|---|
-| `01_store-stats.qmd` | Table 2 (store), Table 5 (benchmarks) | `obis_store_stats()`, `obis_bench()`, `obis_bench_queries()` |
-| `02_rank-vs-subtree.qmd` | Table 3 | `calc_rank_vs_subtree()`, `obis_rank_presets()` |
-| `03_eov-totals.qmd` | Table 4 + Fig. 1 (gap-fill / seagrasses) | `calc_eov_totals()`, `compare_eov_totals()`, `obis_taxon_orphans()`, `gmap_cells()` |
-| `04_eov-maps.qmd` | Fig. 2 (seven EOVs: records, ES50, coverage) | `obis_cell_indicators()`, `gmap_cells()` |
-| `05_scale-curves.qmd` | Fig. 3 | `calc_scale_curves()`, `calc_spue_scale()`, `plot_scale_curves()` |
-| `06_spue-sdm.qmd` | Fig. 4 | `calc_spue_cells()`, `h3_raster_to_cells()`, `compare_spue_sdm()`, `plot_spue_sdm()` |
-| `07_decadal.qmd` | Fig. 5 | `calc_period_indicators()`, `calc_period_change()` |
-| `08_place-rollups.qmd` | Fig. 6 | `place_cells()`, `calc_place_indicators()` |
+| ![Fig. 1](figures/fig1_seagrass_before_after.png) Fig. 1 seagrasses before/after gap-fill | ![Fig. 2](figures/fig2_es50_all_eovs.png) Fig. 2 ES(50) per EOV | ![Fig. 3a](figures/fig3a_scale_curves.png) Fig. 3a scale curves |
+| ![Fig. 3b](figures/fig3b_spue_scale.png) Fig. 3b SPUE denominator | ![Fig. 4a](figures/fig4a_spue_maps.png) Fig. 4a effort and SPUE | ![Fig. 4b](figures/fig4b_spue_vs_sdm.png) Fig. 4b SPUE vs SDM |
+| ![Fig. 5a](figures/fig5a_decadal_summary.png) Fig. 5a per-decade coverage | ![Fig. 6](figures/fig6_place_es50.png) Fig. 6 ES(50) per place | ![Table 5](figures/tab5_bench.png) Table 5 latency by path |
 
-## Run
+## Regenerate
 
 ```bash
-# 1. point at a store (the global one on the MST server, or a regional demo)
-export OBIS_H3_DUCKDB=~/_big/obis_h3_demo_gulf.duckdb
-#    build the demo (Gulf of Mexico + Caribbean, ~8M records) from a local OBIS
-#    export + WoRMS table; add --fill to close the taxonomy gap via WoRMS REST
-Rscript paper/build_demo_store.R                 # ~10 min
+# 1. a store: the global one on the MST server, or a regional demo built from a
+#    local OBIS export + WoRMS table (Gulf of Mexico + Caribbean, ~8M records;
+#    --fill closes the taxonomy gap via WoRMS REST, giving the "after" store)
+Rscript paper/build_demo_store.R                              # ~10 min -> ~/_big/obis_h3_demo_gulf.duckdb
+Rscript paper/build_demo_store.R ~/_big/obis_h3_demo_gulf_filled.duckdb --fill
 
-# 2. optional inputs
-export SDM_TIF=/path/to/suitability.tif          # 06_spue-sdm.qmd (else skipped)
-export PLACES_GPKG=/path/to/places.gpkg          # 08_place-rollups.qmd (else onmsR sanctuaries / bbox demo)
-export OBIS_H3_DUCKDB_BEFORE=/path/pre-gapfill.duckdb   # 03_eov-totals.qmd before/after
+# 2. inputs
+export OBIS_H3_DUCKDB=~/_big/obis_h3_demo_gulf_filled.duckdb
+export OBIS_H3_DUCKDB_BEFORE=~/_big/obis_h3_demo_gulf.duckdb   # eov: before/after (optional)
+export SDM_TIF=/path/to/suitability.tif                         # taxon_children: SPUE vs SDM (optional)
+export PLACES_GPKG=/path/to/places.gpkg                         # places: else onmsR sanctuaries (optional)
 
-# 3. render one or all
-cd paper && quarto render 05_scale-curves.qmd
-cd paper && quarto render
+# 3. knit the articles (all, or a subset) -> vignettes/articles/*.Rmd + figures/, and paper/figures/
+Rscript data-raw/precompute_articles.R
+Rscript data-raw/precompute_articles.R scaling eov
 ```
 
-Numbers in the manuscript come from the **global** store
+Commit the knitted `.Rmd`, `vignettes/articles/figures/` and `paper/figures/`
+together: pkgdown on GitHub Actions has no store, so it renders the committed
+output as-is. Numbers in the manuscript come from the **global** store
 (`/share/data/obis/obis_h3.duckdb` on the MST server); the demo store is for
-developing figures and for the WG to poke at locally.
+developing figures and for the WG to poke at locally. Each article states which
+store it was rendered against.
