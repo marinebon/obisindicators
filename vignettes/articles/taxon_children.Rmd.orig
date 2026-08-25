@@ -226,7 +226,9 @@ save_fig(p, "fig4a_spue_maps", sp5, width = 12, height = 4.5)
 
 Is presence-only SPUE telling us anything about habitat? Compare it with an
 independent modeled suitability surface for the same species: a GeoTIFF named
-by `SDM_TIF` (here the MarineSensitivity merged AquaMaps/expert-range model).
+by `SDM_TIF` (here the AquaMaps environmental-envelope probability surface for
+the species, 0–100, from the MarineSensitivity marine atlas — a *graded* surface;
+a range mask is constant inside the range and gives no correlation).
 `h3_raster_to_cells()` aggregates the raster to the same H3 cells and
 `compare_spue_sdm()` reports an effort-gated Spearman correlation plus
 calibration bins, at each resolution.
@@ -249,6 +251,9 @@ runs <- lapply(res_set, function(rs) {
   list(res = rs, cmp = compare_spue_sdm(spue, sdm, min_effort = min_eff, n_bins = 5L))
 })
 stats <- bind_rows(lapply(runs, function(x) cbind(res = x$res, x$cmp$stats)))
+if (all(is.na(stats$rho)))
+  message("rho is NA at every resolution: the surface is constant within the effort footprint ",
+          "(a range mask rather than a graded suitability) or too few effort-gated cells overlap it")
 knitr::kable(stats |> mutate(across(where(is.numeric), ~ signif(.x, 3))),
              caption = "SPUE vs. modeled suitability by resolution")
 ```

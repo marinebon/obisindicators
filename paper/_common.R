@@ -33,5 +33,18 @@ save_fig <- function(p, name, data = NULL, width = 9, height = 6, dpi = 200) {
   if (!is.null(data)) save_tab(data, name)
   invisible(p)
 }
-save_tab <- function(data, name)
-  utils::write.csv(data, file.path(dir_fig, paste0(name, ".csv")), row.names = FALSE)
+# per-cell tables from the global store run to 100k+ rows (several MB each), so
+# anything over GZ_ROWS is written gzipped (read back with read.csv() as-is)
+GZ_ROWS <- 20000L
+save_tab <- function(data, name) {
+  f <- file.path(dir_fig, paste0(name, ".csv"))
+  if (nrow(data) > GZ_ROWS) {
+    unlink(f); f <- paste0(f, ".gz")
+    con_gz <- gzfile(f, "w"); on.exit(close(con_gz))
+    utils::write.csv(data, con_gz, row.names = FALSE)
+  } else {
+    unlink(paste0(f, ".gz"))
+    utils::write.csv(data, f, row.names = FALSE)
+  }
+  invisible(f)
+}

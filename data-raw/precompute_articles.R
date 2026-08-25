@@ -6,7 +6,7 @@
 #
 #   export OBIS_H3_DUCKDB=~/_big/obis_h3_demo_gulf_filled.duckdb   # or the global store
 #   export OBIS_H3_DUCKDB_BEFORE=~/_big/obis_h3_demo_gulf.duckdb   # eov: before/after gap-fill (optional)
-#   export SDM_TIF=~/_big/msens/derived/v8/marine-atlas/native/merged/ms_merge_WORMS_137092.tif
+#   export SDM_TIF=~/_big/msens/derived/v8/marine-atlas/native/am/am_ITS-Mam-180530.tif  # humpback, GRADED
 #                                                                   # taxon_children: SPUE vs SDM (optional)
 #   export PLACES_GPKG=/path/to/places.gpkg                         # places: else onmsR sanctuaries (optional)
 #   Rscript data-raw/precompute_articles.R                          # all articles

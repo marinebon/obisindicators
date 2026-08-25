@@ -34,8 +34,8 @@ con <- obis_store_connect()   # the store named by OBIS_H3_DUCKDB
 > **Precomputed.** The store is not available where this documentation is
 > built, so the chunks below were run locally by
 > `data-raw/precompute_articles.R` and their output committed. This render used
-> **obis_h3_demo_gulf_filled.duckdb**, a regional demo store (Gulf of Mexico + Caribbean, see `paper/build_demo_store.R`); before/after comparisons use
-> **obis_h3_demo_gulf.duckdb**.
+> **obis_h3_global_v20260728.duckdb**, the global store; before/after comparisons use
+> **obis_h3_global_hp_v20260717.duckdb**.
 
 ## The definitions
 
@@ -159,15 +159,15 @@ knitr::kable(
 
 Table: Records, species and occupied cells per EOV
 
-|eov           |label          |records   |species |cells  | pct_records|
-|:-------------|:--------------|:---------|:-------|:------|-----------:|
-|fish          |Fish           |5,607,473 |3,874   |82,049 |       67.88|
-|hardCorals    |Hard corals    |347,292   |350     |5,110  |        4.20|
-|mangroves     |Mangroves      |39,291    |9       |70     |        0.48|
-|marineMammals |Marine mammals |125,340   |46      |16,645 |        1.52|
-|seabirds      |Seabirds       |284,620   |251     |17,096 |        3.45|
-|seagrasses    |Seagrasses     |12,875    |14      |381    |        0.16|
-|seaTurtles    |Sea turtles    |29,926    |7       |11,761 |        0.36|
+|eov           |label          |records    |species |cells     | pct_records|
+|:-------------|:--------------|:----------|:-------|:---------|-----------:|
+|fish          |Fish           |49,347,730 |17,766  |740,349   |       38.76|
+|hardCorals    |Hard corals    |973,555    |1,977   |31,520    |        0.76|
+|mangroves     |Mangroves      |89,820     |50      |5,547     |        0.07|
+|marineMammals |Marine mammals |4,855,260  |161     |1,183,783 |        3.81|
+|seabirds      |Seabirds       |23,744,889 |991     |1,750,076 |       18.65|
+|seagrasses    |Seagrasses     |311,078    |88      |12,420    |        0.24|
+|seaTurtles    |Sea turtles    |447,633    |8       |152,272   |        0.35|
 
 
 
@@ -193,13 +193,13 @@ Table: EOV totals before and after the WoRMS gap-fill
 
 |eov           |label          |records_before |records_after |records_delta | records_pct| species_before| species_after| cells_before| cells_after|
 |:-------------|:--------------|:--------------|:-------------|:-------------|-----------:|--------------:|-------------:|------------:|-----------:|
-|fish          |Fish           |5,606,448      |5,607,473     |1,025         |         0.0|           3855|          3874|        81971|       82049|
-|hardCorals    |Hard corals    |346,660        |347,292       |632           |         0.2|            269|           350|         5092|        5110|
-|mangroves     |Mangroves      |39,287         |39,291        |4             |         0.0|              8|             9|           70|          70|
-|marineMammals |Marine mammals |125,340        |125,340       |0             |         0.0|             46|            46|        16645|       16645|
-|seabirds      |Seabirds       |283,605        |284,620       |1,015         |         0.4|            174|           251|        17082|       17096|
-|seagrasses    |Seagrasses     |24             |12,875        |12,851        |     53545.8|              4|            14|            8|         381|
-|seaTurtles    |Sea turtles    |29,926         |29,926        |0             |         0.0|              7|             7|        11761|       11761|
+|fish          |Fish           |49,045,799     |49,347,730    |301,931       |         0.6|          17753|         17766|       738872|      740349|
+|hardCorals    |Hard corals    |962,779        |973,555       |10,776        |         1.1|           1977|          1977|        31414|       31520|
+|mangroves     |Mangroves      |88,688         |89,820        |1,132         |         1.3|             50|            50|         5546|        5547|
+|marineMammals |Marine mammals |4,841,269      |4,855,260     |13,991        |         0.3|            161|           161|      1182402|     1183783|
+|seabirds      |Seabirds       |18,981,099     |23,744,889    |4,763,790     |        25.1|            952|           991|      1338850|     1750076|
+|seagrasses    |Seagrasses     |31,360         |311,078       |279,718       |       892.0|             19|            88|         2849|       12420|
+|seaTurtles    |Sea turtles    |447,497        |447,633       |136           |         0.0|              8|             8|       152220|      152272|
 
 
 
@@ -237,7 +237,7 @@ p
 ## The seven EOVs: records, ES(50) and coverage (Fig. 2)
 
 `obis_cell_indicators()` returns every indicator per cell for an EOV at one
-resolution (H3 4 here, ~1,770
+resolution (H3 3 here, ~12,393
 km² per hexagon), reading the precomputed layer when it can. ES(50) is only
 meaningful where a cell has at least 50 records, so each EOV gets three panels:
 records, ES(50) masked to eligible cells, and the eligible-cell coverage
@@ -260,17 +260,17 @@ knitr::kable(summ |> mutate(frac_eligible = round(frac_eligible, 3), median_es =
 
 
 
-Table: Per-EOV coverage at H3 resolution 4
+Table: Per-EOV coverage at H3 resolution 3
 
-|eov           | cells| records| cells_es_eligible| frac_eligible| median_es|
-|:-------------|-----:|-------:|-----------------:|-------------:|---------:|
-|fish          |  4391| 5607473|              1592|         0.363|     26.09|
-|hardCorals    |   975|  347292|               284|         0.291|     13.15|
-|mangroves     |    31|   39291|                19|         0.613|      2.22|
-|marineMammals |  1902|  125340|               154|         0.081|      2.05|
-|seaTurtles    |  1903|   29926|                73|         0.038|      2.96|
-|seabirds      |  1106|  284620|               173|         0.156|      2.12|
-|seagrasses    |    86|   12875|                24|         0.279|      2.22|
+|eov           | cells|  records| cells_es_eligible| frac_eligible| median_es|
+|:-------------|-----:|--------:|-----------------:|-------------:|---------:|
+|fish          | 21481| 49347730|              7407|         0.345|     21.99|
+|hardCorals    |  3556|   973555|              1006|         0.283|     17.27|
+|mangroves     |   235|    89820|                86|         0.366|      3.84|
+|marineMammals | 18589|  4855260|              4887|         0.263|      2.00|
+|seaTurtles    | 10772|   447633|              1056|         0.098|      1.00|
+|seabirds      | 26361| 23744889|              9196|         0.349|     10.54|
+|seagrasses    |  1133|   311078|               290|         0.256|      4.19|
 
 
 

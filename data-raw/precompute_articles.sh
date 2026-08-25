@@ -18,7 +18,8 @@
 #   OBIS_H3_DUCKDB         the store; default = the deployed symlink, RESOLVED so the
 #                          article label carries the versioned file name
 #   OBIS_H3_DUCKDB_BEFORE  pre-gap-fill store for the eov before/after comparison
-#   SDM_TIF                humpback whale merged SDM raster for taxon_children (Fig. 4)
+#   SDM_TIF                humpback whale AquaMaps suitability raster for taxon_children (Fig. 4);
+#                          must be GRADED (the ms_merge range mask is constant -> rho = NA)
 #   PLACES_GPKG            polygons for places (default: onmsR::sanctuaries)
 set -euo pipefail
 
@@ -26,7 +27,7 @@ PKG_ROOT="${PKG_ROOT:-/share/github/marinebon/obisindicators}"
 LOG_DIR="${LOG_DIR:-/share/data/obis_eov_work}"
 STORE="${OBIS_H3_DUCKDB:-$(readlink -f /share/data/obis/obis_h3.duckdb)}"
 BEFORE="${OBIS_H3_DUCKDB_BEFORE:-/share/data/obis/obis_h3_global_hp_v20260717.duckdb}"
-SDM="${SDM_TIF:-/share/data/derived/v8/marine-atlas/native/merged/ms_merge_WORMS_137092.tif}"
+SDM="${SDM_TIF:-/share/data/derived/v8/marine-atlas/native/am/am_ITS-Mam-180530.tif}"
 PLACES="${PLACES_GPKG:-}"
 
 command -v docker >/dev/null || { echo "docker not on PATH — run on the HOST" >&2; exit 1; }

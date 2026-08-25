@@ -6,7 +6,8 @@ Every figure and table of the manuscript is produced by one of the
 — by calling exported, tested functions of `obisindicators` (no analysis logic
 lives in the notebooks). Manuscript copies land here in `figures/` as a
 print-resolution PNG plus the CSV behind each plot, so any figure can be
-regenerated from its data.
+regenerated from its data (per-cell tables over 20k rows are written as
+`.csv.gz`; `read.csv()` reads them directly).
 
 | manuscript item | article (rendered · [source](../vignettes/articles)) | functions | output |
 |---|---|---|---|
