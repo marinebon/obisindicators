@@ -1,7 +1,7 @@
 # obisindicators 0.6.1
 
-* **Precomputed store articles: the figures now show on the pkgdown site and on
-  GitHub.** The vignettes that query an `obis_h3` store (`scaling`,
+* **Precomputed store articles: the figures now show on the pkgdown site (and
+  in the `paper/` gallery on GitHub).** The vignettes that query an `obis_h3` store (`scaling`,
   `taxon_children`) rendered code-only (`eval = FALSE`) because the store is not
   available on GitHub Actions. They move to `vignettes/articles/` (pkgdown-only,
   excluded from the package build) as `*.Rmd.orig` sources that
