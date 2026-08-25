@@ -13,6 +13,9 @@
 #
 # then commit vignettes/articles/ + paper/figures/ (or rsync them to a laptop
 # and commit there). Each article states which store it was rendered against.
+# If you commit elsewhere, reset this checkout before the next pull, otherwise the
+# knitted copies here block it:
+#   git checkout -- vignettes paper && git clean -f paper/figures vignettes/articles/figures
 #
 # Env (override to point elsewhere):
 #   OBIS_H3_DUCKDB         the store; default = the deployed symlink, RESOLVED so the
