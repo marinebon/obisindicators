@@ -4,7 +4,8 @@ This article shows how to filter OBIS by **any WoRMS taxon, at any
 rank**, using only the local OBIS snapshot — no calls to the (heavy)
 OBIS web services — and how to turn a higher-order taxon into an
 **observation-effort proxy** for a presence-only
-sightings-per-unit-effort (SPUE) indicator.
+sightings-per-unit-effort (SPUE) indicator. Along the way it produces
+Table 3 and Figure 4 of the OBIS → H3 → EOV manuscript.
 
 It builds on
 [`vignette("h3t")`](https://marinebon.org/obisindicators/articles/h3t.md):
@@ -25,21 +26,27 @@ AphiaID. To support those we walk the full WoRMS hierarchy:
   `taxonRank` from a WoRMS DarwinCore `taxon.txt` into a compact
   `taxon.parquet`.
 - `migrate_add_taxon.R` bakes that into `obis_h3.duckdb` (indexed on
-  `parentNameUsageID`), alongside `occ_h3` / `idx_h3`.
+  `parentNameUsageID`), alongside `occ_h3` / `idx_h3`. The bulk WoRMS
+  download is not a complete cover of the AphiaIDs OBIS carries, so
+  [`obis_taxon_fill_gaps()`](https://marinebon.org/obisindicators/reference/obis_taxon_fill_gaps.md)
+  closes the gap from the WoRMS REST API (see
+  [`vignette("eov")`](https://marinebon.org/obisindicators/articles/eov.md)).
 
 ``` r
 
 library(obisindicators)
+library(dplyr)
+library(ggplot2)
+
+con <- obis_store_connect()   # the store named by OBIS_H3_DUCKDB
 ```
 
-``` r
-
-library(DBI)
-library(duckdb)
-
-con <- dbConnect(duckdb(), "/share/data/obis/obis_h3.duckdb", read_only = TRUE)
-dbExecute(con, "LOAD h3;")
-```
+> **Precomputed.** The store is not available where this documentation
+> is built, so the database chunks below were run locally by
+> `data-raw/precompute_articles.R` and their output committed (the tile
+> maps are live). This render used **obis_h3_demo_gulf_filled.duckdb**,
+> a regional demo store (Gulf of Mexico + Caribbean, see
+> `paper/build_demo_store.R`).
 
 ## Resolve the children of a taxon
 
@@ -52,12 +59,19 @@ rows) this resolves in a fraction of a second.
 
 # Infraorder Cetacea = AphiaID 2688 (a rank that is NOT an occ_h3 column)
 cet <- obis_taxon_children(2688, con)
-nrow(cet)                              # ~1,665 descendant taxa
-table(cet$taxonRank)                   # Species, Genus, Family, ...
+nrow(cet)                              # descendant taxa
+#> [1] 1573
+sort(table(cet$taxonRank), decreasing = TRUE)
+#> 
+#>     Species       Genus  Subspecies      Family   Subfamily    Subgenus 
+#>        1110         207         146          44          29          26 
+#> Superfamily  Infraorder     Variety 
+#>           9           1           1
 
-# Matt Biddle's phytoplankton example: class Bacillariophyceae (diatoms) = 148899
+# class Bacillariophyceae (diatoms) = 148899: a much broader subtree
 dia <- obis_taxon_children(148899, con)
-nrow(dia)                              # ~71,500 descendant taxa
+nrow(dia)
+#> [1] 13015
 ```
 
 The descendant AphiaIDs (`cet$taxonID`) are exactly the set used to
@@ -65,6 +79,63 @@ filter `occ_h3.aphiaid`.
 [`obis_taxon_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_taxon_subtree_sql.md)
 returns that resolution as a standalone read-only `SELECT`, handy for
 the API.
+
+## Rank columns vs. subtrees (Table 3)
+
+Why not just filter on the Darwin Core rank columns? Because the rank a
+name occupies is not stable across taxonomies. A user who filters
+`class = 'Actinopterygii'` gets nothing: WoRMS files Actinopterygii as a
+gigaclass and OBIS’s `class` column carries Teleostei.
+`class = 'Anthozoa'` likewise returns zero (a subphylum in WoRMS; OBIS
+uses Hexacorallia / Octocorallia). The AphiaID subtree is rank-agnostic
+and immune to this.
+[`calc_rank_vs_subtree()`](https://marinebon.org/obisindicators/reference/calc_rank_vs_subtree.md)
+counts each preset group both ways on the base resolution tier of
+`occ_h3`.
+
+``` r
+
+rv <- calc_rank_vs_subtree(con)
+knitr::kable(
+  rv |> mutate(across(c(records_rank, records_tree), ~ format(.x, big.mark = ",")),
+               ratio = round(ratio, 3)),
+  caption = "Records by Darwin Core rank-column filter vs. AphiaID subtree")
+```
+
+| label | rank | name | aphiaid | records_rank | species_rank | records_tree | species_tree | ratio |
+|:---|:---|:---|---:|:---|---:|:---|---:|---:|
+| Seabirds | class | Aves | 1836 | 284,565 | 247 | 284,620 | 251 | 1.000 |
+| Bony fishes | class | Actinopterygii | 10194 | 0 | 0 | 5,564,819 | 3577 | 0.000 |
+| Sharks & rays | class | Elasmobranchii | 10193 | 42,236 | 275 | 42,236 | 275 | 1.000 |
+| Marine mammals | class | Mammalia | 1837 | 125,350 | 44 | 125,350 | 44 | 1.000 |
+| Sea turtles | order | Testudines | 2689 | 29,926 | 6 | 29,932 | 7 | 1.000 |
+| Corals & anemones | class | Anthozoa | 1292 | 592 | 171 | 384,669 | 898 | 0.002 |
+| Mollusks | phylum | Mollusca | 51 | 304,979 | 5972 | 305,116 | 5976 | 1.000 |
+| Crustaceans | class | Malacostraca | 1071 | 844,218 | 3130 | 844,298 | 3134 | 1.000 |
+
+Records by Darwin Core rank-column filter vs. AphiaID subtree {.table
+style="width:100%;"}
+
+``` r
+
+long <- bind_rows(
+  transmute(rv, label, method = "DwC rank column", records = records_rank),
+  transmute(rv, label, method = "AphiaID subtree", records = records_tree))
+p <- ggplot(long, aes(x = reorder(label, -records), y = pmax(records, 0.5), fill = method)) +
+  geom_col(position = position_dodge(width = .8), width = .7) +
+  scale_y_log10(labels = scales::label_comma()) +
+  labs(x = NULL, y = "records (log)", fill = NULL,
+       title = "Records found by rank-column filter vs AphiaID subtree",
+       subtitle = "zero-height bars are groups the rank column cannot express",
+       caption = store_label) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 25, hjust = 1))
+p
+```
+
+![plot of chunk fig-table3](figures/taxon_children-fig-table3-1.png)
+
+plot of chunk fig-table3
 
 ## Map a taxon’s records (any rank)
 
@@ -100,9 +171,23 @@ url <- obis_h3t_url(
   sql       = sql)
 ```
 
+The map below is served live from the deployed tile service (global
+store):
+
+``` r
+
+library(obisindicators)
+```
+
+    ## Warning: replacing previous import 'h3::compact' by 'purrr::compact' when
+    ## loading 'obisindicators'
+
 ``` r
 
 library(mapgl)
+url <- obis_h3t_url(
+  base_url = "h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t",
+  sql      = obis_h3t_sql(indicator = "n", aphiaid = 2688))
 maplibre(center = c(-40, 20), zoom = 1.5) |>
   add_h3t_source(id = "cet", tiles = url) |>
   add_fill_layer(
@@ -129,7 +214,9 @@ whale/dolphin), what fraction of records are the target species?
 builds this as a served tile query (two recursive subtrees: numerator =
 target, denominator = effort).
 [`calc_spue()`](https://marinebon.org/obisindicators/reference/calc_spue.md)
-is the pinned R reference (see `test-spue-parity.R`).
+is the pinned R reference (see `test-spue-parity.R`), and
+[`calc_spue_cells()`](https://marinebon.org/obisindicators/reference/calc_spue_cells.md)
+returns the same per-cell table from a store at a fixed resolution.
 
 ``` r
 
@@ -170,14 +257,15 @@ cat(spue_sql)
 #>        n_num::DOUBLE / NULLIF(n_den, 0) AS value,
 #>        n_den AS n
 #> FROM src
-
-spue_url <- obis_h3t_url(
-  base_url = "h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t",
-  sql      = spue_sql)
 ```
 
 ``` r
 
+library(obisindicators)
+library(mapgl)
+spue_url <- obis_h3t_url(
+  base_url = "h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t",
+  sql      = obis_spue_sql(num_aphiaid = 137111, den_aphiaid = 2688))
 maplibre(center = c(-40, 20), zoom = 1.5) |>
   add_h3t_source(id = "spue", tiles = spue_url) |>
   add_fill_layer(
@@ -195,7 +283,113 @@ class or order is a sensible default, but a survey-defined group
 [`vignette("scaling")`](https://marinebon.org/obisindicators/articles/scaling.md)
 for how the denominator’s sparsity behaves across H3 resolutions.
 
+## SPUE on a map, and against a species distribution model (Fig. 4)
+
+Humpback whale (*Megaptera novaeangliae*, AphiaID 137092) over all
+Cetacea. The effort map is the denominator; the SPUE map is masked to
+cells with at least `min_eff` effort records.
+
 ``` r
 
-dbDisconnect(con, shutdown = TRUE)
+num_id  <- as.integer(Sys.getenv("SPUE_NUM", "137092"))
+den_id  <- as.integer(strsplit(Sys.getenv("SPUE_DEN", "2688"), ",")[[1]])
+min_eff <- as.integer(Sys.getenv("SPUE_MIN_EFFORT", "30"))
+
+sp5 <- calc_spue_cells(con, num_id, den_id, res = 5)
+```
+
+``` r
+
+p1 <- gmap_cells(sp5, "effort", label = "effort records", trans = "log10") +
+  labs(title = "effort (denominator)")
+p2 <- gmap_cells(sp5, "spue", label = "SPUE", mask = sp5$effort >= min_eff) +
+  labs(title = sprintf("SPUE, effort ≥ %d", min_eff))
+p <- patchwork::wrap_plots(p1, p2, ncol = 2) + patchwork::plot_annotation(caption = store_label)
+p
+```
+
+![plot of chunk fig4a](figures/taxon_children-fig4a-1.png)
+
+plot of chunk fig4a
+
+Is presence-only SPUE telling us anything about habitat? Compare it with
+an independent modeled suitability surface for the same species: a
+GeoTIFF named by `SDM_TIF` (here the MarineSensitivity merged
+AquaMaps/expert-range model).
+[`h3_raster_to_cells()`](https://marinebon.org/obisindicators/reference/h3_raster_to_cells.md)
+aggregates the raster to the same H3 cells and
+[`compare_spue_sdm()`](https://marinebon.org/obisindicators/reference/compare_spue_sdm.md)
+reports an effort-gated Spearman correlation plus calibration bins, at
+each resolution.
+
+``` r
+
+sdm_tif <- Sys.getenv("SDM_TIF")
+has_sdm <- nzchar(sdm_tif) && file.exists(sdm_tif)
+if (!has_sdm) message("set SDM_TIF to run the comparison; skipped")
+```
+
+``` r
+
+r  <- terra::rast(sdm_tif)
+# crop to the effort footprint (a global 0.05-degree raster is 26M pixels)
+bb <- sf::st_bbox(hex_sf(sp5$cell))
+r  <- terra::crop(r, terra::ext(bb[["xmin"]] - 1, bb[["xmax"]] + 1, bb[["ymin"]] - 1, bb[["ymax"]] + 1))
+res_set <- c(3L, 5L, 7L)
+runs <- lapply(res_set, function(rs) {
+  spue <- calc_spue_cells(con, num_id, den_id, res = rs)
+  sdm  <- h3_raster_to_cells(r, rs, cells = spue$cell)
+  list(res = rs, cmp = compare_spue_sdm(spue, sdm, min_effort = min_eff, n_bins = 5L))
+})
+stats <- bind_rows(lapply(runs, function(x) cbind(res = x$res, x$cmp$stats)))
+knitr::kable(stats |> mutate(across(where(is.numeric), ~ signif(.x, 3))),
+             caption = "SPUE vs. modeled suitability by resolution")
+```
+
+| res | n_cells | rho | p_value | frac_present |
+|----:|--------:|----:|--------:|-------------:|
+|   3 |     139 |  NA |      NA |        0.439 |
+|   5 |     190 |  NA |      NA |        0.200 |
+|   7 |     153 |  NA |      NA |        0.144 |
+
+SPUE vs. modeled suitability by resolution {.table}
+
+``` r
+
+p_rho <- ggplot(stats, aes(x = res, y = rho)) + geom_line() + geom_point(aes(size = n_cells)) +
+  scale_x_continuous(breaks = res_set) +
+  labs(x = "H3 resolution", y = "Spearman rho (SPUE vs model)", size = "cells",
+       title = "Agreement by resolution") + theme_minimal(base_size = 11)
+p_cal <- plot_spue_sdm(runs[[2]]$cmp) + labs(title = "Calibration at res 5")
+p <- patchwork::wrap_plots(p_rho, p_cal, ncol = 2) + patchwork::plot_annotation(caption = store_label)
+p
+```
+
+![plot of chunk fig4b](figures/taxon_children-fig4b-1.png)
+
+plot of chunk fig4b
+
+``` r
+
+sdm5 <- h3_raster_to_cells(r, 5, cells = sp5$cell)
+p2 <- patchwork::wrap_plots(
+  gmap_cells(sp5, "spue", label = "SPUE", mask = sp5$effort >= min_eff) + labs(title = "observed SPUE"),
+  gmap_cells(sdm5, "value", label = "suitability") + labs(title = "modeled suitability"),
+  ncol = 2) + patchwork::plot_annotation(caption = store_label)
+p2
+```
+
+![plot of chunk fig4c](figures/taxon_children-fig4c-1.png)
+
+plot of chunk fig4c
+
+On a regional demo store the effort-gated cell count is small and
+agreement is weak; the point of the comparison is the *method* — the
+same effort gate that makes SPUE trustworthy also decides how many cells
+can be compared at all, and that number falls with resolution (see
+[`vignette("scaling")`](https://marinebon.org/obisindicators/articles/scaling.md)).
+
+``` r
+
+DBI::dbDisconnect(con, shutdown = TRUE)
 ```

@@ -1,7 +1,24 @@
 # Changelog
 
-## obisindicators 0.6.0
+## obisindicators 0.6.1
 
+- **Precomputed store articles: the figures now show on the pkgdown site
+  and on GitHub.** The vignettes that query an `obis_h3` store
+  (`scaling`, `taxon_children`) rendered code-only (`eval = FALSE`)
+  because the store is not available on GitHub Actions. They move to
+  `vignettes/articles/` (pkgdown-only, excluded from the package build)
+  as `*.Rmd.orig` sources that `data-raw/precompute_articles.R` knits
+  locally against a store into committed `*.Rmd` + `figures/`; CI
+  renders those as-is. The tile maps stay live.
+  - The `paper/` Quarto notebooks are folded into the articles, which
+    now double as the manuscript’s figure notebooks: `scaling` (Tables
+    2, 5; Fig. 3), `taxon_children` (Table 3; Fig. 4), and new articles
+    `eov` (Table 4; Figs. 1–2), `decadal` (Fig. 5) and `places` (Fig.
+    6). Each article saves its manuscript figure + CSV to
+    `paper/figures/` (now committed) via `paper/_common.R`;
+    `paper/README.md` is the figure gallery and index.
+  - Site navigation: articles are grouped into “Shipped data” and “The
+    obis_h3 store”. No changes to exported functions.
 - **Analysis-side helpers for the paper’s figures and case studies** —
   the tile-SQL builders now have data-frame counterparts, so every
   figure in `paper/` is a call to a tested, exported function rather
@@ -66,7 +83,8 @@
     [`plot_scale_curves()`](https://marinebon.org/obisindicators/reference/plot_scale_curves.md),
     [`plot_spue_sdm()`](https://marinebon.org/obisindicators/reference/plot_spue_sdm.md);
     [`gmap_indicator()`](https://marinebon.org/obisindicators/reference/gmap_indicator.md)
-    gains a `bbox` argument and drops the deprecated `aes_string()`.
+    gains a `bbox` argument and drops the deprecated
+    [`aes_string()`](https://ggplot2.tidyverse.org/reference/aes_.html).
   - Tests: `tests/testthat/test-paper-helpers.R` on a new synthetic
     fixture (`helper-paper.R`: turtles + birds with DwC ranks and years,
     baked `idx_h3` and `idx_h3_eov`) asserts exact values for every
@@ -147,11 +165,10 @@
   chunks that 0.4.1 still left as code-only):
   - [`vignette("h3t")`](https://marinebon.org/obisindicators/articles/h3t.md)
     renders the interactive ES50 hexagon map;
-    [`vignette("taxon_children")`](https://marinebon.org/obisindicators/articles/taxon_children.md)
-    renders the Cetacea-records map and the SPUE map. These are
-    client-side MapLibre widgets — tiles are fetched from the deployed
-    `h3t` service in the reader’s browser, so they need no store/S3 at
-    build time.
+    `vignette("taxon_children")` renders the Cetacea-records map and the
+    SPUE map. These are client-side MapLibre widgets — tiles are fetched
+    from the deployed `h3t` service in the reader’s browser, so they
+    need no store/S3 at build time.
   - **New Remote dependency**: the maps require the h3t-antimeridian fix
     in `mapgl` (renders H3 hexagons that cross the dateline), pinned via
     `Remotes: mapgl=bbest/mapgl@fix/h3t-antimeridian`
@@ -160,9 +177,9 @@
   - Fixed a latent bug in the `h3t` map example — `interpolate(values=)`
     now has the same length as `stops=` (a 3-stop viridis ramp), which
     previously would have errored had the chunk been evaluated.
-  - [`vignette("scaling")`](https://marinebon.org/obisindicators/articles/scaling.md)
-    stays code-only: every chunk runs live benchmark queries against the
-    deployed DuckDB store (no map widgets), which CI cannot reach.
+  - `vignette("scaling")` stays code-only: every chunk runs live
+    benchmark queries against the deployed DuckDB store (no map
+    widgets), which CI cannot reach.
 
 ## obisindicators 0.4.1
 
@@ -175,9 +192,9 @@
     [`gmap_indicator()`](https://marinebon.org/obisindicators/reference/gmap_indicator.md)
     pipeline on shipped `occ_1M` and renders the ES(50) map (only the
     `deckgl` install/demo stays code-only).
-  - [`vignette("taxon_children")`](https://marinebon.org/obisindicators/articles/taxon_children.md)
-    now renders the generated `WITH RECURSIVE` tile SQL and tile URLs
-    from `obis_h3t_sql(aphiaid=)` /
+  - `vignette("taxon_children")` now renders the generated
+    `WITH RECURSIVE` tile SQL and tile URLs from
+    `obis_h3t_sql(aphiaid=)` /
     [`obis_spue_sql()`](https://marinebon.org/obisindicators/reference/obis_spue_sql.md)
     (pure builders, no store needed); only the DB-connection and `mapgl`
     widget chunks stay code-only.
@@ -186,10 +203,8 @@
     [`obis_h3t_sql()`](https://marinebon.org/obisindicators/reference/obis_h3t_sql.md)
     output is clean.
   - Chunks that genuinely require the deployed S3 / DuckDB store / `h3t`
-    tile service
-    ([`vignette("scaling")`](https://marinebon.org/obisindicators/articles/scaling.md),
-    the build/deploy/map chunks) remain illustrative code, as they
-    cannot run in CI.
+    tile service (`vignette("scaling")`, the build/deploy/map chunks)
+    remain illustrative code, as they cannot run in CI.
 
 ## obisindicators 0.4.0
 
@@ -250,9 +265,8 @@
 
 - Added **WoRMS taxonomy children resolution** and an **effort proxy
   (SPUE)** so OBIS can be filtered by any WoRMS AphiaID at any rank from
-  the local snapshot (see
-  [`vignette("taxon_children")`](https://marinebon.org/obisindicators/articles/taxon_children.md),
-  [`vignette("scaling")`](https://marinebon.org/obisindicators/articles/scaling.md)):
+  the local snapshot (see `vignette("taxon_children")`,
+  `vignette("scaling")`):
   - [`obis_taxon_children()`](https://marinebon.org/obisindicators/reference/obis_taxon_children.md)
     /
     [`obis_taxon_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_taxon_subtree_sql.md)

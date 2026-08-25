@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -19,13 +19,20 @@
 <li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/regional_diversity.html">Regional Diversity</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Shipped data</h6></li>
+    <li><a class="dropdown-item" href="../articles/regional_diversity.html">Regional Diversity</a></li>
     <li><a class="dropdown-item" href="../articles/resolution.html">resolution</a></li>
     <li><a class="dropdown-item" href="../articles/temporal_subsets.html">Temporal Subsets</a></li>
     <li><a class="dropdown-item" href="../articles/h3.html">H3 grids and deckgl</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>The obis_h3 store</h6></li>
     <li><a class="dropdown-item" href="../articles/h3t.html">Serving OBIS indicators as H3 hexagon tiles (h3t)</a></li>
     <li><a class="dropdown-item" href="../articles/taxon_children.html">Children taxa &amp; an effort proxy (SPUE) from the OBIS snapshot</a></li>
     <li><a class="dropdown-item" href="../articles/scaling.html">Scaling OBIS observations across H3 resolutions</a></li>
+    <li><a class="dropdown-item" href="../articles/eov.html">Essential Ocean Variables from the OBIS store</a></li>
+    <li><a class="dropdown-item" href="../articles/decadal.html">Decadal change in ES(50) per EOV</a></li>
+    <li><a class="dropdown-item" href="../articles/places.html">Rolling hexagons up to places</a></li>
   </ul></li>
 <li class="active nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -44,15 +51,20 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.6.0" id="obisindicators-060">obisindicators 0.6.0<a class="anchor" aria-label="anchor" href="#obisindicators-060"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.6.1" id="obisindicators-061">obisindicators 0.6.1<a class="anchor" aria-label="anchor" href="#obisindicators-061"></a></h2>
 <ul><li>
+<strong>Precomputed store articles: the figures now show on the pkgdown site and on GitHub.</strong> The vignettes that query an <code>obis_h3</code> store (<code>scaling</code>, <code>taxon_children</code>) rendered code-only (<code>eval = FALSE</code>) because the store is not available on GitHub Actions. They move to <code>vignettes/articles/</code> (pkgdown-only, excluded from the package build) as <code>*.Rmd.orig</code> sources that <code>data-raw/precompute_articles.R</code> knits locally against a store into committed <code>*.Rmd</code> + <code>figures/</code>; CI renders those as-is. The tile maps stay live.
+<ul><li>The <code>paper/</code> Quarto notebooks are folded into the articles, which now double as the manuscript’s figure notebooks: <code>scaling</code> (Tables 2, 5; Fig. 3), <code>taxon_children</code> (Table 3; Fig. 4), and new articles <code>eov</code> (Table 4; Figs. 1–2), <code>decadal</code> (Fig. 5) and <code>places</code> (Fig. 6). Each article saves its manuscript figure + CSV to <code>paper/figures/</code> (now committed) via <code>paper/_common.R</code>; <code>paper/README.md</code> is the figure gallery and index.</li>
+<li>Site navigation: articles are grouped into “Shipped data” and “The obis_h3 store”. No changes to exported functions.</li>
+</ul></li>
+<li>
 <strong>Analysis-side helpers for the paper’s figures and case studies</strong> — the tile-SQL builders now have data-frame counterparts, so every figure in <code>paper/</code> is a call to a tested, exported function rather than notebook code. No new indicator math: everything runs the SQL already pinned to <code><a href="../reference/calc_indicators.html">calc_indicators()</a></code> / <code><a href="../reference/calc_spue.html">calc_spue()</a></code>, or calls those references directly.
 <ul><li>Store (<code>R/store.R</code>): <code><a href="../reference/obis_store_connect.html">obis_store_connect()</a></code> (read-only + <code>LOAD h3</code>), <code><a href="../reference/obis_store_stats.html">obis_store_stats()</a></code> (tables, totals, cells by resolution — Table 2), <code><a href="../reference/obis_h3t_query.html">obis_h3t_query()</a></code> (run any tile SQL at a fixed resolution, keyed on the hex string), <code><a href="../reference/obis_cell_indicators.html">obis_cell_indicators()</a></code> (n/sp/shannon/es per cell for any filter, reading <code>idx_h3</code> / <code>idx_h3_eov</code> when it can), <code><a href="../reference/obis_bench.html">obis_bench()</a></code> + <code><a href="../reference/obis_bench_queries.html">obis_bench_queries()</a></code> (cold/warm timings of the four serving paths), <code><a href="../reference/h3_res_table.html">h3_res_table()</a></code>.</li>
 <li>Scale (<code>R/scale.R</code>): <code><a href="../reference/calc_scale_curves.html">calc_scale_curves()</a></code> and <code><a href="../reference/calc_spue_scale.html">calc_spue_scale()</a></code> — occupied cells, records-per-cell quantiles, ES-eligible fraction, medians and reliability floors across H3 resolutions (Fig. 3).</li>
 <li>Comparisons (<code>R/compare.R</code>): <code><a href="../reference/calc_rank_vs_subtree.html">calc_rank_vs_subtree()</a></code> + <code><a href="../reference/obis_rank_presets.html">obis_rank_presets()</a></code> (records by DwC rank column vs AphiaID subtree — Table 3), <code><a href="../reference/calc_eov_totals.html">calc_eov_totals()</a></code> + <code><a href="../reference/compare_eov_totals.html">compare_eov_totals()</a></code> (per-EOV totals and before/after a taxonomy change — Table 4), <code><a href="../reference/calc_spue_cells.html">calc_spue_cells()</a></code>, <code><a href="../reference/h3_raster_to_cells.html">h3_raster_to_cells()</a></code> (aggregate an SDM raster to H3 by pixel centres or hexagon centroids) and <code><a href="../reference/compare_spue_sdm.html">compare_spue_sdm()</a></code> (Spearman + calibration bins, effort-gated — Fig. 4).</li>
 <li>Periods (<code>R/temporal.R</code>): <code><a href="../reference/calc_period_indicators.html">calc_period_indicators()</a></code> and <code><a href="../reference/calc_period_change.html">calc_period_change()</a></code> (decadal ES50/richness per cell, change where both decades are reliable — Fig. 5).</li>
 <li>Places (<code>R/place.R</code>): <code><a href="../reference/place_cells.html">place_cells()</a></code> and <code><a href="../reference/calc_place_indicators.html">calc_place_indicators()</a></code> (roll H3 cells up to sanctuary/EEZ polygons and compute indicators with <code><a href="../reference/calc_indicators.html">calc_indicators()</a></code> — Fig. 6).</li>
-<li>Visualize (<code>R/visualize.R</code>): <code><a href="../reference/hex_sf.html">hex_sf()</a></code> (cells → dateline-wrapped polygons), <code><a href="../reference/gmap_cells.html">gmap_cells()</a></code> (map a per-cell table with an optional reliability mask), <code><a href="../reference/plot_scale_curves.html">plot_scale_curves()</a></code>, <code><a href="../reference/plot_spue_sdm.html">plot_spue_sdm()</a></code>; <code><a href="../reference/gmap_indicator.html">gmap_indicator()</a></code> gains a <code>bbox</code> argument and drops the deprecated <code>aes_string()</code>.</li>
+<li>Visualize (<code>R/visualize.R</code>): <code><a href="../reference/hex_sf.html">hex_sf()</a></code> (cells → dateline-wrapped polygons), <code><a href="../reference/gmap_cells.html">gmap_cells()</a></code> (map a per-cell table with an optional reliability mask), <code><a href="../reference/plot_scale_curves.html">plot_scale_curves()</a></code>, <code><a href="../reference/plot_spue_sdm.html">plot_spue_sdm()</a></code>; <code><a href="../reference/gmap_indicator.html">gmap_indicator()</a></code> gains a <code>bbox</code> argument and drops the deprecated <code><a href="https://ggplot2.tidyverse.org/reference/aes_.html" class="external-link">aes_string()</a></code>.</li>
 <li>Tests: <code>tests/testthat/test-paper-helpers.R</code> on a new synthetic fixture (<code>helper-paper.R</code>: turtles + birds with DwC ranks and years, baked <code>idx_h3</code> and <code>idx_h3_eov</code>) asserts exact values for every helper, including precomputed-vs-live agreement of <code><a href="../reference/obis_cell_indicators.html">obis_cell_indicators()</a></code>.</li>
 <li>
 <code>paper/</code>: Quarto notebooks, one per figure/table (store stats + benchmarks, rank vs subtree, gap-fill EOV totals, EOV maps, scale curves, SPUE vs SDM, decadal change, place roll-ups), driven by <code>OBIS_H3_DUCKDB</code>; plus <code>paper/build_demo_store.R</code> to build a regional demo store (Gulf of Mexico + Caribbean) from a local OBIS export and a WoRMS table.</li>
@@ -90,12 +102,12 @@
 <ul><li>
 <strong>Vignette H3 tile maps now actually render</strong> (the <code>mapgl</code>/MapLibre chunks that 0.4.1 still left as code-only):
 <ul><li>
-<code><a href="../articles/h3t.html">vignette("h3t")</a></code> renders the interactive ES50 hexagon map; <code><a href="../articles/taxon_children.html">vignette("taxon_children")</a></code> renders the Cetacea-records map and the SPUE map. These are client-side MapLibre widgets — tiles are fetched from the deployed <code>h3t</code> service in the reader’s browser, so they need no store/S3 at build time.</li>
+<code><a href="../articles/h3t.html">vignette("h3t")</a></code> renders the interactive ES50 hexagon map; <code>vignette("taxon_children")</code> renders the Cetacea-records map and the SPUE map. These are client-side MapLibre widgets — tiles are fetched from the deployed <code>h3t</code> service in the reader’s browser, so they need no store/S3 at build time.</li>
 <li>
 <strong>New Remote dependency</strong>: the maps require the h3t-antimeridian fix in <code>mapgl</code> (renders H3 hexagons that cross the dateline), pinned via <code>Remotes: mapgl=bbest/mapgl@fix/h3t-antimeridian</code> (<a href="https://github.com/walkerke/mapgl/pull/211" class="external-link">walkerke/mapgl#211</a>). Switch to upstream <code>mapgl</code> once that PR merges.</li>
 <li>Fixed a latent bug in the <code>h3t</code> map example — <code>interpolate(values=)</code> now has the same length as <code>stops=</code> (a 3-stop viridis ramp), which previously would have errored had the chunk been evaluated.</li>
 <li>
-<code><a href="../articles/scaling.html">vignette("scaling")</a></code> stays code-only: every chunk runs live benchmark queries against the deployed DuckDB store (no map widgets), which CI cannot reach.</li>
+<code>vignette("scaling")</code> stays code-only: every chunk runs live benchmark queries against the deployed DuckDB store (no map widgets), which CI cannot reach.</li>
 </ul></li>
 </ul></div>
     <div class="section level2">
@@ -105,10 +117,10 @@
 <ul><li>
 <code><a href="../articles/h3.html">vignette("h3")</a></code> runs the full h3-grid → <code><a href="../reference/calc_indicators.html">calc_indicators()</a></code> → <code><a href="../reference/gmap_indicator.html">gmap_indicator()</a></code> pipeline on shipped <code>occ_1M</code> and renders the ES(50) map (only the <code>deckgl</code> install/demo stays code-only).</li>
 <li>
-<code><a href="../articles/taxon_children.html">vignette("taxon_children")</a></code> now renders the generated <code>WITH RECURSIVE</code> tile SQL and tile URLs from <code>obis_h3t_sql(aphiaid=)</code> / <code><a href="../reference/obis_spue_sql.html">obis_spue_sql()</a></code> (pure builders, no store needed); only the DB-connection and <code>mapgl</code> widget chunks stay code-only.</li>
+<code>vignette("taxon_children")</code> now renders the generated <code>WITH RECURSIVE</code> tile SQL and tile URLs from <code>obis_h3t_sql(aphiaid=)</code> / <code><a href="../reference/obis_spue_sql.html">obis_spue_sql()</a></code> (pure builders, no store needed); only the DB-connection and <code>mapgl</code> widget chunks stay code-only.</li>
 <li>
 <code><a href="../articles/h3t.html">vignette("h3t")</a></code> suppresses package-load messages so the evaluated <code><a href="../reference/obis_h3t_sql.html">obis_h3t_sql()</a></code> output is clean.</li>
-<li>Chunks that genuinely require the deployed S3 / DuckDB store / <code>h3t</code> tile service (<code><a href="../articles/scaling.html">vignette("scaling")</a></code>, the build/deploy/map chunks) remain illustrative code, as they cannot run in CI.</li>
+<li>Chunks that genuinely require the deployed S3 / DuckDB store / <code>h3t</code> tile service (<code>vignette("scaling")</code>, the build/deploy/map chunks) remain illustrative code, as they cannot run in CI.</li>
 </ul></li>
 </ul></div>
     <div class="section level2">
@@ -135,7 +147,7 @@
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.0" id="obisindicators-020">obisindicators 0.2.0<a class="anchor" aria-label="anchor" href="#obisindicators-020"></a></h2>
-<ul><li>Added <strong>WoRMS taxonomy children resolution</strong> and an <strong>effort proxy (SPUE)</strong> so OBIS can be filtered by any WoRMS AphiaID at any rank from the local snapshot (see <code><a href="../articles/taxon_children.html">vignette("taxon_children")</a></code>, <code><a href="../articles/scaling.html">vignette("scaling")</a></code>):
+<ul><li>Added <strong>WoRMS taxonomy children resolution</strong> and an <strong>effort proxy (SPUE)</strong> so OBIS can be filtered by any WoRMS AphiaID at any rank from the local snapshot (see <code>vignette("taxon_children")</code>, <code>vignette("scaling")</code>):
 <ul><li>
 <code><a href="../reference/obis_taxon_children.html">obis_taxon_children()</a></code> / <code><a href="../reference/obis_taxon_subtree_sql.html">obis_taxon_subtree_sql()</a></code> recursively walk a <code>taxon</code> table (baked into the store; <code>data-raw/build_taxon_parquet.R</code> + <code>data-raw/migrate_add_taxon.R</code>) to return every descendant taxon.</li>
 <li>

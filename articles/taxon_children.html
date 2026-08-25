@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,13 +34,20 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/regional_diversity.html">Regional Diversity</a></li>
+<li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Shipped data</h6></li>
+    <li><a class="dropdown-item" href="../articles/regional_diversity.html">Regional Diversity</a></li>
     <li><a class="dropdown-item" href="../articles/resolution.html">resolution</a></li>
     <li><a class="dropdown-item" href="../articles/temporal_subsets.html">Temporal Subsets</a></li>
     <li><a class="dropdown-item" href="../articles/h3.html">H3 grids and deckgl</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>The obis_h3 store</h6></li>
     <li><a class="dropdown-item" href="../articles/h3t.html">Serving OBIS indicators as H3 hexagon tiles (h3t)</a></li>
     <li><a class="dropdown-item" href="../articles/taxon_children.html">Children taxa &amp; an effort proxy (SPUE) from the OBIS snapshot</a></li>
     <li><a class="dropdown-item" href="../articles/scaling.html">Scaling OBIS observations across H3 resolutions</a></li>
+    <li><a class="dropdown-item" href="../articles/eov.html">Essential Ocean Variables from the OBIS store</a></li>
+    <li><a class="dropdown-item" href="../articles/decadal.html">Decadal change in ES(50) per EOV</a></li>
+    <li><a class="dropdown-item" href="../articles/places.html">Rolling hexagons up to places</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -72,7 +79,7 @@
       <h1>Children taxa &amp; an effort proxy (SPUE) from the OBIS snapshot</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/marinebon/obisindicators/blob/main/vignettes/taxon_children.Rmd" class="external-link"><code>vignettes/taxon_children.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/marinebon/obisindicators/blob/main/vignettes/articles/taxon_children.Rmd" class="external-link"><code>vignettes/articles/taxon_children.Rmd</code></a></small>
       <div class="d-none name"><code>taxon_children.Rmd</code></div>
     </div>
 
@@ -82,7 +89,8 @@
 any rank</strong>, using only the local OBIS snapshot — no calls to the
 (heavy) OBIS web services — and how to turn a higher-order taxon into an
 <strong>observation-effort proxy</strong> for a presence-only
-sightings-per-unit-effort (SPUE) indicator.</p>
+sightings-per-unit-effort (SPUE) indicator. Along the way it produces
+Table 3 and Figure 4 of the OBIS → H3 → EOV manuscript.</p>
 <p>It builds on <a href="h3t.html"><code>vignette("h3t")</code></a>: the
 same <code>occ_h3</code> species-level store, plus a baked
 <strong><code>taxon</code></strong> table (the WoRMS taxonomy) that lets
@@ -107,16 +115,26 @@ into a compact <code>taxon.parquet</code>.</li>
 <li>
 <code>migrate_add_taxon.R</code> bakes that into
 <code>obis_h3.duckdb</code> (indexed on <code>parentNameUsageID</code>),
-alongside <code>occ_h3</code> / <code>idx_h3</code>.</li>
+alongside <code>occ_h3</code> / <code>idx_h3</code>. The bulk WoRMS
+download is not a complete cover of the AphiaIDs OBIS carries, so
+<code><a href="../reference/obis_taxon_fill_gaps.html">obis_taxon_fill_gaps()</a></code> closes the gap from the WoRMS REST
+API (see <a href="eov.html"><code>vignette("eov")</code></a>).</li>
 </ul>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators">obisindicators</a></span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dbi.r-dbi.org" class="external-link">DBI</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r.duckdb.org/" class="external-link">duckdb</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators">obisindicators</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">con</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dbi.r-dbi.org/reference/dbConnect.html" class="external-link">dbConnect</a></span><span class="op">(</span><span class="fu"><a href="https://r.duckdb.org/reference/duckdb.html" class="external-link">duckdb</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"/share/data/obis/obis_h3.duckdb"</span>, read_only <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://dbi.r-dbi.org/reference/dbExecute.html" class="external-link">dbExecute</a></span><span class="op">(</span><span class="va">con</span>, <span class="st">"LOAD h3;"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">con</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_store_connect.html">obis_store_connect</a></span><span class="op">(</span><span class="op">)</span>   <span class="co"># the store named by OBIS_H3_DUCKDB</span></span></code></pre></div>
+<blockquote>
+<p><strong>Precomputed.</strong> The store is not available where this
+documentation is built, so the database chunks below were run locally by
+<code>data-raw/precompute_articles.R</code> and their output committed
+(the tile maps are live). This render used
+<strong>obis_h3_demo_gulf_filled.duckdb</strong>, a regional demo store
+(Gulf of Mexico + Caribbean, see
+<code>paper/build_demo_store.R</code>).</p>
+</blockquote>
 </div>
 <div class="section level2">
 <h2 id="resolve-the-children-of-a-taxon">Resolve the children of a taxon<a class="anchor" aria-label="anchor" href="#resolve-the-children-of-a-taxon"></a>
@@ -125,19 +143,180 @@ alongside <code>occ_h3</code> / <code>idx_h3</code>.</li>
 descendant, at any rank, via a recursive walk of
 <code>parentNameUsageID</code>. On the full WoRMS table (~1.5 M rows)
 this resolves in a fraction of a second.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Infraorder Cetacea = AphiaID 2688 (a rank that is NOT an occ_h3 column)</span></span>
 <span><span class="va">cet</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_taxon_children.html">obis_taxon_children</a></span><span class="op">(</span><span class="fl">2688</span>, <span class="va">con</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">cet</span><span class="op">)</span>                              <span class="co"># ~1,665 descendant taxa</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">cet</span><span class="op">$</span><span class="va">taxonRank</span><span class="op">)</span>                   <span class="co"># Species, Genus, Family, ...</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">cet</span><span class="op">)</span>                              <span class="co"># descendant taxa</span></span>
+<span><span class="co">#&gt; [1] 1573</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">cet</span><span class="op">$</span><span class="va">taxonRank</span><span class="op">)</span>, decreasing <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt;     Species       Genus  Subspecies      Family   Subfamily    Subgenus </span></span>
+<span><span class="co">#&gt;        1110         207         146          44          29          26 </span></span>
+<span><span class="co">#&gt; Superfamily  Infraorder     Variety </span></span>
+<span><span class="co">#&gt;           9           1           1</span></span>
 <span></span>
-<span><span class="co"># Matt Biddle's phytoplankton example: class Bacillariophyceae (diatoms) = 148899</span></span>
+<span><span class="co"># class Bacillariophyceae (diatoms) = 148899: a much broader subtree</span></span>
 <span><span class="va">dia</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_taxon_children.html">obis_taxon_children</a></span><span class="op">(</span><span class="fl">148899</span>, <span class="va">con</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dia</span><span class="op">)</span>                              <span class="co"># ~71,500 descendant taxa</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dia</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 13015</span></span></code></pre></div>
 <p>The descendant AphiaIDs (<code>cet$taxonID</code>) are exactly the
 set used to filter <code>occ_h3.aphiaid</code>.
 <code><a href="../reference/obis_taxon_subtree_sql.html">obis_taxon_subtree_sql()</a></code> returns that resolution as a
 standalone read-only <code>SELECT</code>, handy for the API.</p>
+</div>
+<div class="section level2">
+<h2 id="rank-columns-vs--subtrees-table-3">Rank columns vs. subtrees (Table 3)<a class="anchor" aria-label="anchor" href="#rank-columns-vs--subtrees-table-3"></a>
+</h2>
+<p>Why not just filter on the Darwin Core rank columns? Because the rank
+a name occupies is not stable across taxonomies. A user who filters
+<code>class = 'Actinopterygii'</code> gets nothing: WoRMS files
+Actinopterygii as a gigaclass and OBIS’s <code>class</code> column
+carries Teleostei. <code>class = 'Anthozoa'</code> likewise returns zero
+(a subphylum in WoRMS; OBIS uses Hexacorallia / Octocorallia). The
+AphiaID subtree is rank-agnostic and immune to this.
+<code><a href="../reference/calc_rank_vs_subtree.html">calc_rank_vs_subtree()</a></code> counts each preset group both ways
+on the base resolution tier of <code>occ_h3</code>.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">rv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_rank_vs_subtree.html">calc_rank_vs_subtree</a></span><span class="op">(</span><span class="va">con</span><span class="op">)</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
+<span>  <span class="va">rv</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">records_rank</span>, <span class="va">records_tree</span><span class="op">)</span>, <span class="op">~</span> <span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="va">.x</span>, big.mark <span class="op">=</span> <span class="st">","</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>               ratio <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">ratio</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  caption <span class="op">=</span> <span class="st">"Records by Darwin Core rank-column filter vs. AphiaID subtree"</span><span class="op">)</span></span></code></pre></div>
+<table style="width:100%;" class="table">
+<caption>Records by Darwin Core rank-column filter vs. AphiaID
+subtree</caption>
+<colgroup>
+<col width="16%">
+<col width="6%">
+<col width="14%">
+<col width="7%">
+<col width="12%">
+<col width="12%">
+<col width="12%">
+<col width="12%">
+<col width="5%">
+</colgroup>
+<thead><tr class="header">
+<th align="left">label</th>
+<th align="left">rank</th>
+<th align="left">name</th>
+<th align="right">aphiaid</th>
+<th align="left">records_rank</th>
+<th align="right">species_rank</th>
+<th align="left">records_tree</th>
+<th align="right">species_tree</th>
+<th align="right">ratio</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">Seabirds</td>
+<td align="left">class</td>
+<td align="left">Aves</td>
+<td align="right">1836</td>
+<td align="left">284,565</td>
+<td align="right">247</td>
+<td align="left">284,620</td>
+<td align="right">251</td>
+<td align="right">1.000</td>
+</tr>
+<tr class="even">
+<td align="left">Bony fishes</td>
+<td align="left">class</td>
+<td align="left">Actinopterygii</td>
+<td align="right">10194</td>
+<td align="left">0</td>
+<td align="right">0</td>
+<td align="left">5,564,819</td>
+<td align="right">3577</td>
+<td align="right">0.000</td>
+</tr>
+<tr class="odd">
+<td align="left">Sharks &amp; rays</td>
+<td align="left">class</td>
+<td align="left">Elasmobranchii</td>
+<td align="right">10193</td>
+<td align="left">42,236</td>
+<td align="right">275</td>
+<td align="left">42,236</td>
+<td align="right">275</td>
+<td align="right">1.000</td>
+</tr>
+<tr class="even">
+<td align="left">Marine mammals</td>
+<td align="left">class</td>
+<td align="left">Mammalia</td>
+<td align="right">1837</td>
+<td align="left">125,350</td>
+<td align="right">44</td>
+<td align="left">125,350</td>
+<td align="right">44</td>
+<td align="right">1.000</td>
+</tr>
+<tr class="odd">
+<td align="left">Sea turtles</td>
+<td align="left">order</td>
+<td align="left">Testudines</td>
+<td align="right">2689</td>
+<td align="left">29,926</td>
+<td align="right">6</td>
+<td align="left">29,932</td>
+<td align="right">7</td>
+<td align="right">1.000</td>
+</tr>
+<tr class="even">
+<td align="left">Corals &amp; anemones</td>
+<td align="left">class</td>
+<td align="left">Anthozoa</td>
+<td align="right">1292</td>
+<td align="left">592</td>
+<td align="right">171</td>
+<td align="left">384,669</td>
+<td align="right">898</td>
+<td align="right">0.002</td>
+</tr>
+<tr class="odd">
+<td align="left">Mollusks</td>
+<td align="left">phylum</td>
+<td align="left">Mollusca</td>
+<td align="right">51</td>
+<td align="left">304,979</td>
+<td align="right">5972</td>
+<td align="left">305,116</td>
+<td align="right">5976</td>
+<td align="right">1.000</td>
+</tr>
+<tr class="even">
+<td align="left">Crustaceans</td>
+<td align="left">class</td>
+<td align="left">Malacostraca</td>
+<td align="right">1071</td>
+<td align="left">844,218</td>
+<td align="right">3130</td>
+<td align="left">844,298</td>
+<td align="right">3134</td>
+<td align="right">1.000</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">long</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/transmute.html" class="external-link">transmute</a></span><span class="op">(</span><span class="va">rv</span>, <span class="va">label</span>, method <span class="op">=</span> <span class="st">"DwC rank column"</span>, records <span class="op">=</span> <span class="va">records_rank</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/transmute.html" class="external-link">transmute</a></span><span class="op">(</span><span class="va">rv</span>, <span class="va">label</span>, method <span class="op">=</span> <span class="st">"AphiaID subtree"</span>, records <span class="op">=</span> <span class="va">records_tree</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">long</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/reorder.factor.html" class="external-link">reorder</a></span><span class="op">(</span><span class="va">label</span>, <span class="op">-</span><span class="va">records</span><span class="op">)</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">pmax</a></span><span class="op">(</span><span class="va">records</span>, <span class="fl">0.5</span><span class="op">)</span>, fill <span class="op">=</span> <span class="va">method</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_bar.html" class="external-link">geom_col</a></span><span class="op">(</span>position <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/position_dodge.html" class="external-link">position_dodge</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">.8</span><span class="op">)</span>, width <span class="op">=</span> <span class="fl">.7</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html" class="external-link">scale_y_log10</a></span><span class="op">(</span>labels <span class="op">=</span> <span class="fu">scales</span><span class="fu">::</span><span class="fu"><a href="https://scales.r-lib.org/reference/label_number.html" class="external-link">label_comma</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="cn">NULL</span>, y <span class="op">=</span> <span class="st">"records (log)"</span>, fill <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>       title <span class="op">=</span> <span class="st">"Records found by rank-column filter vs AphiaID subtree"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"zero-height bars are groups the rank column cannot express"</span>,</span>
+<span>       caption <span class="op">=</span> <span class="va">store_label</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span>base_size <span class="op">=</span> <span class="fl">11</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span>, axis.text.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_text</a></span><span class="op">(</span>angle <span class="op">=</span> <span class="fl">25</span>, hjust <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">p</span></span></code></pre></div>
+<div class="figure">
+<img src="figures/taxon_children-fig-table3-1.png" alt="plot of chunk fig-table3" width="100%"><p class="caption">
+plot of chunk fig-table3
+</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="map-a-taxons-records-any-rank">Map a taxon’s records (any rank)<a class="anchor" aria-label="anchor" href="#map-a-taxons-records-any-rank"></a>
@@ -146,7 +325,7 @@ standalone read-only <code>SELECT</code>, handy for the API.</p>
 that filters <code>occ_h3</code> to the subtree via a recursive CTE (the
 <code>h3t</code> validator permits <code>WITH RECURSIVE</code>).
 <code><a href="../reference/obis_h3t_url.html">obis_h3t_url()</a></code> base64-encodes it into a tile URL.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sql</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_h3t_sql.html">obis_h3t_sql</a></span><span class="op">(</span>indicator <span class="op">=</span> <span class="st">"n"</span>, aphiaid <span class="op">=</span> <span class="fl">2688</span><span class="op">)</span>   <span class="co"># # records, all Cetacea</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="va">sql</span><span class="op">)</span></span>
 <span><span class="co">#&gt; WITH RECURSIVE taxon_tree AS (</span></span>
@@ -169,8 +348,17 @@ that filters <code>occ_h3</code> to the subtree via a recursive CTE (the
 <span><span class="va">url</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_h3t_url.html">obis_h3t_url</a></span><span class="op">(</span></span>
 <span>  base_url  <span class="op">=</span> <span class="st">"h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t"</span>,</span>
 <span>  sql       <span class="op">=</span> <span class="va">sql</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<p>The map below is served live from the deployed tile service (global
+store):</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators">obisindicators</a></span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Warning: replacing previous import 'h3::compact' by 'purrr::compact' when</span></span>
+<span><span class="co">## loading 'obisindicators'</span></span></code></pre>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://walker-data.com/mapgl/" class="external-link">mapgl</a></span><span class="op">)</span></span>
+<span><span class="va">url</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_h3t_url.html">obis_h3t_url</a></span><span class="op">(</span></span>
+<span>  base_url <span class="op">=</span> <span class="st">"h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t"</span>,</span>
+<span>  sql      <span class="op">=</span> <span class="fu"><a href="../reference/obis_h3t_sql.html">obis_h3t_sql</a></span><span class="op">(</span>indicator <span class="op">=</span> <span class="st">"n"</span>, aphiaid <span class="op">=</span> <span class="fl">2688</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://walker-data.com/mapgl/reference/maplibre.html" class="external-link">maplibre</a></span><span class="op">(</span>center <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">40</span>, <span class="fl">20</span><span class="op">)</span>, zoom <span class="op">=</span> <span class="fl">1.5</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://walker-data.com/mapgl/reference/add_h3t_source.html" class="external-link">add_h3t_source</a></span><span class="op">(</span>id <span class="op">=</span> <span class="st">"cet"</span>, tiles <span class="op">=</span> <span class="va">url</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://walker-data.com/mapgl/reference/add_fill_layer.html" class="external-link">add_fill_layer</a></span><span class="op">(</span></span>
@@ -195,8 +383,9 @@ target species?</p>
 <p><code><a href="../reference/obis_spue_sql.html">obis_spue_sql()</a></code> builds this as a served tile query (two
 recursive subtrees: numerator = target, denominator = effort).
 <code><a href="../reference/calc_spue.html">calc_spue()</a></code> is the pinned R reference (see
-<code>test-spue-parity.R</code>).</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code>test-spue-parity.R</code>), and <code><a href="../reference/calc_spue_cells.html">calc_spue_cells()</a></code>
+returns the same per-cell table from a store at a fixed resolution.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># target: Tursiops truncatus (common bottlenose dolphin) = 137111</span></span>
 <span><span class="co"># effort: Infraorder Cetacea = 2688 (its multi-species-survey footprint)</span></span>
 <span><span class="va">spue_sql</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_spue_sql.html">obis_spue_sql</a></span><span class="op">(</span>num_aphiaid <span class="op">=</span> <span class="fl">137111</span>, den_aphiaid <span class="op">=</span> <span class="fl">2688</span><span class="op">)</span></span>
@@ -233,13 +422,14 @@ recursive subtrees: numerator = target, denominator = effort).
 <span><span class="co">#&gt; SELECT cell_id,</span></span>
 <span><span class="co">#&gt;        n_num::DOUBLE / NULLIF(n_den, 0) AS value,</span></span>
 <span><span class="co">#&gt;        n_den AS n</span></span>
-<span><span class="co">#&gt; FROM src</span></span>
-<span></span>
+<span><span class="co">#&gt; FROM src</span></span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators">obisindicators</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://walker-data.com/mapgl/" class="external-link">mapgl</a></span><span class="op">)</span></span>
 <span><span class="va">spue_url</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_h3t_url.html">obis_h3t_url</a></span><span class="op">(</span></span>
 <span>  base_url <span class="op">=</span> <span class="st">"h3tiles://h3t.marinesensitivity.org/h3t/{z}/{x}/{y}.h3t"</span>,</span>
-<span>  sql      <span class="op">=</span> <span class="va">spue_sql</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://walker-data.com/mapgl/reference/maplibre.html" class="external-link">maplibre</a></span><span class="op">(</span>center <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">40</span>, <span class="fl">20</span><span class="op">)</span>, zoom <span class="op">=</span> <span class="fl">1.5</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  sql      <span class="op">=</span> <span class="fu"><a href="../reference/obis_spue_sql.html">obis_spue_sql</a></span><span class="op">(</span>num_aphiaid <span class="op">=</span> <span class="fl">137111</span>, den_aphiaid <span class="op">=</span> <span class="fl">2688</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://walker-data.com/mapgl/reference/maplibre.html" class="external-link">maplibre</a></span><span class="op">(</span>center <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">40</span>, <span class="fl">20</span><span class="op">)</span>, zoom <span class="op">=</span> <span class="fl">1.5</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://walker-data.com/mapgl/reference/add_h3t_source.html" class="external-link">add_h3t_source</a></span><span class="op">(</span>id <span class="op">=</span> <span class="st">"spue"</span>, tiles <span class="op">=</span> <span class="va">spue_url</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://walker-data.com/mapgl/reference/add_fill_layer.html" class="external-link">add_fill_layer</a></span><span class="op">(</span></span>
 <span>    id <span class="op">=</span> <span class="st">"spue_fill"</span>, source <span class="op">=</span> <span class="st">"spue"</span>, source_layer <span class="op">=</span> <span class="st">"spue"</span>,</span>
@@ -254,8 +444,122 @@ the effort taxon is the analyst’s call — the parent class or order is a
 sensible default, but a survey-defined group (e.g. Cetacea, seabirds) is
 often better. See <a href="scaling.html"><code>vignette("scaling")</code></a> for how the
 denominator’s sparsity behaves across H3 resolutions.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://dbi.r-dbi.org/reference/dbDisconnect.html" class="external-link">dbDisconnect</a></span><span class="op">(</span><span class="va">con</span>, shutdown <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="spue-on-a-map-and-against-a-species-distribution-model-fig--4">SPUE on a map, and against a species distribution model (Fig.
+4)<a class="anchor" aria-label="anchor" href="#spue-on-a-map-and-against-a-species-distribution-model-fig--4"></a>
+</h2>
+<p>Humpback whale (<em>Megaptera novaeangliae</em>, AphiaID 137092) over
+all Cetacea. The effort map is the denominator; the SPUE map is masked
+to cells with at least <code>min_eff</code> effort records.</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">num_id</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"SPUE_NUM"</span>, <span class="st">"137092"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">den_id</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/strsplit.html" class="external-link">strsplit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"SPUE_DEN"</span>, <span class="st">"2688"</span><span class="op">)</span>, <span class="st">","</span><span class="op">)</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="va">min_eff</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"SPUE_MIN_EFFORT"</span>, <span class="st">"30"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">sp5</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_spue_cells.html">calc_spue_cells</a></span><span class="op">(</span><span class="va">con</span>, <span class="va">num_id</span>, <span class="va">den_id</span>, res <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">p1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/gmap_cells.html">gmap_cells</a></span><span class="op">(</span><span class="va">sp5</span>, <span class="st">"effort"</span>, label <span class="op">=</span> <span class="st">"effort records"</span>, trans <span class="op">=</span> <span class="st">"log10"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"effort (denominator)"</span><span class="op">)</span></span>
+<span><span class="va">p2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/gmap_cells.html">gmap_cells</a></span><span class="op">(</span><span class="va">sp5</span>, <span class="st">"spue"</span>, label <span class="op">=</span> <span class="st">"SPUE"</span>, mask <span class="op">=</span> <span class="va">sp5</span><span class="op">$</span><span class="va">effort</span> <span class="op">&gt;=</span> <span class="va">min_eff</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"SPUE, effort ≥ %d"</span>, <span class="va">min_eff</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu">patchwork</span><span class="fu">::</span><span class="fu"><a href="https://patchwork.data-imaginist.com/reference/wrap_plots.html" class="external-link">wrap_plots</a></span><span class="op">(</span><span class="va">p1</span>, <span class="va">p2</span>, ncol <span class="op">=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">+</span> <span class="fu">patchwork</span><span class="fu">::</span><span class="fu"><a href="https://patchwork.data-imaginist.com/reference/plot_annotation.html" class="external-link">plot_annotation</a></span><span class="op">(</span>caption <span class="op">=</span> <span class="va">store_label</span><span class="op">)</span></span>
+<span><span class="va">p</span></span></code></pre></div>
+<div class="figure">
+<img src="figures/taxon_children-fig4a-1.png" alt="plot of chunk fig4a" width="100%"><p class="caption">
+plot of chunk fig4a
+</p>
+</div>
+<p>Is presence-only SPUE telling us anything about habitat? Compare it
+with an independent modeled suitability surface for the same species: a
+GeoTIFF named by <code>SDM_TIF</code> (here the MarineSensitivity merged
+AquaMaps/expert-range model). <code><a href="../reference/h3_raster_to_cells.html">h3_raster_to_cells()</a></code>
+aggregates the raster to the same H3 cells and
+<code><a href="../reference/compare_spue_sdm.html">compare_spue_sdm()</a></code> reports an effort-gated Spearman
+correlation plus calibration bins, at each resolution.</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sdm_tif</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"SDM_TIF"</span><span class="op">)</span></span>
+<span><span class="va">has_sdm</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nzchar</a></span><span class="op">(</span><span class="va">sdm_tif</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">sdm_tif</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="va">has_sdm</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"set SDM_TIF to run the comparison; skipped"</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">r</span>  <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span><span class="va">sdm_tif</span><span class="op">)</span></span>
+<span><span class="co"># crop to the effort footprint (a global 0.05-degree raster is 26M pixels)</span></span>
+<span><span class="va">bb</span> <span class="op">&lt;-</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_bbox.html" class="external-link">st_bbox</a></span><span class="op">(</span><span class="fu"><a href="../reference/hex_sf.html">hex_sf</a></span><span class="op">(</span><span class="va">sp5</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">r</span>  <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">crop</a></span><span class="op">(</span><span class="va">r</span>, <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="va">bb</span><span class="op">[[</span><span class="st">"xmin"</span><span class="op">]</span><span class="op">]</span> <span class="op">-</span> <span class="fl">1</span>, <span class="va">bb</span><span class="op">[[</span><span class="st">"xmax"</span><span class="op">]</span><span class="op">]</span> <span class="op">+</span> <span class="fl">1</span>, <span class="va">bb</span><span class="op">[[</span><span class="st">"ymin"</span><span class="op">]</span><span class="op">]</span> <span class="op">-</span> <span class="fl">1</span>, <span class="va">bb</span><span class="op">[[</span><span class="st">"ymax"</span><span class="op">]</span><span class="op">]</span> <span class="op">+</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">res_set</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3L</span>, <span class="fl">5L</span>, <span class="fl">7L</span><span class="op">)</span></span>
+<span><span class="va">runs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">res_set</span>, <span class="kw">function</span><span class="op">(</span><span class="va">rs</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">spue</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_spue_cells.html">calc_spue_cells</a></span><span class="op">(</span><span class="va">con</span>, <span class="va">num_id</span>, <span class="va">den_id</span>, res <span class="op">=</span> <span class="va">rs</span><span class="op">)</span></span>
+<span>  <span class="va">sdm</span>  <span class="op">&lt;-</span> <span class="fu"><a href="../reference/h3_raster_to_cells.html">h3_raster_to_cells</a></span><span class="op">(</span><span class="va">r</span>, <span class="va">rs</span>, cells <span class="op">=</span> <span class="va">spue</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>res <span class="op">=</span> <span class="va">rs</span>, cmp <span class="op">=</span> <span class="fu"><a href="../reference/compare_spue_sdm.html">compare_spue_sdm</a></span><span class="op">(</span><span class="va">spue</span>, <span class="va">sdm</span>, min_effort <span class="op">=</span> <span class="va">min_eff</span>, n_bins <span class="op">=</span> <span class="fl">5L</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
+<span><span class="va">stats</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">runs</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span>res <span class="op">=</span> <span class="va">x</span><span class="op">$</span><span class="va">res</span>, <span class="va">x</span><span class="op">$</span><span class="va">cmp</span><span class="op">$</span><span class="va">stats</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">stats</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/where.html" class="external-link">where</a></span><span class="op">(</span><span class="va">is.numeric</span><span class="op">)</span>, <span class="op">~</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">signif</a></span><span class="op">(</span><span class="va">.x</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>             caption <span class="op">=</span> <span class="st">"SPUE vs. modeled suitability by resolution"</span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>SPUE vs. modeled suitability by resolution</caption>
+<thead><tr class="header">
+<th align="right">res</th>
+<th align="right">n_cells</th>
+<th align="right">rho</th>
+<th align="right">p_value</th>
+<th align="right">frac_present</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="right">3</td>
+<td align="right">139</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">0.439</td>
+</tr>
+<tr class="even">
+<td align="right">5</td>
+<td align="right">190</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">0.200</td>
+</tr>
+<tr class="odd">
+<td align="right">7</td>
+<td align="right">153</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">0.144</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">p_rho</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">stats</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">res</span>, y <span class="op">=</span> <span class="va">rho</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_point.html" class="external-link">geom_point</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>size <span class="op">=</span> <span class="va">n_cells</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html" class="external-link">scale_x_continuous</a></span><span class="op">(</span>breaks <span class="op">=</span> <span class="va">res_set</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"H3 resolution"</span>, y <span class="op">=</span> <span class="st">"Spearman rho (SPUE vs model)"</span>, size <span class="op">=</span> <span class="st">"cells"</span>,</span>
+<span>       title <span class="op">=</span> <span class="st">"Agreement by resolution"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span>base_size <span class="op">=</span> <span class="fl">11</span><span class="op">)</span></span>
+<span><span class="va">p_cal</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_spue_sdm.html">plot_spue_sdm</a></span><span class="op">(</span><span class="va">runs</span><span class="op">[[</span><span class="fl">2</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">cmp</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Calibration at res 5"</span><span class="op">)</span></span>
+<span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu">patchwork</span><span class="fu">::</span><span class="fu"><a href="https://patchwork.data-imaginist.com/reference/wrap_plots.html" class="external-link">wrap_plots</a></span><span class="op">(</span><span class="va">p_rho</span>, <span class="va">p_cal</span>, ncol <span class="op">=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">+</span> <span class="fu">patchwork</span><span class="fu">::</span><span class="fu"><a href="https://patchwork.data-imaginist.com/reference/plot_annotation.html" class="external-link">plot_annotation</a></span><span class="op">(</span>caption <span class="op">=</span> <span class="va">store_label</span><span class="op">)</span></span>
+<span><span class="va">p</span></span></code></pre></div>
+<div class="figure">
+<img src="figures/taxon_children-fig4b-1.png" alt="plot of chunk fig4b" width="100%"><p class="caption">
+plot of chunk fig4b
+</p>
+</div>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sdm5</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/h3_raster_to_cells.html">h3_raster_to_cells</a></span><span class="op">(</span><span class="va">r</span>, <span class="fl">5</span>, cells <span class="op">=</span> <span class="va">sp5</span><span class="op">$</span><span class="va">cell</span><span class="op">)</span></span>
+<span><span class="va">p2</span> <span class="op">&lt;-</span> <span class="fu">patchwork</span><span class="fu">::</span><span class="fu"><a href="https://patchwork.data-imaginist.com/reference/wrap_plots.html" class="external-link">wrap_plots</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/gmap_cells.html">gmap_cells</a></span><span class="op">(</span><span class="va">sp5</span>, <span class="st">"spue"</span>, label <span class="op">=</span> <span class="st">"SPUE"</span>, mask <span class="op">=</span> <span class="va">sp5</span><span class="op">$</span><span class="va">effort</span> <span class="op">&gt;=</span> <span class="va">min_eff</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"observed SPUE"</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="../reference/gmap_cells.html">gmap_cells</a></span><span class="op">(</span><span class="va">sdm5</span>, <span class="st">"value"</span>, label <span class="op">=</span> <span class="st">"suitability"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"modeled suitability"</span><span class="op">)</span>,</span>
+<span>  ncol <span class="op">=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">+</span> <span class="fu">patchwork</span><span class="fu">::</span><span class="fu"><a href="https://patchwork.data-imaginist.com/reference/plot_annotation.html" class="external-link">plot_annotation</a></span><span class="op">(</span>caption <span class="op">=</span> <span class="va">store_label</span><span class="op">)</span></span>
+<span><span class="va">p2</span></span></code></pre></div>
+<div class="figure">
+<img src="figures/taxon_children-fig4c-1.png" alt="plot of chunk fig4c" width="100%"><p class="caption">
+plot of chunk fig4c
+</p>
+</div>
+<p>On a regional demo store the effort-gated cell count is small and
+agreement is weak; the point of the comparison is the <em>method</em> —
+the same effort gate that makes SPUE trustworthy also decides how many
+cells can be compared at all, and that number falls with resolution (see
+<a href="scaling.html"><code>vignette("scaling")</code></a>).</p>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">DBI</span><span class="fu">::</span><span class="fu"><a href="https://dbi.r-dbi.org/reference/dbDisconnect.html" class="external-link">dbDisconnect</a></span><span class="op">(</span><span class="va">con</span>, shutdown <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

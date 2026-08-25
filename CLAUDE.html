@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -19,13 +19,20 @@
 <li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="articles/regional_diversity.html">Regional Diversity</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Shipped data</h6></li>
+    <li><a class="dropdown-item" href="articles/regional_diversity.html">Regional Diversity</a></li>
     <li><a class="dropdown-item" href="articles/resolution.html">resolution</a></li>
     <li><a class="dropdown-item" href="articles/temporal_subsets.html">Temporal Subsets</a></li>
     <li><a class="dropdown-item" href="articles/h3.html">H3 grids and deckgl</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>The obis_h3 store</h6></li>
     <li><a class="dropdown-item" href="articles/h3t.html">Serving OBIS indicators as H3 hexagon tiles (h3t)</a></li>
     <li><a class="dropdown-item" href="articles/taxon_children.html">Children taxa &amp; an effort proxy (SPUE) from the OBIS snapshot</a></li>
     <li><a class="dropdown-item" href="articles/scaling.html">Scaling OBIS observations across H3 resolutions</a></li>
+    <li><a class="dropdown-item" href="articles/eov.html">Essential Ocean Variables from the OBIS store</a></li>
+    <li><a class="dropdown-item" href="articles/decadal.html">Decadal change in ES(50) per EOV</a></li>
+    <li><a class="dropdown-item" href="articles/places.html">Rolling hexagons up to places</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -177,7 +184,9 @@
 <li>
 <code>R/scale.R</code>, <code>R/compare.R</code>, <code>R/temporal.R</code>, <code>R/place.R</code> — the paper’s analyses (scale curves, rank-vs-subtree, EOV totals, SPUE vs SDM raster, periods, place roll-ups), all tested on <code>tests/testthat/helper-paper.R</code>’s synthetic fixture in <code>test-paper-helpers.R</code>.</li>
 <li>
-<code>paper/</code> — Quarto notebooks, one per manuscript figure/table, driven by <code>OBIS_H3_DUCKDB</code>; <code>paper/build_demo_store.R</code> builds a regional demo store from a local OBIS export + WoRMS table (Gulf of Mexico + Caribbean by default).</li>
+<code>vignettes/articles/*.Rmd.orig</code> — <strong>precomputed articles</strong> against an <code>obis_h3</code> store (<code>scaling</code>, <code>taxon_children</code>, <code>eov</code>, <code>decadal</code>, <code>places</code>). The <code>.Rmd.orig</code> is the source; <code>data-raw/precompute_articles.R</code> knits it locally (needs <code>OBIS_H3_DUCKDB</code>; optional <code>OBIS_H3_DUCKDB_BEFORE</code>, <code>SDM_TIF</code>, <code>PLACES_GPKG</code>) into the committed <code>.Rmd</code> + <code>figures/</code> that pkgdown renders on CI without a store. <strong>Edit the <code>.orig</code>, never the knitted <code>.Rmd</code></strong>, and commit both plus <code>paper/figures/</code>. Chunk headers suffixed with <code>`r ''`</code> pass through un-knitted so the mapgl tile maps stay live on the site. The directory is <code>.Rbuildignore</code>d (pkgdown-only, not package vignettes).</li>
+<li>
+<code>paper/</code> — the manuscript’s figure gallery/index (<code>README.md</code>) and outputs (<code>figures/</code>, print PNG + CSV per figure, written by the articles via <code>paper/_common.R</code>); <code>paper/build_demo_store.R</code> builds a regional demo store from a local OBIS export + WoRMS table (Gulf of Mexico + Caribbean by default; <code>--fill</code> gives the post-gap-fill store).</li>
 <li>
 <code>R/data.R</code> — roxygen docs for the shipped <code>occ_*</code> datasets.</li>
 <li>roxygen <code>@concept</code> tags (<code>read</code>/<code>analyze</code>/<code>h3t</code>/<code>taxon</code>/<code>visualize</code>/<code>data</code>) drive the pkgdown reference index in <code>_pkgdown.yml</code> — tag new exported functions.</li>

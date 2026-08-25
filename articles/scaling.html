@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,13 +34,20 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/regional_diversity.html">Regional Diversity</a></li>
+<li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Shipped data</h6></li>
+    <li><a class="dropdown-item" href="../articles/regional_diversity.html">Regional Diversity</a></li>
     <li><a class="dropdown-item" href="../articles/resolution.html">resolution</a></li>
     <li><a class="dropdown-item" href="../articles/temporal_subsets.html">Temporal Subsets</a></li>
     <li><a class="dropdown-item" href="../articles/h3.html">H3 grids and deckgl</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>The obis_h3 store</h6></li>
     <li><a class="dropdown-item" href="../articles/h3t.html">Serving OBIS indicators as H3 hexagon tiles (h3t)</a></li>
     <li><a class="dropdown-item" href="../articles/taxon_children.html">Children taxa &amp; an effort proxy (SPUE) from the OBIS snapshot</a></li>
     <li><a class="dropdown-item" href="../articles/scaling.html">Scaling OBIS observations across H3 resolutions</a></li>
+    <li><a class="dropdown-item" href="../articles/eov.html">Essential Ocean Variables from the OBIS store</a></li>
+    <li><a class="dropdown-item" href="../articles/decadal.html">Decadal change in ES(50) per EOV</a></li>
+    <li><a class="dropdown-item" href="../articles/places.html">Rolling hexagons up to places</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -66,92 +73,581 @@
       <h1>Scaling OBIS observations across H3 resolutions</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/marinebon/obisindicators/blob/main/vignettes/scaling.Rmd" class="external-link"><code>vignettes/scaling.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/marinebon/obisindicators/blob/main/vignettes/articles/scaling.Rmd" class="external-link"><code>vignettes/articles/scaling.Rmd</code></a></small>
       <div class="d-none name"><code>scaling.Rmd</code></div>
     </div>
 
     
     
 <p>H3 is a hierarchy: each drop in resolution aggregates ~7 child
-hexagons into a parent. Summarizing OBIS the same query at different H3
-resolutions therefore trades <strong>spatial detail</strong> against
-<strong>per-cell sample size</strong> and <strong>query cost</strong>.
-This article walks those trade-offs and the choices they force in the
-<code>h3t</code> serving design — especially for the live children-taxa
-and SPUE paths from <a href="taxon_children.html"><code>vignette("taxon_children")</code></a>.</p>
+hexagons into a parent. Summarizing OBIS with the same query at
+different H3 resolutions therefore trades <strong>spatial
+detail</strong> against <strong>per-cell sample size</strong> and
+<strong>query cost</strong>. This article walks those trade-offs and the
+choices they force in the <code>h3t</code> serving design — especially
+for the live children-taxa and SPUE paths from <a href="taxon_children.html"><code>vignette("taxon_children")</code></a>.
+It also produces Tables 2, 3 and 5 and Figure 3 of the OBIS → H3 → EOV
+manuscript.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators">obisindicators</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dbi.r-dbi.org" class="external-link">DBI</a></span><span class="op">)</span>; <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r.duckdb.org/" class="external-link">duckdb</a></span><span class="op">)</span>; <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">con</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dbi.r-dbi.org/reference/dbConnect.html" class="external-link">dbConnect</a></span><span class="op">(</span><span class="fu"><a href="https://r.duckdb.org/reference/duckdb.html" class="external-link">duckdb</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"/share/data/obis/obis_h3.duckdb"</span>, read_only <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://dbi.r-dbi.org/reference/dbExecute.html" class="external-link">dbExecute</a></span><span class="op">(</span><span class="va">con</span>, <span class="st">"LOAD h3;"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co"># the store named by OBIS_H3_DUCKDB; paper/build_demo_store.R builds a regional demo</span></span>
+<span><span class="va">con</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_store_connect.html">obis_store_connect</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<blockquote>
+<p><strong>Precomputed.</strong> The store is not available where this
+documentation is built, so the chunks below were run locally by
+<code>data-raw/precompute_articles.R</code> and their output committed.
+This render used <strong>obis_h3_demo_gulf_filled.duckdb</strong>, a
+regional demo store (Gulf of Mexico + Caribbean, see
+<code>paper/build_demo_store.R</code>). The manuscript’s numbers come
+from the global store.</p>
+</blockquote>
 <div class="section level2">
-<h2 id="cells-vs--density-across-resolution">Cells vs. density across resolution<a class="anchor" aria-label="anchor" href="#cells-vs--density-across-resolution"></a>
+<h2 id="what-the-store-holds-table-2">What the store holds (Table 2)<a class="anchor" aria-label="anchor" href="#what-the-store-holds-table-2"></a>
 </h2>
-<p>Take one taxon — all Cetacea (AphiaID 2688) — and summarize it at
-every stored resolution. As resolution rises, cell count climbs roughly
-×7 per step while the median records-per-cell falls: the signal spreads
-thinner.</p>
+<p><code><a href="../reference/obis_store_stats.html">obis_store_stats()</a></code> summarizes the layers of a store: the
+species-level <code>occ_h3</code> counts at resolution tiers 3/5/7, the
+precomputed all-taxa <code>idx_h3</code>, per-coarse-rank
+<code>idx_h3_taxon</code> and per-EOV <code>idx_h3_eov</code> indicator
+layers (resolutions 1–7), and the WoRMS <code>taxon</code> table that
+makes any-rank filters possible.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">res_summary</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">res</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">sql</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_h3t_sql.html">obis_h3t_sql</a></span><span class="op">(</span><span class="st">"n"</span>, aphiaid <span class="op">=</span> <span class="fl">2688</span>, res_placeholder <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">res</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dbi.r-dbi.org/reference/dbGetQuery.html" class="external-link">dbGetQuery</a></span><span class="op">(</span><span class="va">con</span>, <span class="va">sql</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span>res <span class="op">=</span> <span class="va">res</span>, n_cells <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">d</span><span class="op">)</span>,</span>
-<span>         records <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">d</span><span class="op">$</span><span class="va">value</span><span class="op">)</span>, median_per_cell <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/median.html" class="external-link">median</a></span><span class="op">(</span><span class="va">d</span><span class="op">$</span><span class="va">value</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span><span class="fu">purrr</span><span class="fu">::</span><span class="fu"><a href="https://purrr.tidyverse.org/reference/map_dfr.html" class="external-link">map_dfr</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">7</span>, <span class="va">res_summary</span><span class="op">)</span></span>
-<span><span class="co">#&gt; # res 1: few big cells, high density ... res 7: many cells, sparse</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_store_stats.html">obis_store_stats</a></span><span class="op">(</span><span class="va">con</span><span class="op">)</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">totals</span>, caption <span class="op">=</span> <span class="st">"Totals"</span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>Totals</caption>
+<thead><tr class="header">
+<th align="left">metric</th>
+<th align="left">value</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">records</td>
+<td align="left">8260407</td>
+</tr>
+<tr class="even">
+<td align="left">species</td>
+<td align="left">27521</td>
+</tr>
+<tr class="odd">
+<td align="left">aphiaids</td>
+<td align="left">27762</td>
+</tr>
+<tr class="even">
+<td align="left">cells_base</td>
+<td align="left">133069</td>
+</tr>
+<tr class="odd">
+<td align="left">year_min</td>
+<td align="left">1720</td>
+</tr>
+<tr class="even">
+<td align="left">year_max</td>
+<td align="left">2025</td>
+</tr>
+<tr class="odd">
+<td align="left">taxon_rows</td>
+<td align="left">607919</td>
+</tr>
+<tr class="even">
+<td align="left">eov_members</td>
+<td align="left">79920</td>
+</tr>
+<tr class="odd">
+<td align="left">database_size</td>
+<td align="left">231.0 MiB</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">s</span><span class="op">$</span><span class="va">tables</span>, caption <span class="op">=</span> <span class="st">"Tables and row counts"</span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>Tables and row counts</caption>
+<thead><tr class="header">
+<th align="left">table</th>
+<th align="right">rows</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">eov</td>
+<td align="right">79920</td>
+</tr>
+<tr class="even">
+<td align="left">idx_h3</td>
+<td align="right">217521</td>
+</tr>
+<tr class="odd">
+<td align="left">idx_h3_eov</td>
+<td align="right">243891</td>
+</tr>
+<tr class="even">
+<td align="left">idx_h3_taxon</td>
+<td align="right">1874492</td>
+</tr>
+<tr class="odd">
+<td align="left">occ_h3</td>
+<td align="right">3740114</td>
+</tr>
+<tr class="even">
+<td align="left">taxon</td>
+<td align="right">607919</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
+<span>  <span class="va">s</span><span class="op">$</span><span class="va">cells_by_res</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>area_km2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">area_km2</span><span class="op">)</span>, edge_km <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">edge_km</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  caption <span class="op">=</span> <span class="st">"Occupied cells by H3 resolution"</span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>Occupied cells by H3 resolution</caption>
+<thead><tr class="header">
+<th align="right">res</th>
+<th align="right">n_cells</th>
+<th align="right">records</th>
+<th align="right">area_km2</th>
+<th align="right">edge_km</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="right">1</td>
+<td align="right">31</td>
+<td align="right">8260407</td>
+<td align="right">609788</td>
+<td align="right">483.1</td>
+</tr>
+<tr class="even">
+<td align="right">2</td>
+<td align="right">157</td>
+<td align="right">8260407</td>
+<td align="right">86802</td>
+<td align="right">182.5</td>
+</tr>
+<tr class="odd">
+<td align="right">3</td>
+<td align="right">977</td>
+<td align="right">8260407</td>
+<td align="right">12393</td>
+<td align="right">69.0</td>
+</tr>
+<tr class="even">
+<td align="right">4</td>
+<td align="right">5459</td>
+<td align="right">8260407</td>
+<td align="right">1770</td>
+<td align="right">26.1</td>
+</tr>
+<tr class="odd">
+<td align="right">5</td>
+<td align="right">20169</td>
+<td align="right">8260407</td>
+<td align="right">253</td>
+<td align="right">9.9</td>
+</tr>
+<tr class="even">
+<td align="right">6</td>
+<td align="right">57659</td>
+<td align="right">8260407</td>
+<td align="right">36</td>
+<td align="right">3.7</td>
+</tr>
+<tr class="odd">
+<td align="right">7</td>
+<td align="right">133069</td>
+<td align="right">8260407</td>
+<td align="right">5</td>
+<td align="right">1.4</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section level2">
+<h2 id="cells-vs--density-across-resolution-fig--3a">Cells vs. density across resolution (Fig. 3a)<a class="anchor" aria-label="anchor" href="#cells-vs--density-across-resolution-fig--3a"></a>
+</h2>
+<p>Take one taxon — all Cetacea (AphiaID 2688, an infraorder, so not a
+Darwin Core rank column; see <a href="taxon_children.html"><code>vignette("taxon_children")</code></a>)
+— and summarize it at every stored resolution. As resolution rises, the
+cell count climbs roughly ×7 per step while the median records-per-cell
+falls: the signal spreads thinner, and the fraction of cells that can
+support ES(50) (at least 50 records) collapses.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/calc_scale_curves.html">calc_scale_curves</a></span><span class="op">(</span><span class="va">con</span>, res <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">7</span>, aphiaid <span class="op">=</span> <span class="fl">2688L</span>, group <span class="op">=</span> <span class="st">"Cetacea"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">res</span>, <span class="va">n_cells</span>, <span class="va">median_n</span>, <span class="va">frac_eligible</span>, <span class="va">median_es</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>frac_eligible <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">frac_eligible</span>, <span class="fl">3</span><span class="op">)</span>, median_es <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">median_es</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;   res n_cells median_n frac_eligible median_es</span></span>
+<span><span class="co">#&gt; 1   1      28    252.5         0.750      7.40</span></span>
+<span><span class="co">#&gt; 2   2     125     42.0         0.464      7.52</span></span>
+<span><span class="co">#&gt; 3   3     527      9.0         0.188      5.24</span></span>
+<span><span class="co">#&gt; 4   4    1854      3.0         0.062      2.72</span></span>
+<span><span class="co">#&gt; 5   5    4662      2.0         0.027      1.09</span></span>
+<span><span class="co">#&gt; 6   6    8911      1.0         0.012      1.00</span></span>
+<span><span class="co">#&gt; 7   7   13983      1.0         0.007      1.00</span></span></code></pre></div>
+<p><code><a href="../reference/calc_scale_curves.html">calc_scale_curves()</a></code> does the same for any filter. Here
+it is for all taxa and for each of the seven Essential Ocean Variables
+(EOVs; see <a href="eov.html"><code>vignette("eov")</code></a>):</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">RES</span> <span class="op">&lt;-</span> <span class="fl">1</span><span class="op">:</span><span class="fl">7</span></span>
+<span><span class="va">sc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/calc_scale_curves.html">calc_scale_curves</a></span><span class="op">(</span><span class="va">con</span>, res <span class="op">=</span> <span class="va">RES</span>, group <span class="op">=</span> <span class="st">"all taxa"</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">EOV_ORDER</span>, <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="../reference/calc_scale_curves.html">calc_scale_curves</a></span><span class="op">(</span><span class="va">con</span>, res <span class="op">=</span> <span class="va">RES</span>, eov <span class="op">=</span> <span class="va">e</span>, group <span class="op">=</span> <span class="va">e</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">sc</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">group</span>, <span class="va">res</span>, <span class="va">n_cells</span>, <span class="va">frac_cells_all</span>, <span class="va">median_n</span>, <span class="va">frac_eligible</span>, <span class="va">median_es</span>, <span class="va">median_sp</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">frac_cells_all</span>, <span class="va">frac_eligible</span><span class="op">)</span>, <span class="op">~</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">.x</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span>, median_es <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">median_es</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;            group res n_cells frac_cells_all median_n frac_eligible median_es</span></span>
+<span><span class="co">#&gt; 1       all taxa   1      31          1.000  35746.0         0.935     36.32</span></span>
+<span><span class="co">#&gt; 2       all taxa   2     157          1.000   2888.0         0.949     32.79</span></span>
+<span><span class="co">#&gt; 3       all taxa   3     977          1.000    194.0         0.746     30.34</span></span>
+<span><span class="co">#&gt; 4       all taxa   4    5459          1.000     22.0         0.388     30.03</span></span>
+<span><span class="co">#&gt; 5       all taxa   5   20169          1.000      9.0         0.257     27.17</span></span>
+<span><span class="co">#&gt; 6       all taxa   6   57659          1.000      6.0         0.138     24.51</span></span>
+<span><span class="co">#&gt; 7       all taxa   7  133069          1.000      4.0         0.072     25.23</span></span>
+<span><span class="co">#&gt; 8           fish   1      31          1.000  12392.0         0.903     34.27</span></span>
+<span><span class="co">#&gt; 9           fish   2     157          1.000   1195.0         0.885     29.83</span></span>
+<span><span class="co">#&gt; 10          fish   3     939          0.961    104.0         0.618     28.63</span></span>
+<span><span class="co">#&gt; 11          fish   4    4391          0.804     21.0         0.363     26.09</span></span>
+<span><span class="co">#&gt; 12          fish   5   14702          0.729     10.0         0.222     21.04</span></span>
+<span><span class="co">#&gt; 13          fish   6   39874          0.692      6.0         0.108     19.70</span></span>
+<span><span class="co">#&gt; 14          fish   7   82049          0.617      4.0         0.061     22.48</span></span>
+<span><span class="co">#&gt; 15    hardCorals   1      23          0.742   2178.0         0.913     19.28</span></span>
+<span><span class="co">#&gt; 16    hardCorals   2      94          0.599    225.5         0.723     17.59</span></span>
+<span><span class="co">#&gt; 17    hardCorals   3     342          0.350     40.5         0.474     14.79</span></span>
+<span><span class="co">#&gt; 18    hardCorals   4     975          0.179     12.0         0.291     13.15</span></span>
+<span><span class="co">#&gt; 19    hardCorals   5    2045          0.101      7.0         0.202     12.69</span></span>
+<span><span class="co">#&gt; 20    hardCorals   6    3339          0.058      5.0         0.203     12.89</span></span>
+<span><span class="co">#&gt; 21    hardCorals   7    5110          0.038      6.0         0.185     13.01</span></span>
+<span><span class="co">#&gt; 22     mangroves   1      10          0.323      6.0         0.300      3.30</span></span>
+<span><span class="co">#&gt; 23     mangroves   2      18          0.115      6.0         0.389      2.99</span></span>
+<span><span class="co">#&gt; 24     mangroves   3      22          0.023     28.0         0.500      2.89</span></span>
+<span><span class="co">#&gt; 25     mangroves   4      31          0.006     97.0         0.613      2.22</span></span>
+<span><span class="co">#&gt; 26     mangroves   5      41          0.002     85.0         0.634      2.18</span></span>
+<span><span class="co">#&gt; 27     mangroves   6      54          0.001     91.0         0.648      2.23</span></span>
+<span><span class="co">#&gt; 28     mangroves   7      70          0.001     95.5         0.686      2.00</span></span>
+<span><span class="co">#&gt; 29 marineMammals   1      28          0.903    347.0         0.750      7.63</span></span>
+<span><span class="co">#&gt; 30 marineMammals   2     125          0.796     45.0         0.480      7.79</span></span>
+<span><span class="co">#&gt; 31 marineMammals   3     536          0.549      9.0         0.201      4.47</span></span>
+<span><span class="co">#&gt; 32 marineMammals   4    1902          0.348      3.0         0.081      2.05</span></span>
+<span><span class="co">#&gt; 33 marineMammals   5    4891          0.243      2.0         0.047      1.25</span></span>
+<span><span class="co">#&gt; 34 marineMammals   6    9748          0.169      1.0         0.027      1.00</span></span>
+<span><span class="co">#&gt; 35 marineMammals   7   16645          0.125      1.0         0.012      1.00</span></span>
+<span><span class="co">#&gt; 36      seabirds   1      26          0.839    158.0         0.808     15.92</span></span>
+<span><span class="co">#&gt; 37      seabirds   2     127          0.809     16.0         0.346     12.85</span></span>
+<span><span class="co">#&gt; 38      seabirds   3     451          0.462      3.0         0.224      9.92</span></span>
+<span><span class="co">#&gt; 39      seabirds   4    1106          0.203      5.0         0.156      2.12</span></span>
+<span><span class="co">#&gt; 40      seabirds   5    2865          0.142      4.0         0.141      1.95</span></span>
+<span><span class="co">#&gt; 41      seabirds   6    6873          0.119      3.0         0.115      2.00</span></span>
+<span><span class="co">#&gt; 42      seabirds   7   17096          0.128      3.0         0.069      2.00</span></span>
+<span><span class="co">#&gt; 43    seagrasses   1      18          0.581     20.5         0.444      2.79</span></span>
+<span><span class="co">#&gt; 44    seagrasses   2      35          0.223     17.0         0.400      2.29</span></span>
+<span><span class="co">#&gt; 45    seagrasses   3      58          0.059      8.5         0.310      2.29</span></span>
+<span><span class="co">#&gt; 46    seagrasses   4      86          0.016      4.0         0.279      2.22</span></span>
+<span><span class="co">#&gt; 47    seagrasses   5     114          0.006      4.0         0.325      2.38</span></span>
+<span><span class="co">#&gt; 48    seagrasses   6     176          0.003     13.0         0.381      2.00</span></span>
+<span><span class="co">#&gt; 49    seagrasses   7     381          0.003     16.0         0.213      2.00</span></span>
+<span><span class="co">#&gt; 50    seaTurtles   1      29          0.935    209.0         0.759      3.57</span></span>
+<span><span class="co">#&gt; 51    seaTurtles   2     143          0.911     35.0         0.420      3.00</span></span>
+<span><span class="co">#&gt; 52    seaTurtles   3     683          0.699      6.0         0.117      2.93</span></span>
+<span><span class="co">#&gt; 53    seaTurtles   4    1903          0.349      3.0         0.038      2.96</span></span>
+<span><span class="co">#&gt; 54    seaTurtles   5    4184          0.207      2.0         0.021      2.25</span></span>
+<span><span class="co">#&gt; 55    seaTurtles   6    7584          0.132      1.0         0.005      2.00</span></span>
+<span><span class="co">#&gt; 56    seaTurtles   7   11761          0.088      1.0         0.002      2.00</span></span>
+<span><span class="co">#&gt;    median_sp</span></span>
+<span><span class="co">#&gt; 1     3033.0</span></span>
+<span><span class="co">#&gt; 2      581.0</span></span>
+<span><span class="co">#&gt; 3       52.0</span></span>
+<span><span class="co">#&gt; 4        9.0</span></span>
+<span><span class="co">#&gt; 5        5.0</span></span>
+<span><span class="co">#&gt; 6        4.0</span></span>
+<span><span class="co">#&gt; 7        2.0</span></span>
+<span><span class="co">#&gt; 8      905.0</span></span>
+<span><span class="co">#&gt; 9      195.0</span></span>
+<span><span class="co">#&gt; 10      28.0</span></span>
+<span><span class="co">#&gt; 11       8.0</span></span>
+<span><span class="co">#&gt; 12       6.0</span></span>
+<span><span class="co">#&gt; 13       4.0</span></span>
+<span><span class="co">#&gt; 14       3.0</span></span>
+<span><span class="co">#&gt; 15      99.0</span></span>
+<span><span class="co">#&gt; 16      36.0</span></span>
+<span><span class="co">#&gt; 17      10.5</span></span>
+<span><span class="co">#&gt; 18       4.0</span></span>
+<span><span class="co">#&gt; 19       3.0</span></span>
+<span><span class="co">#&gt; 20       2.0</span></span>
+<span><span class="co">#&gt; 21       3.0</span></span>
+<span><span class="co">#&gt; 22       4.0</span></span>
+<span><span class="co">#&gt; 23       3.0</span></span>
+<span><span class="co">#&gt; 24       2.5</span></span>
+<span><span class="co">#&gt; 25       3.0</span></span>
+<span><span class="co">#&gt; 26       2.0</span></span>
+<span><span class="co">#&gt; 27       2.0</span></span>
+<span><span class="co">#&gt; 28       2.0</span></span>
+<span><span class="co">#&gt; 29      16.0</span></span>
+<span><span class="co">#&gt; 30       6.0</span></span>
+<span><span class="co">#&gt; 31       2.0</span></span>
+<span><span class="co">#&gt; 32       2.0</span></span>
+<span><span class="co">#&gt; 33       1.0</span></span>
+<span><span class="co">#&gt; 34       1.0</span></span>
+<span><span class="co">#&gt; 35       1.0</span></span>
+<span><span class="co">#&gt; 36      17.0</span></span>
+<span><span class="co">#&gt; 37       5.0</span></span>
+<span><span class="co">#&gt; 38       2.0</span></span>
+<span><span class="co">#&gt; 39       2.0</span></span>
+<span><span class="co">#&gt; 40       1.0</span></span>
+<span><span class="co">#&gt; 41       1.0</span></span>
+<span><span class="co">#&gt; 42       1.0</span></span>
+<span><span class="co">#&gt; 43       5.0</span></span>
+<span><span class="co">#&gt; 44       2.0</span></span>
+<span><span class="co">#&gt; 45       2.0</span></span>
+<span><span class="co">#&gt; 46       1.0</span></span>
+<span><span class="co">#&gt; 47       1.0</span></span>
+<span><span class="co">#&gt; 48       2.0</span></span>
+<span><span class="co">#&gt; 49       2.0</span></span>
+<span><span class="co">#&gt; 50       4.0</span></span>
+<span><span class="co">#&gt; 51       3.0</span></span>
+<span><span class="co">#&gt; 52       2.0</span></span>
+<span><span class="co">#&gt; 53       1.0</span></span>
+<span><span class="co">#&gt; 54       1.0</span></span>
+<span><span class="co">#&gt; 55       1.0</span></span>
+<span><span class="co">#&gt; 56       1.0</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_scale_curves.html">plot_scale_curves</a></span><span class="op">(</span></span>
+<span>  <span class="va">sc</span>,</span>
+<span>  metrics <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"n_cells"</span>, <span class="st">"median_n"</span>, <span class="st">"frac_eligible"</span>, <span class="st">"median_es"</span>, <span class="st">"frac_cells_all"</span>, <span class="st">"median_sp"</span><span class="op">)</span>,</span>
+<span>  log_y   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"n_cells"</span>, <span class="st">"median_n"</span>, <span class="st">"median_sp"</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Scale curves by EOV"</span>, caption <span class="op">=</span> <span class="va">store_label</span><span class="op">)</span></span>
+<span><span class="va">p</span></span></code></pre></div>
+<div class="figure">
+<img src="figures/scaling-fig3a-1.png" alt="plot of chunk fig3a" width="100%"><p class="caption">
+plot of chunk fig3a
+</p>
+</div>
 <p>The store keeps species-level <code>occ_h3</code> at only three tiers
 (3 / 5 / 7); a query at res 1–2 rolls up from tier 3, res 4 from tier 5,
 res 6 from tier 7 (see <code><a href="../reference/obis_h3t_sql.html">obis_h3t_sql()</a></code>). Rolling <em>up</em>
 is cheap; the expense is the base-tier scan.</p>
 </div>
 <div class="section level2">
-<h2 id="precomputed-vs--live-query-cost">Precomputed vs. live query cost<a class="anchor" aria-label="anchor" href="#precomputed-vs--live-query-cost"></a>
+<h2 id="precomputed-vs--live-query-cost-table-5">Precomputed vs. live query cost (Table 5)<a class="anchor" aria-label="anchor" href="#precomputed-vs--live-query-cost-table-5"></a>
 </h2>
 <p>Unfiltered and coarse-rank (phylum/class/order) indicators are
 <strong>precomputed</strong> into <code>idx_h3</code> /
-<code>idx_h3_taxon</code> (one row per cell, res 1–7) — served with a
-plain indexed lookup at any resolution. The children-taxa
-(<code>aphiaid=</code>) and SPUE paths have no precomputed layer: they
-aggregate <code>occ_h3</code> <strong>live</strong>, resolving the WoRMS
-subtree with a recursive CTE on each request.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">bench</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">label</span>, <span class="va">sql</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">t</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.time.html" class="external-link">system.time</a></span><span class="op">(</span><span class="fu"><a href="https://dbi.r-dbi.org/reference/dbGetQuery.html" class="external-link">dbGetQuery</a></span><span class="op">(</span><span class="va">con</span>, <span class="va">sql</span><span class="op">)</span><span class="op">)</span><span class="op">[[</span><span class="st">"elapsed"</span><span class="op">]</span><span class="op">]</span></span>
-<span>  <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span>query <span class="op">=</span> <span class="va">label</span>, seconds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">t</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span></span>
-<span>  <span class="fu">bench</span><span class="op">(</span><span class="st">"idx_h3 (precomputed, res 7)"</span>, <span class="fu"><a href="../reference/obis_h3t_sql.html">obis_h3t_sql</a></span><span class="op">(</span><span class="st">"es"</span>, res_placeholder <span class="op">=</span> <span class="st">"7"</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  <span class="fu">bench</span><span class="op">(</span><span class="st">"aphiaid Cetacea (live, res 7)"</span>,</span>
-<span>        <span class="fu"><a href="../reference/obis_h3t_sql.html">obis_h3t_sql</a></span><span class="op">(</span><span class="st">"n"</span>, aphiaid <span class="op">=</span> <span class="fl">2688</span>, res_placeholder <span class="op">=</span> <span class="st">"7"</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  <span class="fu">bench</span><span class="op">(</span><span class="st">"aphiaid diatoms (live, res 7)"</span>,   <span class="co"># ~71k descendant taxa</span></span>
-<span>        <span class="fu"><a href="../reference/obis_h3t_sql.html">obis_h3t_sql</a></span><span class="op">(</span><span class="st">"n"</span>, aphiaid <span class="op">=</span> <span class="fl">148899</span>, res_placeholder <span class="op">=</span> <span class="st">"7"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<code>idx_h3_taxon</code> (one row per cell, res 1–7), and each EOV into
+<code>idx_h3_eov</code> — all served with a plain indexed lookup at any
+resolution. The children-taxa (<code>aphiaid=</code>) and SPUE paths
+have no precomputed layer: they aggregate <code>occ_h3</code>
+<strong>live</strong>, resolving the WoRMS subtree with a recursive CTE
+on each request.</p>
+<p><code><a href="../reference/obis_bench_queries.html">obis_bench_queries()</a></code> builds the four paths a tile can
+take — precomputed all-taxa, precomputed EOV, live EOV subtree over
+<code>occ_h3</code>, and the SPUE effort proxy (two recursive subtrees)
+— and <code><a href="../reference/obis_bench.html">obis_bench()</a></code> times them. Cold = first run; warm =
+median of 3 repeats, which is what the Varnish-fronted service sees
+after the first viewer.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">q</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_bench_queries.html">obis_bench_queries</a></span><span class="op">(</span>res <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3L</span>, <span class="fl">5L</span>, <span class="fl">7L</span><span class="op">)</span>, eov <span class="op">=</span> <span class="st">"fish"</span>,</span>
+<span>                        num_aphiaid <span class="op">=</span> <span class="fl">137092L</span>, den_aphiaid <span class="op">=</span> <span class="fl">2688L</span><span class="op">)</span>  <span class="co"># humpback / Cetacea</span></span>
+<span><span class="va">b</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_bench.html">obis_bench</a></span><span class="op">(</span><span class="va">con</span>, <span class="va">q</span>, reps <span class="op">=</span> <span class="fl">3L</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>path <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">sub</a></span><span class="op">(</span><span class="st">" res \\d$"</span>, <span class="st">""</span>, <span class="va">label</span><span class="op">)</span>,</span>
+<span>         res  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">sub</a></span><span class="op">(</span><span class="st">".* res (\\d)$"</span>, <span class="st">"\\1"</span>, <span class="va">label</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
+<span>  <span class="va">b</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">path</span>, <span class="va">res</span>, <span class="va">rows</span>, <span class="va">cold_s</span>, <span class="va">warm_s</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">cold_s</span>, <span class="va">warm_s</span><span class="op">)</span>, <span class="op">~</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">.x</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  caption <span class="op">=</span> <span class="st">"Query latency by serving path (seconds)"</span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>Query latency by serving path (seconds)</caption>
+<thead><tr class="header">
+<th align="left">path</th>
+<th align="right">res</th>
+<th align="right">rows</th>
+<th align="right">cold_s</th>
+<th align="right">warm_s</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">idx_h3 all-taxa ES50</td>
+<td align="right">3</td>
+<td align="right">977</td>
+<td align="right">0.001</td>
+<td align="right">0.000</td>
+</tr>
+<tr class="even">
+<td align="left">idx_h3_eov fish ES50</td>
+<td align="right">3</td>
+<td align="right">939</td>
+<td align="right">0.001</td>
+<td align="right">0.001</td>
+</tr>
+<tr class="odd">
+<td align="left">live subtree fish ES50</td>
+<td align="right">3</td>
+<td align="right">939</td>
+<td align="right">0.062</td>
+<td align="right">0.064</td>
+</tr>
+<tr class="even">
+<td align="left">SPUE 137092/2688</td>
+<td align="right">3</td>
+<td align="right">527</td>
+<td align="right">0.024</td>
+<td align="right">0.019</td>
+</tr>
+<tr class="odd">
+<td align="left">idx_h3 all-taxa ES50</td>
+<td align="right">5</td>
+<td align="right">20169</td>
+<td align="right">0.001</td>
+<td align="right">0.001</td>
+</tr>
+<tr class="even">
+<td align="left">idx_h3_eov fish ES50</td>
+<td align="right">5</td>
+<td align="right">14702</td>
+<td align="right">0.001</td>
+<td align="right">0.001</td>
+</tr>
+<tr class="odd">
+<td align="left">live subtree fish ES50</td>
+<td align="right">5</td>
+<td align="right">14702</td>
+<td align="right">0.087</td>
+<td align="right">0.092</td>
+</tr>
+<tr class="even">
+<td align="left">SPUE 137092/2688</td>
+<td align="right">5</td>
+<td align="right">4662</td>
+<td align="right">0.035</td>
+<td align="right">0.025</td>
+</tr>
+<tr class="odd">
+<td align="left">idx_h3 all-taxa ES50</td>
+<td align="right">7</td>
+<td align="right">133069</td>
+<td align="right">0.002</td>
+<td align="right">0.001</td>
+</tr>
+<tr class="even">
+<td align="left">idx_h3_eov fish ES50</td>
+<td align="right">7</td>
+<td align="right">82049</td>
+<td align="right">0.001</td>
+<td align="right">0.002</td>
+</tr>
+<tr class="odd">
+<td align="left">live subtree fish ES50</td>
+<td align="right">7</td>
+<td align="right">82049</td>
+<td align="right">0.172</td>
+<td align="right">0.156</td>
+</tr>
+<tr class="even">
+<td align="left">SPUE 137092/2688</td>
+<td align="right">7</td>
+<td align="right">13983</td>
+<td align="right">0.028</td>
+<td align="right">0.027</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">b</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">res</span>, y <span class="op">=</span> <span class="va">warm_s</span>, color <span class="op">=</span> <span class="va">path</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_linerange.html" class="external-link">geom_linerange</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>ymin <span class="op">=</span> <span class="va">warm_s</span>, ymax <span class="op">=</span> <span class="va">cold_s</span><span class="op">)</span>, position <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/position_dodge.html" class="external-link">position_dodge</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">.6</span><span class="op">)</span>, linewidth <span class="op">=</span> <span class="fl">.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_point.html" class="external-link">geom_point</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>y <span class="op">=</span> <span class="va">cold_s</span><span class="op">)</span>, position <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/position_dodge.html" class="external-link">position_dodge</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">.6</span><span class="op">)</span>, shape <span class="op">=</span> <span class="fl">21</span>, fill <span class="op">=</span> <span class="st">"white"</span>, size <span class="op">=</span> <span class="fl">2.2</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_point.html" class="external-link">geom_point</a></span><span class="op">(</span>position <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/position_dodge.html" class="external-link">position_dodge</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">.6</span><span class="op">)</span>, size <span class="op">=</span> <span class="fl">3</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html" class="external-link">scale_x_continuous</a></span><span class="op">(</span>breaks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">b</span><span class="op">$</span><span class="va">res</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html" class="external-link">scale_y_log10</a></span><span class="op">(</span>labels <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">x</span>, <span class="st">" s"</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"H3 resolution"</span>, y <span class="op">=</span> <span class="st">"seconds (log)"</span>, color <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>       title <span class="op">=</span> <span class="st">"Query latency by serving path (filled = warm median, hollow = cold first run)"</span>,</span>
+<span>       caption <span class="op">=</span> <span class="va">store_label</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span>base_size <span class="op">=</span> <span class="fl">11</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span></span>
+<span><span class="va">p</span></span></code></pre></div>
+<div class="figure">
+<img src="figures/scaling-tab5-1.png" alt="plot of chunk tab5" width="100%"><p class="caption">
+plot of chunk tab5
+</p>
+</div>
 <p>Live cost grows with (a) the breadth of the subtree (a class resolves
 tens of thousands of descendants) and (b) the base-tier row count at
 fine resolution. The server caps a single statement at
-<code>H3T_STMT_TIMEOUT_MS</code> (8 s); a broad taxon at res 7 can
-approach it.</p>
+<code>H3T_STMT_TIMEOUT_MS</code> (8 s); a broad taxon at res 7 on the
+global store can approach it.</p>
 </div>
 <div class="section level2">
-<h2 id="the-spue-denominator-gets-sparse">The SPUE denominator gets sparse<a class="anchor" aria-label="anchor" href="#the-spue-denominator-gets-sparse"></a>
+<h2 id="the-spue-denominator-gets-sparse-fig--3b">The SPUE denominator gets sparse (Fig. 3b)<a class="anchor" aria-label="anchor" href="#the-spue-denominator-gets-sparse-fig--3b"></a>
 </h2>
 <p>The effort proxy divides by the <em>denominator</em> (effort-taxon
 records per cell). That denominator thins with resolution faster than
 intuition suggests: a ratio of 1/1 and 30/60 both render, but only the
-latter is trustworthy. Track the fraction of cells whose effort
-<code>n</code> falls below a reliability floor:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">floor_n</span> <span class="op">&lt;-</span> <span class="fl">20</span></span>
-<span><span class="va">sparsity</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">res</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">sql</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/obis_spue_sql.html">obis_spue_sql</a></span><span class="op">(</span>num_aphiaid <span class="op">=</span> <span class="fl">137111</span>, den_aphiaid <span class="op">=</span> <span class="fl">2688</span>,  <span class="co"># dolphin / Cetacea</span></span>
-<span>                       res_placeholder <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">res</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dbi.r-dbi.org/reference/dbGetQuery.html" class="external-link">dbGetQuery</a></span><span class="op">(</span><span class="va">con</span>, <span class="va">sql</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span>res <span class="op">=</span> <span class="va">res</span>, n_cells <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">d</span><span class="op">)</span>,</span>
-<span>         pct_below_floor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">d</span><span class="op">$</span><span class="va">n</span> <span class="op">&lt;</span> <span class="va">floor_n</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span><span class="fu">purrr</span><span class="fu">::</span><span class="fu"><a href="https://purrr.tidyverse.org/reference/map_dfr.html" class="external-link">map_dfr</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">4</span>, <span class="fl">6</span>, <span class="fl">7</span><span class="op">)</span>, <span class="va">sparsity</span><span class="op">)</span></span>
-<span><span class="co">#&gt; pct_below_floor rises steeply with res — fine-res SPUE is mostly low-effort noise</span></span></code></pre></div>
+latter is trustworthy. <code><a href="../reference/calc_spue_scale.html">calc_spue_scale()</a></code> tracks the number
+of effort cells, the median effort, and the fraction of cells whose
+effort falls below a reliability floor, across resolutions. Two case
+studies: humpback whale over all Cetacea (multi-species cetacean
+surveys), and loggerhead turtle over the sea-turtles EOV.</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tribble.html" class="external-link">tribble</a></span><span class="op">(</span></span>
+<span>  <span class="op">~</span><span class="va">group</span>,                         <span class="op">~</span><span class="va">num</span>,     <span class="op">~</span><span class="va">den</span>,</span>
+<span>  <span class="st">"humpback / Cetacea"</span>,           <span class="fl">137092L</span>,  <span class="fl">2688L</span>,</span>
+<span>  <span class="st">"loggerhead / seaTurtles EOV"</span>,  <span class="fl">137205L</span>,  <span class="fu"><a href="../reference/obis_eov_aphiaid.html">obis_eov_aphiaid</a></span><span class="op">(</span><span class="st">"seaTurtles"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">ss</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">cases</span><span class="op">)</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/calc_spue_scale.html">calc_spue_scale</a></span><span class="op">(</span><span class="va">con</span>, <span class="va">cases</span><span class="op">$</span><span class="va">num</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span>, <span class="va">cases</span><span class="op">$</span><span class="va">den</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span>, res <span class="op">=</span> <span class="va">RES</span>, group <span class="op">=</span> <span class="va">cases</span><span class="op">$</span><span class="va">group</span><span class="op">[</span><span class="va">i</span><span class="op">]</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">ss</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/starts_with.html" class="external-link">starts_with</a></span><span class="op">(</span><span class="st">"frac_"</span><span class="op">)</span>, <span class="op">~</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">.x</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span>, median_spue <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">median_spue</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;                          group res   area_km2 n_cells_effort effort_records</span></span>
+<span><span class="co">#&gt; 1           humpback / Cetacea   1 609788.442             28          94821</span></span>
+<span><span class="co">#&gt; 2           humpback / Cetacea   2  86801.780            125          94821</span></span>
+<span><span class="co">#&gt; 3           humpback / Cetacea   3  12393.435            527          94821</span></span>
+<span><span class="co">#&gt; 4           humpback / Cetacea   4   1770.348           1854          94821</span></span>
+<span><span class="co">#&gt; 5           humpback / Cetacea   5    252.904           4662          94821</span></span>
+<span><span class="co">#&gt; 6           humpback / Cetacea   6     36.129           8911          94821</span></span>
+<span><span class="co">#&gt; 7           humpback / Cetacea   7      5.161          13983          94821</span></span>
+<span><span class="co">#&gt; 8  loggerhead / seaTurtles EOV   1 609788.442             29          29926</span></span>
+<span><span class="co">#&gt; 9  loggerhead / seaTurtles EOV   2  86801.780            143          29926</span></span>
+<span><span class="co">#&gt; 10 loggerhead / seaTurtles EOV   3  12393.435            683          29926</span></span>
+<span><span class="co">#&gt; 11 loggerhead / seaTurtles EOV   4   1770.348           1903          29926</span></span>
+<span><span class="co">#&gt; 12 loggerhead / seaTurtles EOV   5    252.904           4184          29926</span></span>
+<span><span class="co">#&gt; 13 loggerhead / seaTurtles EOV   6     36.129           7584          29926</span></span>
+<span><span class="co">#&gt; 14 loggerhead / seaTurtles EOV   7      5.161          11761          29926</span></span>
+<span><span class="co">#&gt;    median_effort frac_present median_spue frac_effort_lt_10 frac_effort_lt_30</span></span>
+<span><span class="co">#&gt; 1          252.5        0.643       0.006             0.071             0.107</span></span>
+<span><span class="co">#&gt; 2           42.0        0.512       0.000             0.328             0.456</span></span>
+<span><span class="co">#&gt; 3            9.0        0.287       0.000             0.524             0.736</span></span>
+<span><span class="co">#&gt; 4            3.0        0.159       0.000             0.775             0.913</span></span>
+<span><span class="co">#&gt; 5            2.0        0.102       0.000             0.897             0.959</span></span>
+<span><span class="co">#&gt; 6            1.0        0.085       0.000             0.933             0.978</span></span>
+<span><span class="co">#&gt; 7            1.0        0.087       0.000             0.957             0.989</span></span>
+<span><span class="co">#&gt; 8          209.0        0.793       0.224             0.138             0.172</span></span>
+<span><span class="co">#&gt; 9           35.0        0.720       0.143             0.280             0.448</span></span>
+<span><span class="co">#&gt; 10           6.0        0.542       0.062             0.609             0.835</span></span>
+<span><span class="co">#&gt; 11           3.0        0.401       0.000             0.815             0.944</span></span>
+<span><span class="co">#&gt; 12           2.0        0.334       0.000             0.911             0.967</span></span>
+<span><span class="co">#&gt; 13           1.0        0.333       0.000             0.948             0.986</span></span>
+<span><span class="co">#&gt; 14           1.0        0.350       0.000             0.974             0.996</span></span>
+<span><span class="co">#&gt;    frac_effort_lt_100</span></span>
+<span><span class="co">#&gt; 1               0.321</span></span>
+<span><span class="co">#&gt; 2               0.640</span></span>
+<span><span class="co">#&gt; 3               0.894</span></span>
+<span><span class="co">#&gt; 4               0.964</span></span>
+<span><span class="co">#&gt; 5               0.986</span></span>
+<span><span class="co">#&gt; 6               0.995</span></span>
+<span><span class="co">#&gt; 7               0.996</span></span>
+<span><span class="co">#&gt; 8               0.345</span></span>
+<span><span class="co">#&gt; 9               0.699</span></span>
+<span><span class="co">#&gt; 10              0.939</span></span>
+<span><span class="co">#&gt; 11              0.975</span></span>
+<span><span class="co">#&gt; 12              0.991</span></span>
+<span><span class="co">#&gt; 13              0.998</span></span>
+<span><span class="co">#&gt; 14              0.999</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/plot_scale_curves.html">plot_scale_curves</a></span><span class="op">(</span></span>
+<span>  <span class="va">ss</span>,</span>
+<span>  metrics <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"n_cells_effort"</span>, <span class="st">"median_effort"</span>, <span class="st">"frac_effort_lt_30"</span>,</span>
+<span>              <span class="st">"frac_effort_lt_100"</span>, <span class="st">"frac_present"</span>, <span class="st">"median_spue"</span><span class="op">)</span>,</span>
+<span>  log_y   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"n_cells_effort"</span>, <span class="st">"median_effort"</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"SPUE effort denominator across resolutions"</span>, caption <span class="op">=</span> <span class="va">store_label</span><span class="op">)</span></span>
+<span><span class="va">p</span></span></code></pre></div>
+<div class="figure">
+<img src="figures/scaling-fig3b-1.png" alt="plot of chunk fig3b" width="100%"><p class="caption">
+plot of chunk fig3b
+</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="design-guidance">Design guidance<a class="anchor" aria-label="anchor" href="#design-guidance"></a>
@@ -159,11 +655,11 @@ latter is trustworthy. Track the fraction of cells whose effort
 <ul>
 <li>
 <strong>Prefer a precomputed layer</strong> where the filter is
-knowable ahead of time. All-taxa and phylum/class/order maps hit
-<code>idx_h3</code> / <code>idx_h3_taxon</code> and are
-resolution-independent in cost. If a children-taxa filter is used
-heavily (e.g. a fixed set of EOV groups), precompute it the same
-way.</li>
+knowable ahead of time. All-taxa, phylum/class/order and EOV maps hit
+<code>idx_h3</code> / <code>idx_h3_taxon</code> /
+<code>idx_h3_eov</code> and are resolution-independent in cost. If
+another children-taxa filter is used heavily, precompute it the same way
+(<code><a href="../reference/obis_eov_bake.html">obis_eov_bake()</a></code> is the template).</li>
 <li>
 <strong>Cap <code>res_max</code></strong> for live paths. Serving a
 broad subtree at res 7 is the worst case;
@@ -181,8 +677,8 @@ resolution most cells are low-effort. Aggregating to a coarser
 resolution (or a larger effort taxon) restores a usable
 denominator.</li>
 </ul>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://dbi.r-dbi.org/reference/dbDisconnect.html" class="external-link">dbDisconnect</a></span><span class="op">(</span><span class="va">con</span>, shutdown <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">DBI</span><span class="fu">::</span><span class="fu"><a href="https://dbi.r-dbi.org/reference/dbDisconnect.html" class="external-link">dbDisconnect</a></span><span class="op">(</span><span class="va">con</span>, shutdown <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

@@ -17,13 +17,13 @@ Source:
 [`DESCRIPTION`](https://github.com/marinebon/obisindicators/blob/main/DESCRIPTION)
 
 Ben B, Provoost P, Murray T (2026). *obisindicators: Develop marine
-biodiversity indicators from OBIS data*. R package version 0.6.0,
+biodiversity indicators from OBIS data*. R package version 0.6.1,
 <https://marinebon.org/obisindicators>.
 
     @Manual{,
       title = {obisindicators: Develop marine biodiversity indicators from OBIS data},
       author = {Ben Ben and Pieter Provoost and Tylar Murray},
       year = {2026},
-      note = {R package version 0.6.0},
+      note = {R package version 0.6.1},
       url = {https://marinebon.org/obisindicators},
     }
