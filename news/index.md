@@ -3,13 +3,14 @@
 ## obisindicators 0.6.1
 
 - **Precomputed store articles: the figures now show on the pkgdown site
-  and on GitHub.** The vignettes that query an `obis_h3` store
-  (`scaling`, `taxon_children`) rendered code-only (`eval = FALSE`)
-  because the store is not available on GitHub Actions. They move to
-  `vignettes/articles/` (pkgdown-only, excluded from the package build)
-  as `*.Rmd.orig` sources that `data-raw/precompute_articles.R` knits
-  locally against a store into committed `*.Rmd` + `figures/`; CI
-  renders those as-is. The tile maps stay live.
+  (and in the `paper/` gallery on GitHub).** The vignettes that query an
+  `obis_h3` store (`scaling`, `taxon_children`) rendered code-only
+  (`eval = FALSE`) because the store is not available on GitHub Actions.
+  They move to `vignettes/articles/` (pkgdown-only, excluded from the
+  package build) as `*.Rmd.orig` sources that
+  `data-raw/precompute_articles.R` knits locally against a store into
+  committed `*.Rmd` + `figures/`; CI renders those as-is. The tile maps
+  stay live.
   - The `paper/` Quarto notebooks are folded into the articles, which
     now double as the manuscript’s figure notebooks: `scaling` (Tables
     2, 5; Fig. 3), `taxon_children` (Table 3; Fig. 4), and new articles
