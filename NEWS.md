@@ -1,3 +1,25 @@
+# obisindicators 0.7.0
+
+* **New `obis_h3_export_parquet()`: export a store to hive-partitioned Parquet
+  for a serverless web app** (static hosting + DuckDB-WASM + deck.gl
+  `H3HexagonLayer`). Writes `<dir_out>/<release>/` with `all/res=N/`
+  (`idx_h3`), `eov/eov=<eov>/res=N/` (`idx_h3_eov`),
+  `taxon/rank=<rank>/taxon=<taxon>/res=N/` (`idx_h3_taxon`), and two layers
+  computed from `occ_h3` per decade (`decade/all/decade=<yyy0>/res=N/`,
+  `decade/eov/eov=<eov>/decade=<yyy0>/res=N/`; res 1-5 and decades 1960-2020
+  by default). Every file has `h3` (lowercase hex string), `cell_id`, `n`,
+  `sp`, `shannon`, `simpson`, `es`. Also writes `stats.parquet` (min, 2nd,
+  50th, 98th percentile, max and cell count per layer x key x res x variable,
+  for colour ramps), `taxon_groups.parquet` (the taxa and EOVs on offer, with
+  totals and on-disk / URL paths) and `release.json` (release, snapshot,
+  package and DuckDB versions, row counts per layer, layout, columns and a
+  manifest of every file). Partition values are percent-encoded by DuckDB;
+  `url_path` gives the form to fetch over HTTP.
+* The indicator SQL behind `idx_h3`, `idx_h3_taxon` and `idx_h3_eov` now comes
+  from one internal builder (`.h3t_indicators_sql()`), which the decade layers
+  of the export reuse. The output of the store build is unchanged.
+* `jsonlite` added to Suggests (used by the export).
+
 # obisindicators 0.6.1
 
 * **Precomputed store articles: the figures now show on the pkgdown site (and

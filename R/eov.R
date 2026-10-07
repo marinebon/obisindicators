@@ -237,37 +237,19 @@ obis_eov_sql <- function(
 }
 
 # SQL to compute EOV indicators at resolution `r` and INSERT into idx_h3_eov.
-# PARITY: the ES(esn) term below is the same translation of calc_indicators() as
-# .h3t_idx_sql() / .h3t_idx_taxon_sql() / the `es` branch of obis_h3t_sql() —
-# change one, change all four, and keep test-h3t-parity.R + test-eov-parity.R green.
+# the math is the shared .h3t_indicators_sql() (see its PARITY note); keep
+# test-h3t-parity.R + test-eov-parity.R green.
 .h3t_idx_eov_sql <- function(eov, r, esn = 50L) {
-  glue::glue("
-    INSERT INTO idx_h3_eov
-    WITH src AS (
+  src <- glue::glue("
       SELECT CAST(h3_cell_to_parent(o.cell_id, {r}) AS BIGINT) AS cell_id,
              o.species, SUM(o.records) AS ni
       FROM occ_h3 o
       JOIN eov e ON o.aphiaid = e.taxonID
       WHERE o.res = {H3T_RES_BASE} AND e.eov = '{eov}'
-      GROUP BY 1, 2),
-    tot AS (
-      SELECT cell_id, SUM(ni) AS n FROM src GROUP BY cell_id),
-    per AS (
-      SELECT s.cell_id, s.ni, t.n,
-        CASE
-          WHEN t.n - s.ni >= {esn} THEN 1 - exp(
-                 lgamma(t.n - s.ni + 1) + lgamma(t.n - {esn} + 1)
-               - lgamma(t.n - s.ni - {esn} + 1) - lgamma(t.n + 1))
-          WHEN t.n >= {esn} THEN 1
-          ELSE NULL END AS esi
-      FROM src s JOIN tot t USING (cell_id))
-    SELECT '{eov}' AS eov, {r} AS res, cell_id,
-      ANY_VALUE(n)                                       AS n,
-      COUNT(*)                                           AS sp,
-      -SUM((ni::DOUBLE / n) * ln(ni::DOUBLE / n))        AS shannon,
-      SUM((ni::DOUBLE / n) * (ni::DOUBLE / n))           AS simpson,
-      SUM(esi)                                           AS es
-    FROM per GROUP BY cell_id;")
+      GROUP BY 1, 2")
+  paste0("INSERT INTO idx_h3_eov\n", .h3t_indicators_sql(
+    src, select = glue::glue("'{eov}' AS eov, {r} AS res, cell_id"),
+    esn = esn), ";")
 }
 
 #' Bake the EOV membership and precomputed-indicator layers into a store

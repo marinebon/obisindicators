@@ -320,68 +320,68 @@ build_obis_h3_duckdb <- function(
   invisible(path_duckdb)
 }
 
-# SQL to compute all-taxa indicators at resolution `r` and INSERT into idx_h3.
-# the ES(esn) per-species term is the SQL translation of calc_indicators().
-.h3t_idx_sql <- function(r, esn = 50L) {
+# the one SQL translation of calc_indicators() used by every precomputed layer
+# (idx_h3, idx_h3_taxon, idx_h3_eov) and by the parquet export
+# (obis_h3_export_parquet(), incl. its per-decade layers). `src` is a SELECT
+# yielding `keys`, `cell_id`, `species` and `ni` (records of that species in that
+# cell), one row per (keys, cell_id, species). `select` is the leading column
+# list of the output (default: the keys then cell_id); it is followed by
+# n, sp, shannon, simpson, es. ES(esn) is NULL for a cell with n < esn.
+# PARITY: the `es` branch of obis_h3t_sql() carries the same ES(esn) term —
+# change one, change both, and keep test-h3t-parity.R + test-eov-parity.R green.
+.h3t_indicators_sql <- function(src, keys = character(0), select = NULL, esn = 50L) {
+  k  <- paste(c(keys, "cell_id"), collapse = ", ")
+  sk <- paste(paste0("s.", c(keys, "cell_id")), collapse = ", ")
+  if (is.null(select)) select <- k
   glue::glue("
-    INSERT INTO idx_h3
     WITH src AS (
-      SELECT CAST(h3_cell_to_parent(cell_id, {r}) AS BIGINT) AS cell_id,
-             species, SUM(records) AS ni
-      FROM occ_h3 WHERE res = {H3T_RES_BASE}
-      GROUP BY 1, 2),
+      {src}),
     tot AS (
-      SELECT cell_id, SUM(ni) AS n FROM src GROUP BY cell_id),
+      SELECT {k}, SUM(ni) AS n FROM src GROUP BY {k}),
     per AS (
-      SELECT s.cell_id, s.ni, t.n,
+      SELECT {sk}, s.ni, t.n,
         CASE
           WHEN t.n - s.ni >= {esn} THEN 1 - exp(
                  lgamma(t.n - s.ni + 1) + lgamma(t.n - {esn} + 1)
                - lgamma(t.n - s.ni - {esn} + 1) - lgamma(t.n + 1))
           WHEN t.n >= {esn} THEN 1
           ELSE NULL END AS esi
-      FROM src s JOIN tot t USING (cell_id))
-    SELECT {r} AS res, cell_id,
+      FROM src s JOIN tot t USING ({k}))
+    SELECT {select},
       ANY_VALUE(n)                                       AS n,
       COUNT(*)                                           AS sp,
       -SUM((ni::DOUBLE / n) * ln(ni::DOUBLE / n))        AS shannon,
       SUM((ni::DOUBLE / n) * (ni::DOUBLE / n))           AS simpson,
       SUM(esi)                                           AS es
-    FROM per GROUP BY cell_id;")
+    FROM per GROUP BY {k}")
+}
+
+# SQL to compute all-taxa indicators at resolution `r` and INSERT into idx_h3.
+.h3t_idx_sql <- function(r, esn = 50L) {
+  src <- glue::glue("
+      SELECT CAST(h3_cell_to_parent(cell_id, {r}) AS BIGINT) AS cell_id,
+             species, SUM(records) AS ni
+      FROM occ_h3 WHERE res = {H3T_RES_BASE}
+      GROUP BY 1, 2")
+  paste0("INSERT INTO idx_h3\n", .h3t_indicators_sql(
+    src, select = glue::glue("{r} AS res, cell_id"), esn = esn), ";")
 }
 
 # SQL to compute per-taxon indicators at resolution `r` for one `rank` column
-# (e.g. "class") and INSERT into idx_h3_taxon. Same ES(esn)/Shannon/Simpson/
-# richness math as .h3t_idx_sql(), with the rank's value carried as an extra
-# grouping key so each (taxon, cell) gets its own indicators.
+# (e.g. "class") and INSERT into idx_h3_taxon. Same math as .h3t_idx_sql(), with
+# the rank's value carried as an extra grouping key.
 .h3t_idx_taxon_sql <- function(rank, r, esn = 50L) {
   col <- sprintf('"%s"', rank)  # quote reserved words (e.g. "order")
-  glue::glue("
-    INSERT INTO idx_h3_taxon
-    WITH src AS (
+  src <- glue::glue("
       SELECT {col} AS taxon,
              CAST(h3_cell_to_parent(cell_id, {r}) AS BIGINT) AS cell_id,
              species, SUM(records) AS ni
       FROM occ_h3 WHERE res = {H3T_RES_BASE} AND {col} IS NOT NULL
-      GROUP BY 1, 2, 3),
-    tot AS (
-      SELECT taxon, cell_id, SUM(ni) AS n FROM src GROUP BY taxon, cell_id),
-    per AS (
-      SELECT s.taxon, s.cell_id, s.ni, t.n,
-        CASE
-          WHEN t.n - s.ni >= {esn} THEN 1 - exp(
-                 lgamma(t.n - s.ni + 1) + lgamma(t.n - {esn} + 1)
-               - lgamma(t.n - s.ni - {esn} + 1) - lgamma(t.n + 1))
-          WHEN t.n >= {esn} THEN 1
-          ELSE NULL END AS esi
-      FROM src s JOIN tot t USING (taxon, cell_id))
-    SELECT '{rank}' AS rank, taxon, {r} AS res, cell_id,
-      ANY_VALUE(n)                                       AS n,
-      COUNT(*)                                           AS sp,
-      -SUM((ni::DOUBLE / n) * ln(ni::DOUBLE / n))        AS shannon,
-      SUM((ni::DOUBLE / n) * (ni::DOUBLE / n))           AS simpson,
-      SUM(esi)                                           AS es
-    FROM per GROUP BY taxon, cell_id;")
+      GROUP BY 1, 2, 3")
+  paste0("INSERT INTO idx_h3_taxon\n", .h3t_indicators_sql(
+    src, keys = "taxon",
+    select = glue::glue("'{rank}' AS rank, taxon, {r} AS res, cell_id"),
+    esn = esn), ";")
 }
 
 #' Build an h3t tile SQL query for an OBIS biodiversity indicator
