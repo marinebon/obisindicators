@@ -102,7 +102,11 @@ test_that("export of the demo store: layout, counts, h3, decade math, stats, jso
   expect_equal(js$layers$all$files, nrow(cnt))
   expect_setequal(names(js$columns),
                   c("h3", "cell_id", "n", "sp", "shannon", "simpson", "es"))
-  expect_equal(length(js$files), length(files) - 1L)  # all but release.json
+  mf <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT * FROM read_parquet('{out}/files.parquet')"))
+  expect_equal(nrow(mf), length(files) - 2L)  # all but release.json, files.parquet
+  expect_equal(sum(mf$rows[mf$layer == "all"]), sum(cnt$n))
+  expect_equal(js$files$n_files, length(files) - 1L)
 
   # idempotence: refuses to clobber, replaces with overwrite = TRUE
   expect_error(obis_h3_export_parquet(con, dir, "v20260728", verbose = FALSE),
@@ -199,4 +203,44 @@ test_that("export of the paper fixture: eov, taxon, decade_eov layers", {
   expect_equal(es_t$n_cells, 2)  # A 200, C 260 have ES50; B (45) is NULL -> not counted
   js <- jsonlite::read_json(file.path(out, "release.json"))
   expect_setequal(names(js$layers), c("all", "eov", "taxon", "decade_all", "decade_eov"))
+})
+
+test_that("export writes exactly one data_0.parquet per partition", {
+  # regression: on the global store (~11k taxon partitions) DuckDB split 251
+  # partitions into data_0 + data_1 once more than partitioned_write_max_open_files
+  # were open; the export now lifts that cap. needs enough rows to trigger it.
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("jsonlite")
+  skip_if_not(h3_ext_ok(), "duckdb h3 community extension unavailable")
+
+  con <- DBI::dbConnect(duckdb::duckdb())
+  dir <- tempfile("export_")
+  on.exit({ DBI::dbDisconnect(con, shutdown = TRUE); unlink(dir, recursive = TRUE) },
+          add = TRUE)
+  DBI::dbExecute(con, "LOAD h3;")
+  DBI::dbExecute(con, "
+    CREATE TABLE idx_h3 AS
+    SELECT 1::UTINYINT AS res, 581690000000000000 + i AS cell_id, 1::BIGINT AS n,
+           1::BIGINT AS sp, 0::DOUBLE AS shannon, 1::DOUBLE AS simpson,
+           NULL::DOUBLE AS es
+    FROM range(10) t(i);")
+  DBI::dbExecute(con, "
+    CREATE TABLE occ_h3 (res UTINYINT, cell_id BIGINT, aphiaid BIGINT,
+      species VARCHAR, date_year SMALLINT, records BIGINT);")
+  DBI::dbExecute(con, "
+    CREATE TABLE idx_h3_taxon AS
+    SELECT 'class' AS rank, 'T' || (i % 300) AS taxon, (1 + i % 2)::UTINYINT AS res,
+           581690000000000000 + i AS cell_id, 1::BIGINT AS n, 1::BIGINT AS sp,
+           0::DOUBLE AS shannon, 1::DOUBLE AS simpson, NULL::DOUBLE AS es
+    FROM range(1000000) t(i);")
+  DBI::dbExecute(con, "SET partitioned_write_max_open_files = 2;")
+
+  obis_h3_export_parquet(con, dir, "test", res_decade = 1L, verbose = FALSE)
+  pq <- list.files(file.path(dir, "test", "taxon"), "\\.parquet$", recursive = TRUE)
+  expect_length(pq, 300L)  # taxon T<k> always lands in one res (k % 2)
+  expect_true(all(basename(pq) == "data_0.parquet"))
+  # the setting is reset to its default afterwards
+  expect_equal(DBI::dbGetQuery(con,
+    "SELECT current_setting('partitioned_write_max_open_files') AS v")$v, 100)
 })

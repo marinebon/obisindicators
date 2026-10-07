@@ -31,6 +31,7 @@ EXPORT_VARS <- c("n", "sp", "shannon", "simpson", "es")
 #'   decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
 #'   stats.parquet                             value ranges per layer x key x res x variable
 #'   taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
+#'   files.parquet                             manifest: layer, path, url_path, rows, bytes per file
 #' ```
 #'
 #' Every indicator file has the columns `h3` (lowercase hex string), `cell_id`,
@@ -48,7 +49,8 @@ EXPORT_VARS <- c("n", "sp", "shannon", "simpson", "es")
 #' DuckDB decodes them on read. A static web server decodes the URL once, so a
 #' browser must request the on-disk name with `%` itself encoded (`%2520`);
 #' `taxon_groups.parquet` carries both `path` (on disk) and `url_path` (to
-#' fetch), and `release.json` lists every file with both forms.
+#' fetch), and `files.parquet` lists every file with both forms. Each partition
+#' is exactly one `data_0.parquet`.
 #'
 #' `stats.parquet` has one row per (`layer`, `key`, `decade`, `res`,
 #' `variable`) with `min`, `p02`, `p50`, `p98`, `max` and `n_cells` (cells with
@@ -116,7 +118,15 @@ obis_h3_export_parquet <- function(
   out <- normalizePath(out)  # resolve symlinks (e.g. /tmp) to match DuckDB paths
 
   # resource guards ----
+  # one file per partition: DuckDB otherwise closes a partition's file once more
+  # than partitioned_write_max_open_files (default 100) are open and starts a
+  # data_1.parquet for it (the global taxon layer has ~11k partitions)
   DBI::dbExecute(con, "SET preserve_insertion_order = false;")
+  DBI::dbExecute(con, "SET partitioned_write_max_open_files = 1000000;")
+  on.exit({
+    DBI::dbExecute(con, "RESET preserve_insertion_order;")
+    DBI::dbExecute(con, "RESET partitioned_write_max_open_files;")
+  }, add = TRUE)
   if (!is.null(memory_limit))
     DBI::dbExecute(con, glue::glue("SET memory_limit = '{memory_limit}';"))
   if (!is.null(threads))
@@ -302,6 +312,17 @@ obis_h3_export_parquet <- function(
     bytes    = as.numeric(file.size(file.path(out, files))),
     stringsAsFactors = FALSE)
 
+  manifest$layer <- "meta"  # stats.parquet, taxon_groups.parquet
+  for (l in names(layers))
+    manifest$layer[startsWith(manifest$path, paste0(layers[[l]]$path, "/"))] <- l
+  f_files <- file.path(out, "files.parquet")
+  duckdb::duckdb_register(con, "export_files", manifest)
+  on.exit(duckdb::duckdb_unregister(con, "export_files"), add = TRUE)
+  DBI::dbExecute(con, glue::glue(
+    "COPY (SELECT layer, path, url_path, rows::BIGINT AS rows, bytes::BIGINT AS bytes
+           FROM export_files ORDER BY path)
+     TO '{q(f_files)}' (FORMAT PARQUET, COMPRESSION {compression});"))
+
   store <- tryCatch(DBI::dbGetInfo(con)$dbname, error = function(e) NA_character_)
   snap  <- if (grepl("^v?\\d{8}$", release)) {
     d <- sub("^v", "", release)
@@ -342,7 +363,11 @@ obis_h3_export_parquet <- function(
     decade_note = paste(
       "decade = floor(date_year / 10) * 10; records with no year are excluded;",
       "indicators computed with the same SQL as idx_h3 / idx_h3_eov."),
-    files = manifest)
+    files = list(
+      file    = "files.parquet",
+      columns = c("layer", "path", "url_path", "rows", "bytes"),
+      n_files = nrow(manifest) + 1L,
+      note    = "manifest of every parquet file except itself (HTTP cannot glob)"))
   f_json <- file.path(out, "release.json")
   jsonlite::write_json(info, f_json, auto_unbox = TRUE, pretty = TRUE,
                        digits = NA, dataframe = "rows")
@@ -356,8 +381,8 @@ obis_h3_export_parquet <- function(
       message(sprintf("  %-11s %12s rows %6d files %10s", l,
                       format(layers[[l]]$rows, big.mark = ","),
                       layers[[l]]$files, mb(layers[[l]]$bytes)))
-    message(sprintf("  total       %6d files %10s", nrow(manifest) + 1L,
-                    mb(sum(manifest$bytes) + file.size(f_json))))
+    message(sprintf("  total       %6d files %10s", nrow(manifest) + 2L,
+                    mb(sum(manifest$bytes) + file.size(f_json) + file.size(f_files))))
   }
-  invisible(c(f_json, file.path(out, manifest$path)))
+  invisible(c(f_json, f_files, file.path(out, manifest$path)))
 }

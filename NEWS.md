@@ -11,10 +11,12 @@
   `sp`, `shannon`, `simpson`, `es`. Also writes `stats.parquet` (min, 2nd,
   50th, 98th percentile, max and cell count per layer x key x res x variable,
   for colour ramps), `taxon_groups.parquet` (the taxa and EOVs on offer, with
-  totals and on-disk / URL paths) and `release.json` (release, snapshot,
-  package and DuckDB versions, row counts per layer, layout, columns and a
-  manifest of every file). Partition values are percent-encoded by DuckDB;
-  `url_path` gives the form to fetch over HTTP.
+  totals and on-disk / URL paths), `files.parquet` (a manifest of every file
+  with its row count and size, since HTTP cannot glob) and `release.json`
+  (release, snapshot, package and DuckDB versions, row counts per layer,
+  layout and columns). Each partition is exactly one `data_0.parquet`.
+  Partition values are percent-encoded by DuckDB; `url_path` gives the form to
+  fetch over HTTP.
 * The indicator SQL behind `idx_h3`, `idx_h3_taxon` and `idx_h3_eov` now comes
   from one internal builder (`.h3t_indicators_sql()`), which the decade layers
   of the export reuse. The output of the store build is unchanged.

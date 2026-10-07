@@ -62,6 +62,7 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):
   decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
   stats.parquet                             value ranges per layer x key x res x variable
   taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
+  files.parquet                             manifest: layer, path, url_path, rows, bytes per file
 }\if{html}{\out{</div>}}
 
 Every indicator file has the columns \code{h3} (lowercase hex string), \code{cell_id},
@@ -78,7 +79,8 @@ Partition values are percent-encoded by DuckDB (a space becomes \verb{\%20}), an
 DuckDB decodes them on read. A static web server decodes the URL once, so a
 browser must request the on-disk name with \verb{\%} itself encoded (\verb{\%2520});
 \code{taxon_groups.parquet} carries both \code{path} (on disk) and \code{url_path} (to
-fetch), and \code{release.json} lists every file with both forms.
+fetch), and \code{files.parquet} lists every file with both forms. Each partition
+is exactly one \code{data_0.parquet}.
 
 \code{stats.parquet} has one row per (\code{layer}, \code{key}, \code{decade}, \code{res},
 \code{variable}) with \code{min}, \code{p02}, \code{p50}, \code{p98}, \code{max} and \code{n_cells} (cells with
