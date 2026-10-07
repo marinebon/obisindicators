@@ -15,6 +15,9 @@ EXPORT_COLUMNS <- list(
 
 EXPORT_VARS <- c("n", "sp", "shannon", "simpson", "es")
 
+# max partitions written by one COPY (open files; DuckDB's own default cap)
+EXPORT_MAX_OPEN <- 100L
+
 #' Export an obis_h3 store to hive-partitioned Parquet
 #'
 #' Writes the indicator layers of a store built by [build_obis_h3_duckdb()] to
@@ -168,8 +171,23 @@ obis_h3_export_parquet <- function(
 
   if (has("idx_h3_taxon")) {
     say("taxon: idx_h3_taxon ...")
-    rows <- copy(glue::glue("SELECT rank, taxon, res, {cols} FROM idx_h3_taxon"),
-                 "taxon", c("rank", "taxon", "res"))
+    # thousands of (rank, taxon, res) partitions: write them in batches of at
+    # most EXPORT_MAX_OPEN partitions per COPY, so the open files stay under
+    # the OS limit (macOS: 256 per process by default)
+    grp <- DBI::dbGetQuery(con, "
+      SELECT rank, taxon, COUNT(DISTINCT res)::INTEGER AS n_res
+      FROM idx_h3_taxon GROUP BY 1, 2 ORDER BY 1, 2")
+    batch <- cumsum(grp$n_res) %/% EXPORT_MAX_OPEN
+    rows  <- 0
+    for (b in unique(batch)) {
+      g    <- grp[batch == b, ]
+      keys <- paste(sprintf("(%s, %s)", .h3t_sql_quote(g$rank), .h3t_sql_quote(g$taxon)),
+                    collapse = ", ")
+      rows <- rows + copy(glue::glue(
+        "SELECT rank, taxon, res, {cols} FROM idx_h3_taxon
+         SEMI JOIN (VALUES {keys}) v(rank, taxon) USING (rank, taxon)"),
+        "taxon", c("rank", "taxon", "res"))
+    }
     add_layer("taxon", "taxon", c("rank", "taxon", "res"), rows)
   } else say("skipping taxon: no idx_h3_taxon table")
 

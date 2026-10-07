@@ -14,7 +14,9 @@
   totals and on-disk / URL paths), `files.parquet` (a manifest of every file
   with its row count and size, since HTTP cannot glob) and `release.json`
   (release, snapshot, package and DuckDB versions, row counts per layer,
-  layout and columns). Each partition is exactly one `data_0.parquet`.
+  layout and columns). Each partition is exactly one `data_0.parquet`; the
+  taxon layer is written in batches of at most 100 partitions per COPY to stay
+  under the OS open-file limit.
   Partition values are percent-encoded by DuckDB; `url_path` gives the form to
   fetch over HTTP.
 * The indicator SQL behind `idx_h3`, `idx_h3_taxon` and `idx_h3_eov` now comes
