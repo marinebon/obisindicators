@@ -27,7 +27,8 @@ EXPORT_MAX_OPEN <- 100L
 #' ```
 #' <dir_out>/<release>/
 #'   release.json                              build metadata, row counts, layout, columns, file manifest
-#'   all/res=<1..7>/data_0.parquet             idx_h3 (all taxa, all years)
+#'   all/res=<1..5>/data_0.parquet             idx_h3 (all taxa, all years)
+#'   all/res=<6,7>/p=<parent>/data_0.parquet   the fine res, one file per parent cell
 #'   eov/eov=<eov>/res=<r>/data_0.parquet      idx_h3_eov
 #'   taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order)
 #'   decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
@@ -55,6 +56,20 @@ EXPORT_MAX_OPEN <- 100L
 #' fetch), and `files.parquet` lists every file with both forms. Each partition
 #' is exactly one `data_0.parquet`.
 #'
+#' **Parent partitions for the fine resolutions.** A whole res-7 layer is tens
+#' of MB, too much for a browser to load at once, so the resolutions named in
+#' `parent_res` are split by parent cell: every row of `all/res=7/` goes to
+#' `all/res=7/p=<h3 of its res-3 parent>/data_0.parquet` (default res 6 by its
+#' res-2 parent, res 7 by its res-3 parent), and a viewer loads only the parent
+#' cells that cover its viewport. The taxon layer uses `parent_res_taxon`
+#' (default the res-0 base cell: res-3 parents would make over a million
+#' files across ~5k taxa). A (layer key, res) with at most `parent_min_rows`
+#' rows stays one whole file, since splitting it would only add requests. The
+#' decade layers are never split (their default resolutions are 1-5).
+#' `files.parquet` has a `parent` column (the partition's parent cell, NULL for
+#' a whole file; its resolution is the parent resolution), and each layer in
+#' `release.json` lists the `parent_res` actually used.
+#'
 #' `stats.parquet` has one row per (`layer`, `key`, `decade`, `res`,
 #' `variable`) with `min`, `p02`, `p50`, `p98`, `max` and `n_cells` (cells with
 #' a non-NULL value; a variable NULL everywhere in a partition gets a row with
@@ -67,6 +82,17 @@ EXPORT_MAX_OPEN <- 100L
 #' @param release release tag, e.g. `"v20260728"` (the OBIS snapshot date the
 #'   store was built from); recorded in `release.json`.
 #' @param res_decade H3 resolutions for the decade layers (default 1-5).
+#' @param parent_res named integer vector, fine resolution -> parent
+#'   resolution, for the `all` and `eov` layers: those resolutions are written
+#'   one file per parent cell (`res=<r>/p=<parent>/`). Default
+#'   `c("6" = 2L, "7" = 3L)`; `NULL` writes every resolution whole.
+#' @param parent_res_taxon the same for the taxon layer (default
+#'   `c("6" = 0L, "7" = 0L)`, the base cell).
+#' @param parent_min_rows a (layer key, res) with at most this many rows is
+#'   written whole even when its res is in `parent_res` (default 50000).
+#' @param max_open max partitions written by one COPY (default 100); each open
+#'   partition holds a file open, so keep it under the process limit
+#'   (`ulimit -n`, 256 on macOS by default).
 #' @param compression Parquet compression codec (default `"zstd"`).
 #' @param overwrite replace an existing `dir_out/release/` (default FALSE: stop).
 #' @param decades decades (first year) to export in the decade layers; default
@@ -89,7 +115,11 @@ obis_h3_export_parquet <- function(
   con,
   dir_out,
   release,
-  res_decade   = 1:5,
+  res_decade       = 1:5,
+  parent_res       = c("6" = 2L, "7" = 3L),
+  parent_res_taxon = c("6" = 0L, "7" = 0L),
+  parent_min_rows  = 50000,
+  max_open         = EXPORT_MAX_OPEN,
   compression  = "zstd",
   overwrite    = FALSE,
   decades      = seq(1960L, 2020L, by = 10L),
@@ -105,7 +135,18 @@ obis_h3_export_parquet <- function(
     grepl("^[A-Za-z0-9._-]+$", release),
     is.character(compression), length(compression) == 1L,
     grepl("^[A-Za-z0-9]+$", compression),
-    all(as.integer(res_decade) %in% H3T_RES_IDX))
+    all(as.integer(res_decade) %in% H3T_RES_IDX),
+    is.numeric(parent_min_rows), length(parent_min_rows) == 1L,
+    is.numeric(max_open), length(max_open) == 1L, max_open >= 1)
+  check_pr <- function(pr) {
+    if (is.null(pr) || !length(pr)) return(integer(0))
+    stopifnot(!is.null(names(pr)), !anyNA(suppressWarnings(as.integer(names(pr)))),
+              all(as.integer(pr) >= 0L), all(as.integer(pr) < as.integer(names(pr))))
+    stats::setNames(as.integer(pr), as.integer(names(pr)))
+  }
+  parent_res       <- check_pr(parent_res)
+  parent_res_taxon <- check_pr(parent_res_taxon)
+  max_open         <- as.integer(max_open)
   t0  <- Sys.time()
   say <- function(...) if (verbose) message(...)
   res_decade <- sort(unique(as.integer(res_decade)))
@@ -148,47 +189,92 @@ obis_h3_export_parquet <- function(
       "COPY ({sql}) TO '{q(d)}' (FORMAT PARQUET, COMPRESSION {compression}, ",
       "PARTITION_BY ({paste(parts, collapse = ', ')}), OVERWRITE_OR_IGNORE);"))
   }
+  # the same, in batches of at most max_open partitions per COPY so the open
+  # files stay under the OS limit: `groups` lists the partitions (one column
+  # per entry of `parts`), `sql` must select those columns
+  copy_batched <- function(sql, sub, parts, groups) {
+    if (!nrow(groups)) return(0)
+    lits  <- lapply(parts, function(p) {
+      v <- groups[[p]]
+      if (is.character(v)) .h3t_sql_quote(v) else as.character(as.integer(v))
+    })
+    tuple <- do.call(paste, c(lits, sep = ", "))
+    batch <- (seq_len(nrow(groups)) - 1L) %/% max_open
+    rows  <- 0
+    for (b in unique(batch)) {
+      keys <- paste0("(", tuple[batch == b], ")", collapse = ", ")
+      rows <- rows + copy(glue::glue(
+        "SELECT * FROM ({sql}) _s
+         SEMI JOIN (VALUES {keys}) _v({paste(parts, collapse = ', ')})
+         USING ({paste(parts, collapse = ', ')})"), sub, parts)
+    }
+    rows
+  }
   layers <- list()
-  add_layer <- function(name, sub, parts, rows) {
-    layers[[name]] <<- list(
+  add_layer <- function(name, sub, parts, rows, pr_used = integer(0)) {
+    l <- list(
       path       = sub,
       partitions = I(parts),
       template   = paste0(sub, "/", paste0(parts, "=<", parts, ">", collapse = "/"),
                           "/data_0.parquet"),
       rows       = rows)
+    if (length(pr_used)) {
+      l$parent_res      <- as.list(pr_used)
+      l$template_parent <- sub("/data_0.parquet$", "/p=<parent>/data_0.parquet",
+                               l$template)
+    }
+    layers[[name]] <<- l
+  }
+
+  # a precomputed layer (idx_h3, idx_h3_eov, idx_h3_taxon): whole files per
+  # (keys, res), except the res in `pr` with more than parent_min_rows rows,
+  # which go one file per parent cell (res=<r>/p=<parent>/) ----
+  write_layer <- function(name, sub, from, keys, pr) {
+    parts <- c(keys, "res")
+    kc    <- paste0(keys, ", ", collapse = "")
+    if (!length(keys)) kc <- ""
+    grp <- DBI::dbGetQuery(con, glue::glue(
+      "SELECT {kc}res::INTEGER AS res, COUNT(*)::DOUBLE AS n
+       FROM {from} GROUP BY ALL ORDER BY ALL"))
+    fine <- grp$res %in% as.integer(names(pr)) & grp$n > parent_min_rows
+    rows <- copy_batched(glue::glue("SELECT {kc}res, {cols} FROM {from}"),
+                         sub, parts, grp[!fine, parts, drop = FALSE])
+    pr_used <- pr[as.character(sort(unique(grp$res[fine])))]
+    if (any(fine)) {
+      p_expr <- paste0("CASE res ", paste(sprintf(
+        "WHEN %d THEN lower(printf('%%x', h3_cell_to_parent(cell_id, %d)))",
+        as.integer(names(pr_used)), pr_used), collapse = " "), " END")
+      src <- glue::glue(
+        "SELECT {kc}res, {p_expr} AS p, {cols} FROM {from}
+         WHERE res IN ({paste(names(pr_used), collapse = ', ')})")
+      fg  <- grp[fine, parts, drop = FALSE]
+      fk  <- paste0("(", do.call(paste, c(lapply(parts, function(p) {
+        v <- fg[[p]]
+        if (is.character(v)) .h3t_sql_quote(v) else as.character(as.integer(v))
+      }), sep = ", ")), ")", collapse = ", ")
+      pg  <- DBI::dbGetQuery(con, glue::glue(
+        "SELECT DISTINCT {kc}res::INTEGER AS res, p FROM ({src}) _s
+         SEMI JOIN (VALUES {fk}) _v({paste(parts, collapse = ', ')})
+         USING ({paste(parts, collapse = ', ')})
+         ORDER BY ALL"))
+      say("  ", nrow(pg), " parent partitions for res ",
+          paste(names(pr_used), collapse = ", "))
+      rows <- rows + copy_batched(src, sub, c(parts, "p"), pg)
+    }
+    add_layer(name, sub, parts, rows, pr_used)
   }
 
   say("all: idx_h3 ...")
-  rows <- copy(glue::glue("SELECT res, {cols} FROM idx_h3"), "all", "res")
-  add_layer("all", "all", "res", rows)
+  write_layer("all", "all", "idx_h3", character(0), parent_res)
 
   if (has("idx_h3_eov")) {
     say("eov: idx_h3_eov ...")
-    rows <- copy(glue::glue("SELECT eov, res, {cols} FROM idx_h3_eov"),
-                 "eov", c("eov", "res"))
-    add_layer("eov", "eov", c("eov", "res"), rows)
+    write_layer("eov", "eov", "idx_h3_eov", "eov", parent_res)
   } else say("skipping eov: no idx_h3_eov table")
 
   if (has("idx_h3_taxon")) {
     say("taxon: idx_h3_taxon ...")
-    # thousands of (rank, taxon, res) partitions: write them in batches of at
-    # most EXPORT_MAX_OPEN partitions per COPY, so the open files stay under
-    # the OS limit (macOS: 256 per process by default)
-    grp <- DBI::dbGetQuery(con, "
-      SELECT rank, taxon, COUNT(DISTINCT res)::INTEGER AS n_res
-      FROM idx_h3_taxon GROUP BY 1, 2 ORDER BY 1, 2")
-    batch <- cumsum(grp$n_res) %/% EXPORT_MAX_OPEN
-    rows  <- 0
-    for (b in unique(batch)) {
-      g    <- grp[batch == b, ]
-      keys <- paste(sprintf("(%s, %s)", .h3t_sql_quote(g$rank), .h3t_sql_quote(g$taxon)),
-                    collapse = ", ")
-      rows <- rows + copy(glue::glue(
-        "SELECT rank, taxon, res, {cols} FROM idx_h3_taxon
-         SEMI JOIN (VALUES {keys}) v(rank, taxon) USING (rank, taxon)"),
-        "taxon", c("rank", "taxon", "res"))
-    }
-    add_layer("taxon", "taxon", c("rank", "taxon", "res"), rows)
+    write_layer("taxon", "taxon", "idx_h3_taxon", c("rank", "taxon"), parent_res_taxon)
   } else say("skipping taxon: no idx_h3_taxon table")
 
   # decade layers: computed from occ_h3 with the store's indicator SQL ----
@@ -238,22 +324,33 @@ obis_h3_export_parquet <- function(
   # explicit hive types, so a taxon or EOV name is never auto-cast to a number
   hive_type <- c(res = "INTEGER", decade = "INTEGER", eov = "VARCHAR",
                  rank = "VARCHAR", taxon = "VARCHAR")
+  hive_type <- c(hive_type, p = "VARCHAR")
   rd <- function(sub, parts) glue::glue(
     "read_parquet('{q(file.path(out, sub))}{strrep('/*', length(parts))}/*.parquet', ",
     "hive_partitioning = true, hive_types = {{",
     "{paste(sprintf(\"'%s': '%s'\", parts, hive_type[parts]), collapse = ', ')}}})")
+  # a layer's whole files, plus its parent partitions (one level deeper) if any
+  has_files <- function(sub, depth) length(Sys.glob(file.path(
+    out, sub, paste(rep("*", depth), collapse = "/"), "*.parquet"))) > 0
+  rd_layer <- function(l, sel) {
+    parts <- layers[[l]]$partitions
+    src   <- character(0)
+    if (has_files(layers[[l]]$path, length(parts)))
+      src <- glue::glue("SELECT {sel} FROM {rd(layers[[l]]$path, parts)}")
+    if (length(layers[[l]]$parent_res))
+      src <- c(src, glue::glue("SELECT {sel} FROM {rd(layers[[l]]$path, c(parts, 'p'))}"))
+    paste(src, collapse = "\nUNION ALL\n")
+  }
   key_sql <- list(
     all        = "'' AS key, '' AS rank, NULL::INTEGER AS decade",
     eov        = "eov AS key, '' AS rank, NULL::INTEGER AS decade",
     taxon      = "taxon AS key, rank, NULL::INTEGER AS decade",
     decade_all = "'' AS key, '' AS rank, decade",
     decade_eov = "eov AS key, '' AS rank, decade")
-  parts_of <- lapply(layers, `[[`, "partitions")
   live     <- names(layers)[vapply(layers, function(l) l$rows > 0, logical(1))]
   vals     <- paste(sprintf("%s::DOUBLE AS %s", EXPORT_VARS, EXPORT_VARS), collapse = ", ")
-  union    <- paste(vapply(live, function(l) glue::glue(
-    "SELECT '{l}' AS layer, {key_sql[[l]]}, res, {vals} ",
-    "FROM {rd(layers[[l]]$path, parts_of[[l]])}"), character(1)),
+  union    <- paste(vapply(live, function(l) rd_layer(l, glue::glue(
+    "'{l}' AS layer, {key_sql[[l]]}, res, {vals}")), character(1)),
     collapse = "\nUNION ALL\n")
   f_stats <- file.path(out, "stats.parquet")
   DBI::dbExecute(con, glue::glue("
@@ -329,6 +426,8 @@ obis_h3_export_parquet <- function(
     rows     = as.numeric(meta$num_rows[match(files, meta$rel)]),
     bytes    = as.numeric(file.size(file.path(out, files))),
     stringsAsFactors = FALSE)
+  manifest$parent <- ifelse(grepl("/p=[0-9a-f]+/", files),
+                            sub(".*/p=([0-9a-f]+)/.*", "\\1", files), NA_character_)
 
   manifest$layer <- "meta"  # stats.parquet, taxon_groups.parquet
   for (l in names(layers))
@@ -337,7 +436,8 @@ obis_h3_export_parquet <- function(
   duckdb::duckdb_register(con, "export_files", manifest)
   on.exit(duckdb::duckdb_unregister(con, "export_files"), add = TRUE)
   DBI::dbExecute(con, glue::glue(
-    "COPY (SELECT layer, path, url_path, rows::BIGINT AS rows, bytes::BIGINT AS bytes
+    "COPY (SELECT layer, path, url_path, rows::BIGINT AS rows, bytes::BIGINT AS bytes,
+                  parent::VARCHAR AS parent
            FROM export_files ORDER BY path)
      TO '{q(f_files)}' (FORMAT PARQUET, COMPRESSION {compression});"))
 
@@ -383,9 +483,20 @@ obis_h3_export_parquet <- function(
       "indicators computed with the same SQL as idx_h3 / idx_h3_eov."),
     files = list(
       file    = "files.parquet",
-      columns = c("layer", "path", "url_path", "rows", "bytes"),
+      columns = c("layer", "path", "url_path", "rows", "bytes", "parent"),
       n_files = nrow(manifest) + 1L,
-      note    = "manifest of every parquet file except itself (HTTP cannot glob)"))
+      note    = "manifest of every parquet file except itself (HTTP cannot glob)"),
+    parents = list(
+      parent_res       = as.list(parent_res),
+      parent_res_taxon = as.list(parent_res_taxon),
+      parent_min_rows  = parent_min_rows,
+      note = paste(
+        "a layer's resolutions listed in its `parent_res` are split one file per",
+        "parent cell, <layer path>/.../res=<r>/p=<parent h3>/data_0.parquet, for",
+        "every (layer key, res) with more than parent_min_rows rows (others stay",
+        "whole); files.parquet `parent` is that parent cell (NULL for a whole",
+        "file), and its H3 resolution is the parent resolution. A viewer loads",
+        "the parents covering its viewport.")))
   f_json <- file.path(out, "release.json")
   jsonlite::write_json(info, f_json, auto_unbox = TRUE, pretty = TRUE,
                        digits = NA, dataframe = "rows")

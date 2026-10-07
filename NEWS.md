@@ -1,3 +1,18 @@
+# obisindicators 0.7.1
+
+* **`obis_h3_export_parquet()` splits the fine resolutions by parent cell**, so
+  a browser loads only the cells covering its viewport instead of a whole
+  33 MB `all/res=7` file. New arguments `parent_res` (default
+  `c("6" = 2L, "7" = 3L)`: res 6 by its res-2 parent, res 7 by its res-3
+  parent, for the `all` and `eov` layers), `parent_res_taxon` (default the
+  res-0 base cell, which keeps the taxon layer to thousands rather than
+  millions of files), `parent_min_rows` (default 50000: smaller
+  (layer key, res) partitions stay whole) and `max_open` (partitions per
+  COPY). Split partitions are written to `.../res=<r>/p=<parent h3>/data_0.parquet`;
+  res 1-5 and the decade layers stay whole. `files.parquet` gains a `parent`
+  column (NULL for whole files) and `release.json` documents each layer's
+  `parent_res` and the rule (`parents`).
+
 # obisindicators 0.7.0
 
 * **New `obis_h3_export_parquet()`: export a store to hive-partitioned Parquet

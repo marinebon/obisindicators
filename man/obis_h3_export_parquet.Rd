@@ -9,6 +9,10 @@ obis_h3_export_parquet(
   dir_out,
   release,
   res_decade = 1:5,
+  parent_res = c(`6` = 2L, `7` = 3L),
+  parent_res_taxon = c(`6` = 0L, `7` = 0L),
+  parent_min_rows = 50000,
+  max_open = EXPORT_MAX_OPEN,
   compression = "zstd",
   overwrite = FALSE,
   decades = seq(1960L, 2020L, by = 10L),
@@ -27,6 +31,21 @@ obis_h3_export_parquet(
 store was built from); recorded in \code{release.json}.}
 
 \item{res_decade}{H3 resolutions for the decade layers (default 1-5).}
+
+\item{parent_res}{named integer vector, fine resolution -> parent
+resolution, for the \code{all} and \code{eov} layers: those resolutions are written
+one file per parent cell (\verb{res=<r>/p=<parent>/}). Default
+\code{c("6" = 2L, "7" = 3L)}; \code{NULL} writes every resolution whole.}
+
+\item{parent_res_taxon}{the same for the taxon layer (default
+\code{c("6" = 0L, "7" = 0L)}, the base cell).}
+
+\item{parent_min_rows}{a (layer key, res) with at most this many rows is
+written whole even when its res is in \code{parent_res} (default 50000).}
+
+\item{max_open}{max partitions written by one COPY (default 100); each open
+partition holds a file open, so keep it under the process limit
+(\code{ulimit -n}, 256 on macOS by default).}
 
 \item{compression}{Parquet compression codec (default \code{"zstd"}).}
 
@@ -55,7 +74,8 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):
 \details{
 \if{html}{\out{<div class="sourceCode">}}\preformatted{<dir_out>/<release>/
   release.json                              build metadata, row counts, layout, columns, file manifest
-  all/res=<1..7>/data_0.parquet             idx_h3 (all taxa, all years)
+  all/res=<1..5>/data_0.parquet             idx_h3 (all taxa, all years)
+  all/res=<6,7>/p=<parent>/data_0.parquet   the fine res, one file per parent cell
   eov/eov=<eov>/res=<r>/data_0.parquet      idx_h3_eov
   taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order)
   decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
@@ -81,6 +101,20 @@ browser must request the on-disk name with \verb{\%} itself encoded (\verb{\%252
 \code{taxon_groups.parquet} carries both \code{path} (on disk) and \code{url_path} (to
 fetch), and \code{files.parquet} lists every file with both forms. Each partition
 is exactly one \code{data_0.parquet}.
+
+\strong{Parent partitions for the fine resolutions.} A whole res-7 layer is tens
+of MB, too much for a browser to load at once, so the resolutions named in
+\code{parent_res} are split by parent cell: every row of \verb{all/res=7/} goes to
+\verb{all/res=7/p=<h3 of its res-3 parent>/data_0.parquet} (default res 6 by its
+res-2 parent, res 7 by its res-3 parent), and a viewer loads only the parent
+cells that cover its viewport. The taxon layer uses \code{parent_res_taxon}
+(default the res-0 base cell: res-3 parents would make over a million
+files across ~5k taxa). A (layer key, res) with at most \code{parent_min_rows}
+rows stays one whole file, since splitting it would only add requests. The
+decade layers are never split (their default resolutions are 1-5).
+\code{files.parquet} has a \code{parent} column (the partition's parent cell, NULL for
+a whole file; its resolution is the parent resolution), and each layer in
+\code{release.json} lists the \code{parent_res} actually used.
 
 \code{stats.parquet} has one row per (\code{layer}, \code{key}, \code{decade}, \code{res},
 \code{variable}) with \code{min}, \code{p02}, \code{p50}, \code{p98}, \code{max} and \code{n_cells} (cells with

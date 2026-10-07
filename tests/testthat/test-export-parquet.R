@@ -38,7 +38,7 @@ test_that("export of the demo store: layout, counts, h3, decade math, stats, jso
     d <- file.path(out, "all", paste0("res=", cnt$res[i]))
     expect_true(dir.exists(d))
     got <- DBI::dbGetQuery(con, glue::glue(
-      "SELECT COUNT(*)::DOUBLE AS n FROM read_parquet('{d}/*.parquet')"))$n
+      "SELECT COUNT(*)::DOUBLE AS n FROM read_parquet('{d}/**/*.parquet')"))$n
     expect_identical(got, cnt$n[i])
   }
 
@@ -99,7 +99,11 @@ test_that("export of the demo store: layout, counts, h3, decade math, stats, jso
   expect_equal(js$obis_snapshot, "2026-07-28")
   expect_true(all(c("all", "decade_all") %in% names(js$layers)))
   expect_equal(js$layers$all$rows, sum(cnt$n))
-  expect_equal(js$layers$all$files, nrow(cnt))
+  n_par <- DBI::dbGetQuery(con, "
+    SELECT res::INTEGER AS res, COUNT(DISTINCT h3_cell_to_parent(cell_id, res - 4))::INTEGER AS n
+    FROM idx_h3 WHERE res >= 6 GROUP BY 1 ORDER BY 1")
+  expect_equal(js$layers$all$files, sum(cnt$res <= 5) + sum(n_par$n))
+  expect_equal(unlist(js$layers$all$parent_res), c("6" = 2L, "7" = 3L))
   expect_setequal(names(js$columns),
                   c("h3", "cell_id", "n", "sp", "shannon", "simpson", "es"))
   mf <- DBI::dbGetQuery(con, glue::glue(
@@ -115,6 +119,95 @@ test_that("export of the demo store: layout, counts, h3, decade math, stats, jso
                                    overwrite = TRUE, verbose = FALSE)
   expect_setequal(basename(dirname(files2)), basename(dirname(files)))
   expect_equal(length(files2), length(files))
+})
+
+test_that("export splits the fine res of the demo store by parent cell", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("jsonlite")
+  skip_if_not_installed("h3")
+  skip_if_not(file.exists(demo_store), "demo store not found")
+  skip_if_not(h3_ext_ok(), "duckdb h3 community extension unavailable")
+
+  con <- obis_store_connect(demo_store)
+  dir <- tempfile("export_")
+  on.exit({ DBI::dbDisconnect(con, shutdown = TRUE); unlink(dir, recursive = TRUE) },
+          add = TRUE)
+  # parent_min_rows = 0: every taxon with res 6/7 rows is split too
+  obis_h3_export_parquet(con, dir, "v1", res_decade = 1L, parent_min_rows = 0,
+                         max_open = 500L, threads = 2L, verbose = FALSE)
+  out <- file.path(dir, "v1")
+  mf  <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/files.parquet')"))
+
+  # res <= 5 stay one whole file each, with no parent
+  for (r in 1:5) {
+    expect_true(file.exists(file.path(out, "all", paste0("res=", r), "data_0.parquet")))
+    expect_true(all(is.na(mf$parent[mf$layer == "all" & grepl(paste0("/res=", r, "/"), mf$path)])))
+  }
+  for (pr in list(c(6L, 2L), c(7L, 3L))) {
+    r <- pr[1]; rp <- pr[2]
+    d <- file.path(out, "all", paste0("res=", r))
+    # no whole file left; partition count = distinct parents in the store
+    expect_false(file.exists(file.path(d, "data_0.parquet")))
+    want <- DBI::dbGetQuery(con, glue::glue(
+      "SELECT COUNT(DISTINCT h3_cell_to_parent(cell_id, {rp}))::INTEGER AS np,
+              COUNT(*)::DOUBLE AS n FROM idx_h3 WHERE res = {r}"))
+    pdirs <- list.dirs(d, recursive = FALSE, full.names = FALSE)
+    expect_true(all(grepl("^p=[0-9a-f]+$", pdirs)))
+    expect_length(pdirs, want$np)
+    expect_true(all(file.exists(file.path(d, pdirs, "data_0.parquet"))))
+    # row totals unchanged
+    got <- DBI::dbGetQuery(con, glue::glue(
+      "SELECT COUNT(*)::DOUBLE AS n FROM read_parquet('{d}/*/*.parquet')"))$n
+    expect_identical(got, want$n)
+    # every h3 in a partition has the partition key as its parent (h3 R package)
+    smp <- DBI::dbGetQuery(con, glue::glue(
+      "SELECT h3, p FROM read_parquet('{d}/*/*.parquet', hive_partitioning = true,
+                                       hive_types = {{'p': 'VARCHAR'}})
+       USING SAMPLE 300 ROWS"))
+    expect_equal(nrow(smp), 300L)
+    expect_identical(unname(vapply(smp$h3, h3::h3_to_parent, character(1), res = rp)), smp$p)
+    # the manifest: one row per partition, parent = path key, at the parent res
+    m <- mf[mf$layer == "all" & grepl(paste0("^all/res=", r, "/"), mf$path), ]
+    expect_equal(nrow(m), want$np)
+    expect_identical(m$parent, sub(".*/p=([0-9a-f]+)/.*", "\\1", m$path))
+    expect_true(all(vapply(m$parent[1:5], h3::h3_get_resolution, numeric(1)) == rp))
+    expect_equal(sum(m$rows), want$n)
+  }
+
+  # the taxon layer splits by base cell (res 0); totals unchanged (the demo
+  # store's idx_h3_taxon is empty; the paper fixture test covers real rows)
+  tx <- DBI::dbGetQuery(con, "
+    SELECT COUNT(*)::DOUBLE AS n,
+           COUNT(DISTINCT (rank, taxon, res, h3_cell_to_parent(cell_id, 0)))::INTEGER AS np
+    FROM idx_h3_taxon WHERE res >= 6")
+  mt <- mf[mf$layer == "taxon" & !is.na(mf$parent), ]
+  expect_equal(nrow(mt), tx$np)
+  expect_equal(sum(mt$rows), tx$n)
+  expect_true(all(vapply(unique(mt$parent), h3::h3_get_resolution, numeric(1)) == 0))
+  expect_equal(sum(mf$rows[mf$layer == "taxon"]),
+               DBI::dbGetQuery(con, "SELECT COUNT(*)::DOUBLE AS n FROM idx_h3_taxon")$n)
+
+  # stats still cover res 6/7 (read through the parent partitions)
+  st <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT res, n_cells FROM read_parquet('{out}/stats.parquet')
+     WHERE layer = 'all' AND variable = 'n' ORDER BY res"))
+  cnt <- DBI::dbGetQuery(con, "SELECT res::INTEGER AS res, COUNT(*)::DOUBLE AS n
+                               FROM idx_h3 GROUP BY 1 ORDER BY 1")
+  expect_equal(st$n_cells, cnt$n)
+
+  # release.json documents it
+  js <- jsonlite::read_json(file.path(out, "release.json"))
+  expect_true("parent" %in% unlist(js$files$columns))
+  expect_equal(js$parents$parent_min_rows, 0)
+
+  # parent_min_rows above every count keeps everything whole
+  obis_h3_export_parquet(con, dir, "v0", res_decade = 1L, parent_min_rows = 1e9,
+                         threads = 2L, verbose = FALSE)
+  m0 <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT * FROM read_parquet('{file.path(dir, 'v0')}/files.parquet')"))
+  expect_true(all(is.na(m0$parent)))
+  expect_equal(sum(m0$layer == "all"), 7L)
 })
 
 test_that("export of the paper fixture: eov, taxon, decade_eov layers", {
@@ -203,6 +296,35 @@ test_that("export of the paper fixture: eov, taxon, decade_eov layers", {
   expect_equal(es_t$n_cells, 2)  # A 200, C 260 have ES50; B (45) is NULL -> not counted
   js <- jsonlite::read_json(file.path(out, "release.json"))
   expect_setequal(names(js$layers), c("all", "eov", "taxon", "decade_all", "decade_eov"))
+  expect_null(js$layers$taxon$parent_res)  # tiny fixture: below parent_min_rows
+
+  # split every fine partition: taxon by base cell, encoded names kept
+  obis_h3_export_parquet(con, dir, "split", res_decade = 5L, parent_min_rows = 0,
+                         verbose = FALSE)
+  sp <- file.path(dir, "split")
+  mf <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{sp}/files.parquet')"))
+  for (r in 6:7) {
+    want <- DBI::dbGetQuery(con, glue::glue(
+      "SELECT COUNT(DISTINCT (rank, taxon, h3_cell_to_parent(cell_id, 0)))::INTEGER AS np,
+              COUNT(*)::DOUBLE AS n FROM idx_h3_taxon WHERE res = {r}"))
+    m <- mf[mf$layer == "taxon" & grepl(paste0("/res=", r, "/p="), mf$path), ]
+    expect_equal(nrow(m), want$np)
+    expect_equal(sum(m$rows), want$n)
+    expect_true(all(vapply(m$parent, h3::h3_get_resolution, numeric(1)) == 0))
+  }
+  expect_true(any(startsWith(
+    mf$url_path, "taxon/rank=class/taxon=Reptilia%2520incertae%2520sedis/res=7/p=")))
+  e7 <- mf[mf$layer == "eov" & grepl("^eov/eov=seaTurtles/res=7/", mf$path), ]
+  expect_true(all(vapply(e7$parent, h3::h3_get_resolution, numeric(1)) == 3))
+  js <- jsonlite::read_json(file.path(sp, "release.json"))
+  expect_equal(unlist(js$layers$taxon$parent_res), c("6" = 0L, "7" = 0L))
+  expect_equal(unlist(js$layers$eov$parent_res), c("6" = 2L, "7" = 3L))
+  # stats from split files equal those from whole files
+  s_whole <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT * FROM read_parquet('{out}/stats.parquet') WHERE res >= 6 AND decade IS NULL ORDER BY ALL"))
+  s_split <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT * FROM read_parquet('{sp}/stats.parquet') WHERE res >= 6 AND decade IS NULL ORDER BY ALL"))
+  expect_equal(s_split, s_whole)
 })
 
 test_that("export writes exactly one data_0.parquet per partition", {
