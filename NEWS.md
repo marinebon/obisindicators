@@ -12,6 +12,10 @@
   res 1-5 and the decade layers stay whole. `files.parquet` gains a `parent`
   column (NULL for whole files) and `release.json` documents each layer's
   `parent_res` and the rule (`parents`).
+* **New `data-raw/refresh_obis_h3.sh`: the monthly `obis-h3` release pipeline** (sync OBIS open data, build
+  the store, `obis_h3_export_parquet()`, validate against the previous release, upload to S3, then write
+  `obis-h3/latest.json`). Scheduled from `oceanmetrics/erddap-places` on the msens runner; documented in
+  `data-raw/README.md`. Supports `--skip-sync/-build/-export/-upload`, `--release` and `--dry-run`.
 
 # obisindicators 0.7.0
 
