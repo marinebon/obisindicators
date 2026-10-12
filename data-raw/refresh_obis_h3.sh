@@ -266,6 +266,14 @@ else
     RELEASE="v$(tr -dc '0-9' < "$SYNC_MARKER")"
   fi
 fi
+# the OBIS data date: the newest object in the synced occurrence/ (aws s3 sync gives each file its S3
+# LastModified, and OBIS updates the folder one dataset at a time, publishing no export date of its own).
+# It is release.json's obis_snapshot when this run builds the store; the release tag stays the sync date
+OBIS_DATA_DATE=""
+if [ "$DRY" -eq 0 ] && [ -d "$OCC_DIR" ]; then
+  OBIS_DATA_DATE=$(TZ=UTC find "$OCC_DIR" -name '*.parquet' -printf '%TY-%Tm-%Td\n' 2>/dev/null | sort | tail -1)
+  echo "OBIS data date (newest object): ${OBIS_DATA_DATE:-unknown}"
+fi
 [[ "$RELEASE" =~ ^v[0-9]{8}$ ]] || die "release tag must look like v20260828, got '$RELEASE'"
 OUT="$DIR_OUT/$RELEASE"
 echo "release: $RELEASE   output: $OUT"
@@ -322,8 +330,9 @@ if [ "$SKIP_EXPORT" -eq 0 ]; then
   # (a hand-picked subset missed eov.R's obis_eov_label() until 2026-10-12);
   # release.json takes the version from the checkout's DESCRIPTION (OBIS_PKG_ROOT)
   # the WoRMS version goes into release.json only when this run built the store from it
-  wv=""; [ "$SKIP_BUILD" -eq 0 ] && wv="$WORMS_VERSION"
-  run in_r OBIS_PKG_ROOT="$PKG_ROOT" OBIS_WORMS_VERSION="$wv" Rscript -e '
+  # (so is the OBIS data date: with --skip-build the store may predate the files on disk)
+  wv=""; od=""; [ "$SKIP_BUILD" -eq 0 ] && { wv="$WORMS_VERSION"; od="$OBIS_DATA_DATE"; }
+  run in_r OBIS_PKG_ROOT="$PKG_ROOT" OBIS_WORMS_VERSION="$wv" OBIS_DATA_DATE="$od" Rscript -e '
     a <- commandArgs(TRUE)
     suppressMessages({library(DBI); library(duckdb); library(glue); library(jsonlite)})
     for (f in list.files(file.path(Sys.getenv("OBIS_PKG_ROOT"), "R"), "[.]R$", full.names = TRUE)) source(f)
@@ -409,6 +418,7 @@ rj = json.load(open(sys.argv[1]))
 print(json.dumps({"release": sys.argv[2],
                   "base": f"{sys.argv[3]}/{sys.argv[2]}/",
                   "obis_snapshot": rj["obis_snapshot"],
+                  **({"worms_version": rj["worms_version"]} if rj.get("worms_version") else {}),
                   "built_at": rj["built_at"]}, indent=2))
 PY
     cat "$latest"

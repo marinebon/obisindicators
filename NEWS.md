@@ -1,3 +1,16 @@
+# obisindicators 0.7.3
+
+* **`release.json`'s `obis_snapshot` is the OBIS data date**, the date of the
+  newest object in `s3://obis-open-data/occurrence/` the store was built from,
+  not the date the refresh ran. OBIS updates that folder one dataset at a time
+  and publishes no export date, so `refresh_obis_h3.sh` reads it off the synced
+  files (which `aws s3 sync` stamps with their S3 `LastModified`) and passes it
+  as `OBIS_DATA_DATE`; without it, the date in the release tag is used as
+  before. For v20261012 that is 2026-10-11 (synced 2026-10-12). The release tag
+  stays the sync date.
+* `latest.json` also carries `worms_version`, the ChecklistBank WoRMS version
+  the taxonomy came from.
+
 # obisindicators 0.7.2
 
 * **Family is a precomputed taxon rank.** `H3T_IDX_RANKS` gains `"family"`, so

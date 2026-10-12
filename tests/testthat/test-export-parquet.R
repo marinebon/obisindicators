@@ -235,10 +235,14 @@ test_that("export of the paper fixture: eov, taxon, decade_eov layers", {
   DBI::dbExecute(con, "UPDATE idx_h3_taxon SET taxon = 'Reptilia incertae sedis'
                        WHERE taxon = 'Reptilia'")
 
-  withr::local_envvar(OBIS_WORMS_VERSION = "2026-10-01")  # as refresh_obis_h3.sh passes it
-  obis_h3_export_parquet(con, dir, "test", res_decade = c(5L, 7L), verbose = FALSE)
-  out <- file.path(dir, "test")
-  expect_equal(jsonlite::read_json(file.path(out, "release.json"))$worms_version, "2026-10-01")
+  # as refresh_obis_h3.sh passes them
+  withr::local_envvar(OBIS_WORMS_VERSION = "2026-10-01", OBIS_DATA_DATE = "2026-10-11")
+  obis_h3_export_parquet(con, dir, "v20261012", res_decade = c(5L, 7L), verbose = FALSE)
+  out <- file.path(dir, "v20261012")
+  js  <- jsonlite::read_json(file.path(out, "release.json"))
+  expect_equal(js$worms_version, "2026-10-01")
+  expect_equal(js$obis_snapshot, "2026-10-11")  # the OBIS data date, not the tag's sync date
+  expect_equal(js$release, "v20261012")
 
   # eov layer: row count per (eov, res) equals idx_h3_eov
   for (k in c("seaTurtles", "seabirds")) for (r in c(1L, 7L)) {
@@ -386,6 +390,20 @@ test_that("export writes exactly one data_0.parquet per partition", {
   # the setting is reset to its default afterwards
   expect_equal(DBI::dbGetQuery(con,
     "SELECT current_setting('partitioned_write_max_open_files') AS v")$v, 100)
+})
+
+test_that(".obis_snapshot() is the OBIS data date when known, else the release tag's date", {
+  # refresh_obis_h3.sh passes the newest OBIS object's date (OBIS updates per dataset and states no
+  # export date); the release tag is the sync date, which matters less
+  expect_identical(.obis_snapshot("v20261012", "2026-10-11"), "2026-10-11")
+  expect_identical(.obis_snapshot("v20261012", ""), "2026-10-12")
+  expect_identical(.obis_snapshot("20261012", ""), "2026-10-12")
+  # anything but YYYY-MM-DD is ignored, never written into release.json
+  expect_identical(.obis_snapshot("v20261012", "2026-10-11T17:07:33Z"), "2026-10-12")
+  expect_identical(.obis_snapshot("v20261012", "yesterday"), "2026-10-12")
+  expect_identical(.obis_snapshot("test", ""), "test")
+  withr::local_envvar(OBIS_DATA_DATE = "2026-10-11")
+  expect_identical(.obis_snapshot("v20261012"), "2026-10-11")
 })
 
 test_that(".obisindicators_version() reads the checkout's DESCRIPTION, else the installed package", {

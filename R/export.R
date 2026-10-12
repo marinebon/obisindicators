@@ -79,8 +79,11 @@ EXPORT_MAX_OPEN <- 100L
 #'
 #' @param con connection from [obis_store_connect()] (read-only is fine).
 #' @param dir_out output directory; files go under `dir_out/release/`.
-#' @param release release tag, e.g. `"v20260728"` (the OBIS snapshot date the
-#'   store was built from); recorded in `release.json`.
+#' @param release release tag, e.g. `"v20260728"` (the date of the OBIS sync
+#'   the store was built from); recorded in `release.json`. Its
+#'   `obis_snapshot` is the environment variable `OBIS_DATA_DATE` (the newest
+#'   OBIS object's date, which `refresh_obis_h3.sh` passes) when that is a
+#'   `YYYY-MM-DD` date, else the date in the tag.
 #' @param res_decade H3 resolutions for the decade layers (default 1-5).
 #' @param parent_res named integer vector, fine resolution -> parent
 #'   resolution, for the `all` and `eov` layers: those resolutions are written
@@ -449,10 +452,7 @@ obis_h3_export_parquet <- function(
      TO '{q(f_files)}' (FORMAT PARQUET, COMPRESSION {compression});"))
 
   store <- tryCatch(DBI::dbGetInfo(con)$dbname, error = function(e) NA_character_)
-  snap  <- if (grepl("^v?\\d{8}$", release)) {
-    d <- sub("^v", "", release)
-    paste(substr(d, 1, 4), substr(d, 5, 6), substr(d, 7, 8), sep = "-")
-  } else release
+  snap  <- .obis_snapshot(release)
   for (l in names(layers)) {
     lf <- manifest[startsWith(manifest$path, paste0(layers[[l]]$path, "/")), ]
     layers[[l]]$rows  <- sum(lf$rows)
@@ -461,6 +461,8 @@ obis_h3_export_parquet <- function(
   }
   info <- list(
     release                = release,
+    # the OBIS data date: the newest object of s3://obis-open-data/occurrence/ the store was built
+    # from (OBIS_DATA_DATE, set by refresh_obis_h3.sh), else the date in the release tag
     obis_snapshot          = snap,
     store                  = basename(store),
     obisindicators_version = .obisindicators_version(),
@@ -524,6 +526,18 @@ obis_h3_export_parquet <- function(
                     mb(sum(manifest$bytes) + file.size(f_json) + file.size(f_files))))
   }
   invisible(c(f_json, f_files, file.path(out, manifest$path)))
+}
+
+# release.json's obis_snapshot: the OBIS data date when known (the newest object of
+# s3://obis-open-data/occurrence/, as refresh_obis_h3.sh reads it off the synced files), else the
+# date in a vYYYYMMDD release tag, else the tag itself
+.obis_snapshot <- function(release, data_date = Sys.getenv("OBIS_DATA_DATE")) {
+  if (grepl("^\\d{4}-\\d{2}-\\d{2}$", data_date)) return(data_date)
+  if (grepl("^v?\\d{8}$", release)) {
+    d <- sub("^v", "", release)
+    return(paste(substr(d, 1, 4), substr(d, 5, 6), substr(d, 7, 8), sep = "-"))
+  }
+  release
 }
 
 # the obisindicators version for release.json: the checkout's DESCRIPTION when the code was sourced
