@@ -17,11 +17,14 @@
 #   --skip-build   reuse the newest obis_h3_global_*.duckdb (or $STORE)
 #   --skip-export  reuse an existing $DIR_OUT/<release>/ (it is still validated)
 #   --skip-upload  stop after validation; also skips latest.json
+#   --skip-taxonomy  keep $TAXON_PARQUET as it is (no ChecklistBank check)
+#   --taxonomy-only  run only (a2), then stop (refresh taxon.parquet by hand)
 #   --release TAG  release tag, vYYYYMMDD (default: the UTC date of the sync)
 #   --dry-run      print what each step would run; change nothing
 #
-# Steps: (a) preflight disk (exit 2 if < MIN_FREE_GB) (b) sync (c) build in the
-# `plumber` container (d) export obis_h3_export_parquet() (e) validate vs the
+# Steps: (a) preflight disk (exit 2 if < MIN_FREE_GB) (a2) WoRMS taxonomy: rebuild
+# $TAXON_PARQUET from ChecklistBank's WoRMS archive when its version changed (b) sync
+# (c) build (taxon gap-fill from the WoRMS REST API included) (d) export obis_h3_export_parquet() (e) validate vs the
 # previous release (exit 4) (f) aws s3 sync, no --delete (g) latest.json LAST
 # (h) summary.
 #
@@ -31,8 +34,13 @@
 # NOT done here: swapping the h3t service to the new store (needs sudo). After a
 # successful run, on the host:
 #   data-raw/deploy_obis_h3.sh --skip-sync --skip-build --store <new .duckdb> --yes
-# The WoRMS taxon.parquet ($TAXON_PARQUET) is a manual input; refresh it separately
-# with data-raw/build_taxon_parquet.R when WoRMS changes (the build aborts if absent).
+# The WoRMS taxon.parquet ($TAXON_PARQUET) comes from ChecklistBank dataset 2011 (WoRMS's own
+# monthly DwC-A, re-imported there; public, no login): step (a2) compares the dataset's `version`
+# with $TAXON_PARQUET.json and, when it differs, downloads /archive (~350 MB, kept in $WORMS_DIR),
+# runs data-raw/build_taxon_parquet.R and records the version. If ChecklistBank cannot be reached
+# the existing parquet is kept (a warning); with none at all the run stops. AphiaIDs that OBIS
+# carries but the download lacks (AlgaeBase-sourced algae, ...) are fetched from the WoRMS REST
+# API by the build itself (obis_taxon_fill_gaps(), to closure; the build stops if any remain).
 #
 # NEVER set OBIS_GLOBAL=true: streaming from S3 OOM-wedged msens on 2026-06-23. This
 # script always builds from the local parquet snapshot, with the build script's
@@ -43,6 +51,7 @@
 #   BUILD_CONTAINER=plumber ("" = run R here, inside the obis-h3 image)  MIN_FREE_GB=110  MIN_PCT=90 (new vs previous total records)
 #   OBIS_MEMORY=7GB OBIS_THREADS=2 OBIS_MAX_TEMP=20GB OBIS_TEMP_DIR=$OBIS_DIR/tmp (build)
 #   EXPORT_MEMORY=6GB EXPORT_THREADS=2 (export)  STORE=<.duckdb> (with --skip-build)
+#   WORMS_DIR=$(dirname $TAXON_PARQUET)/worms  CLB_DATASET=2011 (ChecklistBank key of WoRMS)
 #   S3_BUCKET=oceanmetrics.io-public  S3_PREFIX=obis-h3
 #   PUBLIC_BASE=https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3
 #   PREV_RELEASE=<tag to compare with>  ALLOW_NO_PREV=1 (skip the comparison if none can be read)
@@ -65,19 +74,25 @@ OBIS_TEMP_DIR="${OBIS_TEMP_DIR:-$OBIS_DIR/tmp}"
 EXPORT_MEMORY="${EXPORT_MEMORY:-6GB}"
 EXPORT_THREADS="${EXPORT_THREADS:-2}"
 TAXON_PARQUET="${TAXON_PARQUET:-$(dirname "$OBIS_DIR")/derived/taxon.parquet}"
+WORMS_DIR="${WORMS_DIR:-$(dirname "$TAXON_PARQUET")/worms}"
+CLB_DATASET="${CLB_DATASET:-2011}"
+CLB_API="https://api.checklistbank.org/dataset/$CLB_DATASET"
 S3_BUCKET="${S3_BUCKET:-oceanmetrics.io-public}"
 S3_PREFIX="${S3_PREFIX:-obis-h3}"
 PUBLIC_BASE="${PUBLIC_BASE:-https://s3.us-east-1.amazonaws.com/$S3_BUCKET/$S3_PREFIX}"
 LOCK_FILE="${LOCK_FILE:-$OBIS_DIR/refresh_obis_h3.lock}"
 SYNC_MARKER="$OBIS_DIR/occurrence.synced_at"
 
-SKIP_SYNC=0; SKIP_BUILD=0; SKIP_EXPORT=0; SKIP_UPLOAD=0; DRY=0; RELEASE=""
+SKIP_SYNC=0; SKIP_BUILD=0; SKIP_EXPORT=0; SKIP_UPLOAD=0; SKIP_TAXONOMY=0; TAXONOMY_ONLY=0; DRY=0; RELEASE=""
+WORMS_VERSION=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --skip-sync)   SKIP_SYNC=1 ;;
     --skip-build)  SKIP_BUILD=1 ;;
     --skip-export) SKIP_EXPORT=1 ;;
     --skip-upload) SKIP_UPLOAD=1 ;;
+    --skip-taxonomy) SKIP_TAXONOMY=1 ;;
+    --taxonomy-only) TAXONOMY_ONLY=1; SKIP_SYNC=1; SKIP_EXPORT=1; SKIP_UPLOAD=1 ;;
     --dry-run)     DRY=1 ;;
     --release)     RELEASE="${2:?--release needs vYYYYMMDD}"; shift ;;
     -h|--help)     sed -n '2,47p' "$0"; exit 0 ;;
@@ -147,10 +162,12 @@ if [ "$DRY" -eq 0 ]; then
   command -v flock  >/dev/null || die "flock not found"
   command -v python3 >/dev/null || die "python3 not found"
   command -v aws    >/dev/null || die "aws CLI not found"
+  command -v curl   >/dev/null || die "curl not found"
+  [ "$SKIP_BUILD" -eq 1 ] || [ "$SKIP_TAXONOMY" -eq 1 ] || command -v unzip >/dev/null || die "unzip not found (WoRMS taxonomy step)"
 fi
 [ -z "${OBIS_GLOBAL:-}" ] || echo "NOTE: ignoring OBIS_GLOBAL=$OBIS_GLOBAL (this script never streams from S3)"
 
-if [ "$SKIP_SYNC" -eq 0 ] || [ "$SKIP_BUILD" -eq 0 ]; then
+if [ "$TAXONOMY_ONLY" -eq 0 ] && { [ "$SKIP_SYNC" -eq 0 ] || [ "$SKIP_BUILD" -eq 0 ]; }; then
   avail_gb=$(df -BG --output=avail "$OBIS_DIR" 2>/dev/null | tail -1 | tr -dc '0-9' || true)
   avail_gb="${avail_gb:-0}"
   echo "free on $OBIS_DIR: ${avail_gb} GB (need >= ${MIN_FREE_GB} GB)"
@@ -179,6 +196,55 @@ if [ "$SKIP_UPLOAD" -eq 0 ] && [ "$DRY" -eq 0 ]; then
   # fail now, not after hours of build, if S3 credentials are missing
   aws sts get-caller-identity >/dev/null || die "no usable AWS credentials for the upload"
 fi
+
+# ---- (a2) WoRMS taxonomy ---------------------------------------------------------
+# taxon.parquet only feeds the build, so this runs only when the store is built
+tax_meta="$TAXON_PARQUET.json"
+if [ "$SKIP_BUILD" -eq 1 ] || [ "$SKIP_TAXONOMY" -eq 1 ]; then
+  step "a2. WoRMS taxonomy SKIPPED"
+else
+  step "a2. WoRMS taxonomy (ChecklistBank dataset $CLB_DATASET)"
+  have=""; [ -s "$tax_meta" ] && have=$(json_get "$tax_meta" version 2>/dev/null || true)
+  want=$(curl -fsS --max-time 30 "$CLB_API" 2>/dev/null \
+         | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["version"])' 2>/dev/null || true)
+  echo "taxon.parquet: ${have:-<no version recorded>}; ChecklistBank: ${want:-<unreachable>}"
+  if [ -z "$want" ]; then
+    [ -f "$TAXON_PARQUET" ] || [ "$DRY" -eq 1 ] || die "ChecklistBank unreachable and no $TAXON_PARQUET to fall back on"
+    echo "WARN: keeping the existing taxon.parquet (${have:-unversioned})"
+    WORMS_VERSION="$have"
+  elif [ "$want" = "$have" ] && [ -f "$TAXON_PARQUET" ]; then
+    echo "up to date"
+    WORMS_VERSION="$have"
+  else
+    [[ "$want" =~ ^[0-9A-Za-z._-]+$ ]] || die "unexpected ChecklistBank version '$want'"
+    zip="$WORMS_DIR/checklistbank_${CLB_DATASET}_v${want}.zip"
+    run mkdir -p "$WORMS_DIR"
+    if [ "$DRY" -eq 1 ]; then
+      echo "+ (dry-run) curl $CLB_API/archive -> $zip; unzip taxon.txt; build_taxon_parquet.R -> $TAXON_PARQUET"
+    else
+      [ -s "$zip" ] || { curl -fsSL --retry 3 --max-time 1800 -o "$zip.part" "$CLB_API/archive" && mv "$zip.part" "$zip"; } \
+        || die "download of $CLB_API/archive failed"
+      txt="$WORMS_DIR/taxon_v${want}.txt"
+      unzip -p "$zip" taxon.txt > "$txt" || die "no taxon.txt in $zip"
+      in_r OBIS_PKG_ROOT="$PKG_ROOT" Rscript "$PKG_ROOT/data-raw/build_taxon_parquet.R" "$txt" "$TAXON_PARQUET.new"
+      n_tax=$(n_rows "$TAXON_PARQUET.new")
+      [ "${n_tax:-0}" -gt 1000000 ] || die "new taxon.parquet has only ${n_tax:-0} rows; keeping the old one"
+      mv "$TAXON_PARQUET.new" "$TAXON_PARQUET"
+      rm -f "$txt"
+      python3 -I - "$tax_meta" "$want" "$CLB_DATASET" "$n_tax" "$zip" <<'PY'
+import json, sys, datetime
+f, v, ds, n, z = sys.argv[1:]
+json.dump({"source": f"ChecklistBank dataset {ds} (WoRMS DwC-A)", "version": v, "rows": int(n),
+           "archive": z, "built_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
+          open(f, "w"), indent=2)
+PY
+      echo "taxon.parquet rebuilt: WoRMS $want, $n_tax rows"
+    fi
+    WORMS_VERSION="$want"
+  fi
+fi
+
+[ "$TAXONOMY_ONLY" -eq 0 ] || { step "done (--taxonomy-only)"; exit 0; }
 
 # ---- (b) sync -------------------------------------------------------------------
 if [ "$SKIP_SYNC" -eq 0 ]; then
@@ -255,7 +321,9 @@ if [ "$SKIP_EXPORT" -eq 0 ]; then
   # checkout holds, not whatever version of the package was last installed in the container
   # (a hand-picked subset missed eov.R's obis_eov_label() until 2026-10-12);
   # release.json takes the version from the checkout's DESCRIPTION (OBIS_PKG_ROOT)
-  run in_r OBIS_PKG_ROOT="$PKG_ROOT" Rscript -e '
+  # the WoRMS version goes into release.json only when this run built the store from it
+  wv=""; [ "$SKIP_BUILD" -eq 0 ] && wv="$WORMS_VERSION"
+  run in_r OBIS_PKG_ROOT="$PKG_ROOT" OBIS_WORMS_VERSION="$wv" Rscript -e '
     a <- commandArgs(TRUE)
     suppressMessages({library(DBI); library(duckdb); library(glue); library(jsonlite)})
     for (f in list.files(file.path(Sys.getenv("OBIS_PKG_ROOT"), "R"), "[.]R$", full.names = TRUE)) source(f)

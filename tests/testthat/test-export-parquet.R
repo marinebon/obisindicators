@@ -96,6 +96,7 @@ test_that("export of the demo store: layout, counts, h3, decade math, stats, jso
   # release.json parses and lists the layers with their row counts
   js <- jsonlite::read_json(file.path(out, "release.json"))
   expect_equal(js$release, "v20260728")
+  expect_null(js$worms_version)  # OBIS_WORMS_VERSION unset: the key is left out
   expect_equal(js$obis_snapshot, "2026-07-28")
   expect_true(all(c("all", "decade_all") %in% names(js$layers)))
   expect_equal(js$layers$all$rows, sum(cnt$n))
@@ -234,8 +235,10 @@ test_that("export of the paper fixture: eov, taxon, decade_eov layers", {
   DBI::dbExecute(con, "UPDATE idx_h3_taxon SET taxon = 'Reptilia incertae sedis'
                        WHERE taxon = 'Reptilia'")
 
+  withr::local_envvar(OBIS_WORMS_VERSION = "2026-10-01")  # as refresh_obis_h3.sh passes it
   obis_h3_export_parquet(con, dir, "test", res_decade = c(5L, 7L), verbose = FALSE)
   out <- file.path(dir, "test")
+  expect_equal(jsonlite::read_json(file.path(out, "release.json"))$worms_version, "2026-10-01")
 
   # eov layer: row count per (eov, res) equals idx_h3_eov
   for (k in c("seaTurtles", "seabirds")) for (r in c(1L, 7L)) {

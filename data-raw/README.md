@@ -6,7 +6,7 @@ msens`). Not on a laptop. Excluded from the built package (`.Rbuildignore`).
 
 | script | does |
 |---|---|
-| `build_taxon_parquet.R` | WoRMS `taxon.parquet` (**manual input**, see below) |
+| `build_taxon_parquet.R` | WoRMS `taxon.parquet` from a DwC `taxon.txt`; run by the monthly refresh when ChecklistBank's WoRMS version changes (step 2) |
 | `build_obis_h3_duckdb.R` | builds `/share/data/obis/obis_h3_global_vYYYYMMDD.duckdb` from the local OBIS parquet snapshot (in the obis-h3 image, or msens's `plumber` container) |
 | `deploy_obis_h3.sh` | swaps the store the `h3t` tile service serves (needs sudo), restarts h3t, verifies |
 | `refresh_obis_h3.sh` | the monthly `obis-h3` release for the obis-hex app: sync, build, export, validate, upload, `latest.json` |
@@ -28,15 +28,16 @@ release is `obis-h3/latest.json`:
 flowchart LR
   subgraph src["sources"]
     occ[("OBIS open data<br/>s3://obis-open-data/occurrence/<br/>GeoParquet, ~93 GB")]
-    worms[("WoRMS")]
+    clb[("ChecklistBank dataset 2011<br/>WoRMS DwC-A, monthly, public<br/>/dataset/2011/archive, ~350 MB")]
+    wrest["WoRMS REST API<br/>AphiaRecordsByAphiaIDs"]
   end
   subgraph mini["Mac mini · Docker image obis-h3-refresh · /share/data = /Volumes/msens_big/_big/obis · monthly, runner macmini"]
-    tax[("derived/taxon.parquet<br/>manual: build_taxon_parquet.R")]
-    sync["1 sync<br/>obis/occurrence/"]
-    build["2 build_obis_h3_duckdb.R"]
+    tax[("derived/taxon.parquet<br/>+ taxon.parquet.json (version)")]
+    sync["3 sync<br/>obis/occurrence/"]
+    build["4 build_obis_h3_duckdb.R<br/>+ taxon gap-fill"]
     store[("obis_h3_global_vYYYYMMDD.duckdb<br/>occ_h3, idx_h3, idx_h3_eov,<br/>idx_h3_taxon, taxon")]
-    export["3 obis_h3_export_parquet()<br/>obis-h3/vYYYYMMDD/"]
-    check["4 validate<br/>≥ 90 % of previous records"]
+    export["5 obis_h3_export_parquet()<br/>obis-h3/vYYYYMMDD/"]
+    check["6 validate<br/>≥ 90 % of previous records"]
   end
   subgraph msens["msens VM"]
     h3t["h3t (FastAPI)<br/>/subtree, /taxon"]
@@ -47,9 +48,10 @@ flowchart LR
   end
   app["obis-hex<br/>(browser)"]
   occ --> sync --> build
-  worms -. manual .-> tax --> build
-  build --> store --> export --> check -->|"5 aws s3 sync"| rel
-  check -->|"6"| latest
+  clb -->|"2 when its version changed:<br/>build_taxon_parquet.R"| tax --> build
+  wrest -->|"OBIS AphiaIDs missing from the download<br/>(AlgaeBase-sourced algae, …), to closure"| build
+  build --> store --> export --> check -->|"7 aws s3 sync"| rel
+  check -->|"8"| latest
   store -. "rsync, then deploy_obis_h3.sh<br/>(manual, sudo)" .-> h3t
   latest --> app
   rel --> app
@@ -114,20 +116,33 @@ Steps:
 
 1. **Preflight**: at least 110 GB free on `/share/data/obis` (`MIN_FREE_GB`), else exit 2 naming the prunable
    old stores. A partial sync would silently build from a truncated snapshot. Also checks AWS credentials.
-2. **Sync** `s3://obis-open-data/occurrence/` to `/share/data/obis/occurrence/` (anonymous).
-3. **Build** `Rscript data-raw/build_obis_h3_duckdb.R` from the local parquet (in the image, or `docker exec plumber`
+2. **WoRMS taxonomy** (only when the store is built; `--skip-taxonomy` to keep it, `--taxonomy-only` to run just
+   this): compare the `version` of ChecklistBank dataset 2011 (`api.checklistbank.org/dataset/2011`: WoRMS's own
+   monthly DwC-A, re-imported there, public, no login) with `derived/taxon.parquet.json`. When it changed,
+   download `/archive` (~350 MB, kept as `derived/worms/checklistbank_2011_v<version>.zip`), extract
+   `taxon.txt`, run `build_taxon_parquet.R`, check it has over a million rows, swap it in and record the version
+   (`taxon.parquet.json`; `release.json` `worms_version`). If ChecklistBank is unreachable the existing parquet is
+   kept with a warning. WoRMS publishes on the 1st and ChecklistBank imports it some days later (2026-10-01 was
+   imported on the 9th), so a run on the 1st usually uses the previous month's taxonomy. Took ~45 s on the mini.
+3. **Sync** `s3://obis-open-data/occurrence/` to `/share/data/obis/occurrence/` (anonymous).
+4. **Build** `Rscript data-raw/build_obis_h3_duckdb.R` from the local parquet (in the image, or `docker exec plumber`
    on msens), with the guards `OBIS_MEMORY`, `OBIS_THREADS`, `OBIS_MAX_TEMP` (script defaults 7GB, 2, 20GB for
    msens; the wrapper passes the mini's). It never
-   sets `OBIS_GLOBAL=true`: streaming from S3 OOM-wedged msens on 2026-06-23.
-4. **Export** `obis_h3_export_parquet()` (from `R/export.R`, sourced from the checkout) into
+   sets `OBIS_GLOBAL=true`: streaming from S3 OOM-wedged msens on 2026-06-23. The build gap-fills the taxonomy:
+   every AphiaID in OBIS's `occ_h3` missing from `taxon.parquet` (notably AlgaeBase-sourced algae, absent from
+   the DwC export) is fetched from the WoRMS REST API (`obis_taxon_fill_gaps()`, `R/taxon_gapfill.R`, 50 ids per
+   request), with any missing ancestors, until nothing new appears; the build stops if that does not close or if
+   any `occ_h3` AphiaID is still missing. The filled rows live in the store's `taxon` table, so they are fetched
+   again each month.
+5. **Export** `obis_h3_export_parquet()` (from `R/export.R`, sourced from the checkout) into
    `/share/data/obis-h3/<release>/` (`EXPORT_MEMORY`, `EXPORT_THREADS`). A half-written output folder
    (no `release.json`) is replaced; a complete one needs `EXPORT_OVERWRITE=1`.
-5. **Validate**: `release.json` parses and carries the release tag; `files.parquet`, `stats.parquet` and
+6. **Validate**: `release.json` parses and carries the release tag; `files.parquet`, `stats.parquet` and
    `taxon_groups.parquet` are non-empty; total records (the sum of `n` over `all/res=1`, since every record
    falls in exactly one res-1 cell) is at least 90% of the previous release's (`MIN_PCT`). Else exit 4,
    nothing uploaded. The previous release is `PREV_RELEASE`, else the one `latest.json` names.
-6. **Upload** `aws s3 sync` of the release folder, no `--delete`, then compare file counts.
-7. **`latest.json`**.
+7. **Upload** `aws s3 sync` of the release folder, no `--delete`, then compare file counts.
+8. **`latest.json`**.
 
 Not automated (needs sudo, on msens): pointing the `h3t` tile service at the new store, after a successful run
 and the wrapper's copy:
@@ -143,9 +158,8 @@ data-raw/deploy_obis_h3.sh --skip-sync --skip-build --store /share/data/obis/obi
   it out).
 - The external drive mounted at `/Volumes/msens_big`; the wrapper creates `obis/log`, `obis-h3` and `derived`
   under `/Volumes/msens_big/_big/obis`.
-- **`derived/taxon.parquet` (WoRMS) is a manual input**, refreshed separately with
-  `Rscript data-raw/build_taxon_parquet.R` when WoRMS changes (copied from msens on 2026-10-12). The monthly job
-  reuses whatever is there and the build aborts if it is missing.
+- `derived/taxon.parquet` (WoRMS) is maintained by step 2 (first built there from ChecklistBank 2026-10-01 on
+  2026-10-12). By hand: `data-raw/run_refresh_docker.sh --taxonomy-only`. The build aborts if it is missing.
 - For the copy to msens: an ssh host `msens` on the mini that reaches `/share/data/obis` (else it warns and the
   store is copied by hand).
 - On msens (the old mode): the `plumber` container with `/share` mounted and `glue`, `jsonlite`, `duckdb`, `httr2`.

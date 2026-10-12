@@ -464,6 +464,8 @@ obis_h3_export_parquet <- function(
     obis_snapshot          = snap,
     store                  = basename(store),
     obisindicators_version = .obisindicators_version(),
+    # the WoRMS (ChecklistBank) version the store's taxonomy came from, when the refresh knows it
+    worms_version          = Sys.getenv("OBIS_WORMS_VERSION"),
     duckdb_version         = DBI::dbGetQuery(con, "SELECT version() AS v")$v,
     built_at               = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
     esn                    = esn,
@@ -504,6 +506,7 @@ obis_h3_export_parquet <- function(
         "whole); files.parquet `parent` is that parent cell (NULL for a whole",
         "file), and its H3 resolution is the parent resolution. A viewer loads",
         "the parents covering its viewport.")))
+  if (!nzchar(info$worms_version)) info$worms_version <- NULL   # unknown: left out, not ""
   f_json <- file.path(out, "release.json")
   jsonlite::write_json(info, f_json, auto_unbox = TRUE, pretty = TRUE,
                        digits = NA, dataframe = "rows")

@@ -19,6 +19,14 @@
   time: the single UNPIVOT over every layer held all values in `quantile_cont()`
   states at once and, with the family rank, was killed for lack of memory in a
   24 GiB VM. Same rows, values and column types (regression test).
+* **The WoRMS taxonomy is refreshed by the monthly run.** New step (a2) in
+  `refresh_obis_h3.sh`: when the `version` of ChecklistBank dataset 2011 (WoRMS's
+  monthly DwC-A, public) differs from `taxon.parquet.json`, it downloads the
+  archive, runs `build_taxon_parquet.R` and records the version, which
+  `release.json` carries as `worms_version`. New flags `--skip-taxonomy` and
+  `--taxonomy-only`. The build's gap-fill of AphiaIDs missing from the download
+  (WoRMS REST) is unchanged. `run_refresh_docker.sh` skips a separate mount for a
+  checkout that sits inside the data folder (Colima refuses overlapping mounts).
 * `release.json`'s `obisindicators_version` comes from the checkout's
   `DESCRIPTION` when `OBIS_PKG_ROOT` is set (`.obisindicators_version()`), so
   the image needs no installed package.

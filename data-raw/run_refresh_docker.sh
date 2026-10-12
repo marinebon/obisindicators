@@ -79,10 +79,11 @@ if colima status --profile "$COLIMA_PROFILE" >/dev/null 2>&1; then
   say "colima $COLIMA_PROFILE already running"
 else
   say "colima start $COLIMA_PROFILE (${COLIMA_CPU} CPU, ${COLIMA_MEMORY} GiB)"
-  # the mounts are fixed when the profile is first created; a later start reuses them
+  # Colima refuses overlapping mounts, so a checkout inside $DATA_ROOT rides on that mount
+  mounts=(--mount "$DATA_ROOT:w" --mount "$AWS_DIR")
+  case "$PKG_ROOT/" in "$DATA_ROOT"/*) ;; *) mounts+=(--mount "$PKG_ROOT") ;; esac
   colima start --profile "$COLIMA_PROFILE" --vm-type vz --mount-type virtiofs \
-    --cpu "$COLIMA_CPU" --memory "$COLIMA_MEMORY" --disk "$COLIMA_DISK" \
-    --mount "$DATA_ROOT:w" --mount "$PKG_ROOT" --mount "$AWS_DIR" \
+    --cpu "$COLIMA_CPU" --memory "$COLIMA_MEMORY" --disk "$COLIMA_DISK" "${mounts[@]}" \
     || die "colima start failed" 5
   started=1
 fi
