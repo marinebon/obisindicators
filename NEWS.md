@@ -1,3 +1,24 @@
+# obisindicators 0.7.2
+
+* **Family is a precomputed taxon rank.** `H3T_IDX_RANKS` gains `"family"`, so
+  the store's `idx_h3_taxon` and the export's `taxon/rank=family/` layer carry
+  every family (about 5,800 in the v20260728 store), and a single-family h3t
+  query takes the precomputed path. `migrate_add_idx_h3_taxon.R` adds it to an
+  existing store.
+* **The monthly `obis-h3` refresh runs in Docker on the Mac mini.** New
+  `data-raw/docker/Dockerfile` (R 4.6.1, CRAN from a dated Posit Package
+  Manager snapshot, duckdb 1.5.5, the h3/spatial/httpfs extensions, AWS CLI v2)
+  and `data-raw/run_refresh_docker.sh` (Colima VM started and stopped per run,
+  data on the external drive mounted at `/share/data`, the new store rsynced to
+  msens for h3t). `refresh_obis_h3.sh` runs R directly when `BUILD_CONTAINER`
+  is empty (inside the image); msens's `docker exec plumber` mode is unchanged.
+* `refresh_obis_h3.sh` sources every file in `R/` for the export: the subset it
+  sourced before lacked `eov.R`, so the export stopped at `taxon_groups`
+  (`could not find function "obis_eov_label"`).
+* `release.json`'s `obisindicators_version` comes from the checkout's
+  `DESCRIPTION` when `OBIS_PKG_ROOT` is set (`.obisindicators_version()`), so
+  the image needs no installed package.
+
 # obisindicators 0.7.1
 
 * **`obis_h3_export_parquet()` splits the fine resolutions by parent cell**, so

@@ -30,7 +30,7 @@ EXPORT_MAX_OPEN <- 100L
 #'   all/res=<1..5>/data_0.parquet             idx_h3 (all taxa, all years)
 #'   all/res=<6,7>/p=<parent>/data_0.parquet   the fine res, one file per parent cell
 #'   eov/eov=<eov>/res=<r>/data_0.parquet      idx_h3_eov
-#'   taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order)
+#'   taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family)
 #'   decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
 #'   decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
 #'   stats.parquet                             value ranges per layer x key x res x variable
@@ -456,7 +456,7 @@ obis_h3_export_parquet <- function(
     release                = release,
     obis_snapshot          = snap,
     store                  = basename(store),
-    obisindicators_version = as.character(utils::packageVersion("obisindicators")),
+    obisindicators_version = .obisindicators_version(),
     duckdb_version         = DBI::dbGetQuery(con, "SELECT version() AS v")$v,
     built_at               = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
     esn                    = esn,
@@ -514,4 +514,16 @@ obis_h3_export_parquet <- function(
                     mb(sum(manifest$bytes) + file.size(f_json) + file.size(f_files))))
   }
   invisible(c(f_json, f_files, file.path(out, manifest$path)))
+}
+
+# the obisindicators version for release.json: the checkout's DESCRIPTION when the code was sourced
+# from one (OBIS_PKG_ROOT, as the monthly refresh does inside its image, which does not install the
+# package), else the installed package's; NA when neither is available
+.obisindicators_version <- function(pkg_root = Sys.getenv("OBIS_PKG_ROOT")) {
+  f <- file.path(pkg_root, "DESCRIPTION")
+  if (nzchar(pkg_root) && file.exists(f)) {
+    d <- read.dcf(f, fields = c("Package", "Version"))
+    if (identical(unname(d[1, "Package"]), "obisindicators")) return(unname(d[1, "Version"]))
+  }
+  tryCatch(as.character(utils::packageVersion("obisindicators")), error = function(e) NA_character_)
 }

@@ -2,9 +2,11 @@
 # Monthly refresh of the obis-h3 release that the obis-hex app reads:
 #   sync OBIS open data -> build the H3 store -> export hive-partitioned Parquet
 #   -> validate -> upload to S3 -> publish latest.json.
-# Run on the msens HOST (needs docker, aws, flock, python3), not in a container.
-# Scheduled by oceanmetrics/erddap-places .github/workflows/obis-h3.yml (self-hosted
-# runner `msens`); also fine to run by hand.
+# Runs either on a Linux host that has the `plumber` container (msens: R through
+# `docker exec plumber`), or inside the obis-h3 image (data-raw/docker/Dockerfile) with
+# BUILD_CONTAINER="" so R runs directly; data-raw/run_refresh_docker.sh does the latter on the
+# Mac mini. Needs aws, flock, python3 (and docker in the first mode). Scheduled by
+# oceanmetrics/erddap-places .github/workflows/obis-h3.yml; also fine to run by hand.
 #
 # Usage:
 #   data-raw/refresh_obis_h3.sh [--skip-sync] [--skip-build] [--skip-export]
@@ -38,7 +40,7 @@
 #
 # Env (defaults): OBIS_DIR=/share/data/obis  OCC_DIR=$OBIS_DIR/occurrence
 #   DIR_OUT=/share/data/obis-h3  LOG_DIR=$OBIS_DIR/log  PKG_ROOT=/share/github/marinebon/obisindicators
-#   BUILD_CONTAINER=plumber  MIN_FREE_GB=110  MIN_PCT=90 (new vs previous total records)
+#   BUILD_CONTAINER=plumber ("" = run R here, inside the obis-h3 image)  MIN_FREE_GB=110  MIN_PCT=90 (new vs previous total records)
 #   OBIS_MEMORY=7GB OBIS_THREADS=2 OBIS_MAX_TEMP=20GB OBIS_TEMP_DIR=$OBIS_DIR/tmp (build)
 #   EXPORT_MEMORY=6GB EXPORT_THREADS=2 (export)  STORE=<.duckdb> (with --skip-build)
 #   S3_BUCKET=oceanmetrics.io-public  S3_PREFIX=obis-h3
@@ -53,7 +55,7 @@ OCC_DIR="${OCC_DIR:-$OBIS_DIR/occurrence}"
 DIR_OUT="${DIR_OUT:-/share/data/obis-h3}"
 LOG_DIR="${LOG_DIR:-$OBIS_DIR/log}"
 PKG_ROOT="${PKG_ROOT:-/share/github/marinebon/obisindicators}"
-BUILD_CONTAINER="${BUILD_CONTAINER:-plumber}"
+BUILD_CONTAINER="${BUILD_CONTAINER-plumber}"   # set but empty: R runs here (inside the obis-h3 image)
 MIN_FREE_GB="${MIN_FREE_GB:-110}"
 MIN_PCT="${MIN_PCT:-90}"
 OBIS_MEMORY="${OBIS_MEMORY:-7GB}"
@@ -84,7 +86,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-die()  { echo "ERROR: $*" >&2; exit "${2:-1}"; }
+die()  { echo "ERROR: $1" >&2; exit "${2:-1}"; }
 step() { echo; echo "=== $(date -u +%H:%M:%SZ) $* ==="; }
 # run a command, or only print it with --dry-run
 run()  { if [ "$DRY" -eq 1 ]; then echo "+ (dry-run) $*"; else "$@"; fi; }
@@ -106,18 +108,30 @@ if [ "$DRY" -eq 0 ]; then
   echo "log: $LOG"
 fi
 echo "refresh_obis_h3.sh $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(hostname) as $(id -un)$([ "$DRY" -eq 1 ] && echo " (DRY RUN)")"
+if [ -n "$BUILD_CONTAINER" ]; then echo "R runs in container $BUILD_CONTAINER (docker exec)"; else echo "R runs here (BUILD_CONTAINER empty)"; fi
 
 # ---- helpers --------------------------------------------------------------------
-# R in the container: sum of the n column of one parquet file, and row counts
-dexec() { docker exec "$BUILD_CONTAINER" "$@" </dev/null; }
+# run a command where R lives: `docker exec` into $BUILD_CONTAINER, or here when it is empty (inside
+# the obis-h3 image); leading VAR=value words become the command's environment
+in_r() {
+  local envs=() e=()
+  while [ $# -gt 0 ] && [[ "$1" =~ ^[A-Z_][A-Z0-9_]*= ]]; do envs+=("$1"); shift; done
+  if [ -n "$BUILD_CONTAINER" ]; then
+    for v in ${envs[@]+"${envs[@]}"}; do e+=(-e "$v"); done
+    docker exec ${e[@]+"${e[@]}"} "$BUILD_CONTAINER" "$@" </dev/null
+  else
+    env ${envs[@]+"${envs[@]}"} "$@" </dev/null
+  fi
+}
+# sum of the n column of one parquet file, and row counts
 sum_n() {  # sum_n <parquet path visible inside the container>
-  dexec Rscript -e '
+  in_r Rscript -e '
     suppressMessages({library(DBI); library(duckdb)})
     con <- dbConnect(duckdb(), dbdir = ":memory:")
     cat(format(dbGetQuery(con, sprintf("SELECT SUM(n)::DOUBLE v FROM read_parquet(\x27%s\x27)", commandArgs(TRUE)[1]))$v, scientific = FALSE))' "$1"
 }
 n_rows() {  # n_rows <parquet path>
-  dexec Rscript -e '
+  in_r Rscript -e '
     suppressMessages({library(DBI); library(duckdb)})
     con <- dbConnect(duckdb(), dbdir = ":memory:")
     cat(dbGetQuery(con, sprintf("SELECT COUNT(*)::BIGINT v FROM read_parquet(\x27%s\x27)", commandArgs(TRUE)[1]))$v)' "$1"
@@ -129,7 +143,7 @@ json_get() {  # json_get <file> <key> : top-level string value
 # ---- (a) preflight --------------------------------------------------------------
 step "a. preflight"
 if [ "$DRY" -eq 0 ]; then
-  command -v docker >/dev/null || die "docker not on PATH (run on the msens host)"
+  [ -z "$BUILD_CONTAINER" ] || command -v docker >/dev/null || die "docker not on PATH (or set BUILD_CONTAINER=\"\" to run R here)"
   command -v flock  >/dev/null || die "flock not found"
   command -v python3 >/dev/null || die "python3 not found"
   command -v aws    >/dev/null || die "aws CLI not found"
@@ -193,19 +207,19 @@ echo "release: $RELEASE   output: $OUT"
 
 # ---- (c) build ------------------------------------------------------------------
 if [ "$SKIP_BUILD" -eq 0 ]; then
-  step "c. build the store inside $BUILD_CONTAINER"
+  step "c. build the store ${BUILD_CONTAINER:+inside $BUILD_CONTAINER}"
   [ "$DRY" -eq 1 ] || [ -n "$(find "$OCC_DIR" -name '*.parquet' -print -quit 2>/dev/null)" ] \
     || die "no parquet at $OCC_DIR; sync first"
   [ "$DRY" -eq 1 ] || [ -f "$TAXON_PARQUET" ] \
     || die "no WoRMS taxon.parquet at $TAXON_PARQUET (manual input; Rscript data-raw/build_taxon_parquet.R)"
   marker=""; [ "$DRY" -eq 1 ] || marker=$(mktemp "$OBIS_DIR/.refresh_build_start.XXXXXX")
   # the build script's own guards, explicit; OBIS_GLOBAL=false forces the local parquet path
-  run docker exec \
-    -e OBIS_DIR="$OBIS_DIR" -e OBIS_PKG_ROOT="$PKG_ROOT" \
-    -e OBIS_MEMORY="$OBIS_MEMORY" -e OBIS_THREADS="$OBIS_THREADS" \
-    -e OBIS_TEMP_DIR="$OBIS_TEMP_DIR" -e OBIS_MAX_TEMP="$OBIS_MAX_TEMP" \
-    -e OBIS_GLOBAL=false -e OBIS_SYMLINK=false -e OBIS_TAXON_PARQUET="$TAXON_PARQUET" \
-    "$BUILD_CONTAINER" Rscript "$PKG_ROOT/data-raw/build_obis_h3_duckdb.R" </dev/null
+  run in_r \
+    OBIS_DIR="$OBIS_DIR" OBIS_PKG_ROOT="$PKG_ROOT" \
+    OBIS_MEMORY="$OBIS_MEMORY" OBIS_THREADS="$OBIS_THREADS" \
+    OBIS_TEMP_DIR="$OBIS_TEMP_DIR" OBIS_MAX_TEMP="$OBIS_MAX_TEMP" \
+    OBIS_GLOBAL=false OBIS_SYMLINK=false OBIS_TAXON_PARQUET="$TAXON_PARQUET" \
+    Rscript "$PKG_ROOT/data-raw/build_obis_h3_duckdb.R"
   if [ "$DRY" -eq 0 ]; then
     STORE=$(find "$OBIS_DIR" -maxdepth 1 -name 'obis_h3_global_*.duckdb' -newer "$marker" -printf '%T@ %p\n' \
             | sort -n | tail -1 | cut -d' ' -f2-)
@@ -221,6 +235,7 @@ else
     || die "no store to export: set STORE=... or build one"
 fi
 echo "store: ${STORE:-<n/a>}"
+[ -z "${GITHUB_OUTPUT:-}" ] || [ "$DRY" -eq 1 ] || [ -z "${STORE:-}" ] || echo "store=$STORE" >> "$GITHUB_OUTPUT"
 
 # ---- (d) export -----------------------------------------------------------------
 if [ "$SKIP_EXPORT" -eq 0 ]; then
@@ -236,13 +251,14 @@ if [ "$SKIP_EXPORT" -eq 0 ]; then
     fi
   fi
   run mkdir -p "$DIR_OUT"
-  # source the checked-out R files (same as the build script) so the export is whatever the
-  # checkout holds, not whatever version of the package was last installed in the container;
-  # the installed package is still needed for utils::packageVersion() in release.json
-  run docker exec -e OBIS_PKG_ROOT="$PKG_ROOT" "$BUILD_CONTAINER" Rscript -e '
+  # source every checked-out R file (they only define functions) so the export is whatever the
+  # checkout holds, not whatever version of the package was last installed in the container
+  # (a hand-picked subset missed eov.R's obis_eov_label() until 2026-10-12);
+  # release.json takes the version from the checkout's DESCRIPTION (OBIS_PKG_ROOT)
+  run in_r OBIS_PKG_ROOT="$PKG_ROOT" Rscript -e '
     a <- commandArgs(TRUE)
     suppressMessages({library(DBI); library(duckdb); library(glue); library(jsonlite)})
-    for (f in c("h3t.R", "store.R", "export.R")) source(file.path(Sys.getenv("OBIS_PKG_ROOT"), "R", f))
+    for (f in list.files(file.path(Sys.getenv("OBIS_PKG_ROOT"), "R"), "[.]R$", full.names = TRUE)) source(f)
     con <- obis_store_connect(a[1], read_only = TRUE)
     on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
     dbExecute(con, sprintf("SET temp_directory = \x27%s\x27;", a[6]))
@@ -250,7 +266,7 @@ if [ "$SKIP_EXPORT" -eq 0 ]; then
     obis_h3_export_parquet(con, a[2], a[3], memory_limit = a[4], threads = as.integer(a[5]),
                            overwrite = identical(a[8], "TRUE"))' \
     "${STORE:-}" "$DIR_OUT" "$RELEASE" "$EXPORT_MEMORY" "$EXPORT_THREADS" \
-    "$OBIS_TEMP_DIR" "$OBIS_MAX_TEMP" "$overwrite" </dev/null
+    "$OBIS_TEMP_DIR" "$OBIS_MAX_TEMP" "$overwrite"
 else
   step "d. export SKIPPED"
 fi

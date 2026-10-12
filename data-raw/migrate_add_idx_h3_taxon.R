@@ -31,7 +31,7 @@ cluster_occ  <- only_cluster || "--cluster-occ" %in% args
 stopifnot(file.exists(in_db))
 if (file.exists(out_db)) stop("out.duckdb already exists: ", out_db)
 
-RANKS <- c("phylum", "class", "order")   # H3T_IDX_RANKS
+RANKS <- c("phylum", "class", "order", "family")   # H3T_IDX_RANKS
 RES   <- 1:7                             # H3T_RES_IDX  (base tier = 7)
 ESN   <- 50L
 

@@ -6,9 +6,10 @@
 H3T_RANKS <- c("phylum", "class", "order", "family", "genus", "species")
 
 # ranks that get a precomputed idx_h3_taxon layer (fast single-taxon maps).
-# kept coarse: finer ranks (family/genus/species) would explode storage, so a
-# filter on those (or on multiple values / a year range) uses the live occ_h3 path.
-H3T_IDX_RANKS <- c("phylum", "class", "order")
+# family added in 0.7.2 (~5,800 families, ~60% more idx_h3_taxon rows than
+# phylum + class + order); genus and species would explode storage, so a filter
+# on those (or on multiple values / a year range) uses the live occ_h3 path.
+H3T_IDX_RANKS <- c("phylum", "class", "order", "family")
 
 # the species-level resolution tiers stored in occ_h3 (finest = base) ----
 H3T_RES_TIERS <- c(3L, 5L, 7L)

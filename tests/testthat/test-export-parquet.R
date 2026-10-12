@@ -366,3 +366,19 @@ test_that("export writes exactly one data_0.parquet per partition", {
   expect_equal(DBI::dbGetQuery(con,
     "SELECT current_setting('partitioned_write_max_open_files') AS v")$v, 100)
 })
+
+test_that(".obisindicators_version() reads the checkout's DESCRIPTION, else the installed package", {
+  root <- tempfile("pkg_"); dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  writeLines(c("Package: obisindicators", "Version: 9.8.7"), file.path(root, "DESCRIPTION"))
+  expect_identical(.obisindicators_version(root), "9.8.7")
+
+  # another package's DESCRIPTION, or no DESCRIPTION, falls back to the installed version (or NA)
+  writeLines(c("Package: other", "Version: 1.0.0"), file.path(root, "DESCRIPTION"))
+  installed <- tryCatch(as.character(utils::packageVersion("obisindicators")),
+                        error = function(e) NA_character_)
+  expect_identical(.obisindicators_version(root), installed)
+  expect_identical(.obisindicators_version(""), installed)
+  expect_identical(.obisindicators_version(file.path(root, "missing")), installed)
+})
+
