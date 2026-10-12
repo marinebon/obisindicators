@@ -42,8 +42,11 @@ obis_h3_export_parquet(
 
 - release:
 
-  release tag, e.g. `"v20260728"` (the OBIS snapshot date the store was
-  built from); recorded in `release.json`.
+  release tag, e.g. `"v20260728"` (the date of the OBIS sync the store
+  was built from); recorded in `release.json`. Its `obis_snapshot` is
+  the environment variable `OBIS_DATA_DATE` (the newest OBIS object's
+  date, which `refresh_obis_h3.sh` passes) when that is a `YYYY-MM-DD`
+  date, else the date in the tag.
 
 - res_decade:
 
@@ -113,7 +116,7 @@ invisibly, a character vector of the files written (absolute paths).
       all/res=<1..5>/data_0.parquet             idx_h3 (all taxa, all years)
       all/res=<6,7>/p=<parent>/data_0.parquet   the fine res, one file per parent cell
       eov/eov=<eov>/res=<r>/data_0.parquet      idx_h3_eov
-      taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order)
+      taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family)
       decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
       decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
       stats.parquet                             value ranges per layer x key x res x variable

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -50,6 +50,13 @@
       <small>Source: <a href="https://github.com/marinebon/obisindicators/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.7.3" id="obisindicators-073">obisindicators 0.7.3<a class="anchor" aria-label="anchor" href="#obisindicators-073"></a></h2>
+<ul><li>
+<strong><code>release.json</code>’s <code>obis_snapshot</code> is the OBIS data date</strong>, the date of the newest object in <code>s3://obis-open-data/occurrence/</code> the store was built from, not the date the refresh ran. OBIS updates that folder one dataset at a time and publishes no export date, so <code>refresh_obis_h3.sh</code> reads it off the synced files (which <code>aws s3 sync</code> stamps with their S3 <code>LastModified</code>) and passes it as <code>OBIS_DATA_DATE</code>; without it, the date in the release tag is used as before. For v20261012 that is 2026-10-11 (synced 2026-10-12). The release tag stays the sync date.</li>
+<li>
+<code>latest.json</code> also carries <code>worms_version</code>, the ChecklistBank WoRMS version the taxonomy came from.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.2" id="obisindicators-072">obisindicators 0.7.2<a class="anchor" aria-label="anchor" href="#obisindicators-072"></a></h2>
 <ul><li>

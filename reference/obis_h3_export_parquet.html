@@ -11,7 +11,7 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):"></h
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -95,8 +95,11 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):</p>
 
 
 <dt id="arg-release">release<a class="anchor" aria-label="anchor" href="#arg-release"></a></dt>
-<dd><p>release tag, e.g. <code>"v20260728"</code> (the OBIS snapshot date the
-store was built from); recorded in <code>release.json</code>.</p></dd>
+<dd><p>release tag, e.g. <code>"v20260728"</code> (the date of the OBIS sync
+the store was built from); recorded in <code>release.json</code>. Its
+<code>obis_snapshot</code> is the environment variable <code>OBIS_DATA_DATE</code> (the newest
+OBIS object's date, which <code>refresh_obis_h3.sh</code> passes) when that is a
+<code>YYYY-MM-DD</code> date, else the date in the tag.</p></dd>
 
 
 <dt id="arg-res-decade">res_decade<a class="anchor" aria-label="anchor" href="#arg-res-decade"></a></dt>
@@ -167,7 +170,7 @@ partition holds a file open, so keep it under the process limit
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>  all<span class="sc">/</span>res<span class="ot">=</span><span class="er">&lt;</span><span class="dv">1</span>..<span class="dv">5</span><span class="sc">&gt;</span><span class="er">/</span>data_0.parquet             <span class="fu">idx_h3</span> (all taxa, all years)</span>
 <span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>  all<span class="sc">/</span>res<span class="ot">=</span><span class="er">&lt;</span><span class="dv">6</span>,<span class="dv">7</span><span class="sc">&gt;</span><span class="er">/</span>p<span class="ot">=</span><span class="er">&lt;</span>parent<span class="sc">&gt;</span><span class="er">/</span>data_0.parquet   the fine res, one file per parent cell</span>
 <span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>  eov<span class="sc">/</span>eov<span class="ot">=</span><span class="er">&lt;</span>eov<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>data_0.parquet      idx_h3_eov</span>
-<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  taxon<span class="sc">/</span>rank<span class="ot">=</span><span class="er">&lt;</span>rank<span class="sc">&gt;</span><span class="er">/</span>taxon<span class="ot">=</span><span class="er">&lt;</span>taxon<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>  <span class="fu">idx_h3_taxon</span> (phylum <span class="sc">/</span> class <span class="sc">/</span> order)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  taxon<span class="sc">/</span>rank<span class="ot">=</span><span class="er">&lt;</span>rank<span class="sc">&gt;</span><span class="er">/</span>taxon<span class="ot">=</span><span class="er">&lt;</span>taxon<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>  <span class="fu">idx_h3_taxon</span> (phylum <span class="sc">/</span> class <span class="sc">/</span> order <span class="sc">/</span> family)</span>
 <span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>  decade<span class="sc">/</span>all<span class="sc">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>yyy0<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>         per decade, all <span class="fu">taxa</span>  (res <span class="cf">in</span> res_decade)</span>
 <span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  decade<span class="sc">/</span>eov<span class="sc">/</span>eov<span class="ot">=</span><span class="er">&lt;</span>eov<span class="sc">&gt;</span><span class="er">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>yyy0<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>  per decade and <span class="fu">EOV</span> (res <span class="cf">in</span> res_decade)</span>
 <span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  stats.parquet                             value ranges per layer x key x res x variable</span>
