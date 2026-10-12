@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -50,6 +50,36 @@
       <small>Source: <a href="https://github.com/marinebon/obisindicators/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.7.2" id="obisindicators-072">obisindicators 0.7.2<a class="anchor" aria-label="anchor" href="#obisindicators-072"></a></h2>
+<ul><li>
+<strong>Family is a precomputed taxon rank.</strong> <code>H3T_IDX_RANKS</code> gains <code>"family"</code>, so the store’s <code>idx_h3_taxon</code> and the export’s <code>taxon/rank=family/</code> layer carry every family (about 5,800 in the v20260728 store), and a single-family h3t query takes the precomputed path. <code>migrate_add_idx_h3_taxon.R</code> adds it to an existing store.</li>
+<li>
+<strong>The monthly <code>obis-h3</code> refresh runs in Docker on the Mac mini.</strong> New <code>data-raw/docker/Dockerfile</code> (R 4.6.1, CRAN from a dated Posit Package Manager snapshot, duckdb 1.5.5, the h3/spatial/httpfs extensions, AWS CLI v2) and <code>data-raw/run_refresh_docker.sh</code> (Colima VM started and stopped per run, data on the external drive mounted at <code>/share/data</code>, the new store rsynced to msens for h3t). <code>refresh_obis_h3.sh</code> runs R directly when <code>BUILD_CONTAINER</code> is empty (inside the image); msens’s <code>docker exec plumber</code> mode is unchanged.</li>
+<li>
+<code>refresh_obis_h3.sh</code> sources every file in <code>R/</code> for the export: the subset it sourced before lacked <code>eov.R</code>, so the export stopped at <code>taxon_groups</code> (<code>could not find function "obis_eov_label"</code>).</li>
+<li>
+<code><a href="../reference/obis_h3_export_parquet.html">obis_h3_export_parquet()</a></code> computes <code>stats.parquet</code> one layer and variable at a time: the single UNPIVOT over every layer held all values in <code>quantile_cont()</code> states at once and, with the family rank, was killed for lack of memory in a 24 GiB VM. Same rows, values and column types (regression test).</li>
+<li>
+<strong>The WoRMS taxonomy is refreshed by the monthly run.</strong> New step (a2) in <code>refresh_obis_h3.sh</code>: when the <code>version</code> of ChecklistBank dataset 2011 (WoRMS’s monthly DwC-A, public) differs from <code>taxon.parquet.json</code>, it downloads the archive, runs <code>build_taxon_parquet.R</code> and records the version, which <code>release.json</code> carries as <code>worms_version</code>. New flags <code>--skip-taxonomy</code> and <code>--taxonomy-only</code>. The build’s gap-fill of AphiaIDs missing from the download (WoRMS REST) is unchanged. <code>run_refresh_docker.sh</code> skips a separate mount for a checkout that sits inside the data folder (Colima refuses overlapping mounts).</li>
+<li>
+<code>release.json</code>’s <code>obisindicators_version</code> comes from the checkout’s <code>DESCRIPTION</code> when <code>OBIS_PKG_ROOT</code> is set (<code>.obisindicators_version()</code>), so the image needs no installed package.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.7.1" id="obisindicators-071">obisindicators 0.7.1<a class="anchor" aria-label="anchor" href="#obisindicators-071"></a></h2>
+<ul><li>
+<strong><code><a href="../reference/obis_h3_export_parquet.html">obis_h3_export_parquet()</a></code> splits the fine resolutions by parent cell</strong>, so a browser loads only the cells covering its viewport instead of a whole 33 MB <code>all/res=7</code> file. New arguments <code>parent_res</code> (default <code>c("6" = 2L, "7" = 3L)</code>: res 6 by its res-2 parent, res 7 by its res-3 parent, for the <code>all</code> and <code>eov</code> layers), <code>parent_res_taxon</code> (default the res-0 base cell, which keeps the taxon layer to thousands rather than millions of files), <code>parent_min_rows</code> (default 50000: smaller (layer key, res) partitions stay whole) and <code>max_open</code> (partitions per COPY). Split partitions are written to <code>.../res=&lt;r&gt;/p=&lt;parent h3&gt;/data_0.parquet</code>; res 1-5 and the decade layers stay whole. <code>files.parquet</code> gains a <code>parent</code> column (NULL for whole files) and <code>release.json</code> documents each layer’s <code>parent_res</code> and the rule (<code>parents</code>).</li>
+<li>
+<strong>New <code>data-raw/refresh_obis_h3.sh</code>: the monthly <code>obis-h3</code> release pipeline</strong> (sync OBIS open data, build the store, <code><a href="../reference/obis_h3_export_parquet.html">obis_h3_export_parquet()</a></code>, validate against the previous release, upload to S3, then write <code>obis-h3/latest.json</code>). Scheduled from <code>oceanmetrics/erddap-places</code> on the msens runner; documented in <code>data-raw/README.md</code>. Supports <code>--skip-sync/-build/-export/-upload</code>, <code>--release</code> and <code>--dry-run</code>.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.7.0" id="obisindicators-070">obisindicators 0.7.0<a class="anchor" aria-label="anchor" href="#obisindicators-070"></a></h2>
+<ul><li>
+<strong>New <code><a href="../reference/obis_h3_export_parquet.html">obis_h3_export_parquet()</a></code>: export a store to hive-partitioned Parquet for a serverless web app</strong> (static hosting + DuckDB-WASM + deck.gl <code>H3HexagonLayer</code>). Writes <code>&lt;dir_out&gt;/&lt;release&gt;/</code> with <code>all/res=N/</code> (<code>idx_h3</code>), <code>eov/eov=&lt;eov&gt;/res=N/</code> (<code>idx_h3_eov</code>), <code>taxon/rank=&lt;rank&gt;/taxon=&lt;taxon&gt;/res=N/</code> (<code>idx_h3_taxon</code>), and two layers computed from <code>occ_h3</code> per decade (<code>decade/all/decade=&lt;yyy0&gt;/res=N/</code>, <code>decade/eov/eov=&lt;eov&gt;/decade=&lt;yyy0&gt;/res=N/</code>; res 1-5 and decades 1960-2020 by default). Every file has <code>h3</code> (lowercase hex string), <code>cell_id</code>, <code>n</code>, <code>sp</code>, <code>shannon</code>, <code>simpson</code>, <code>es</code>. Also writes <code>stats.parquet</code> (min, 2nd, 50th, 98th percentile, max and cell count per layer x key x res x variable, for colour ramps), <code>taxon_groups.parquet</code> (the taxa and EOVs on offer, with totals and on-disk / URL paths), <code>files.parquet</code> (a manifest of every file with its row count and size, since HTTP cannot glob) and <code>release.json</code> (release, snapshot, package and DuckDB versions, row counts per layer, layout and columns). Each partition is exactly one <code>data_0.parquet</code>; the taxon layer is written in batches of at most 100 partitions per COPY to stay under the OS open-file limit. Partition values are percent-encoded by DuckDB; <code>url_path</code> gives the form to fetch over HTTP.</li>
+<li>The indicator SQL behind <code>idx_h3</code>, <code>idx_h3_taxon</code> and <code>idx_h3_eov</code> now comes from one internal builder (<code>.h3t_indicators_sql()</code>), which the decade layers of the export reuse. The output of the store build is unchanged.</li>
+<li>
+<code>jsonlite</code> added to Suggests (used by the export).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.1" id="obisindicators-061">obisindicators 0.6.1<a class="anchor" aria-label="anchor" href="#obisindicators-061"></a></h2>
 <ul><li>

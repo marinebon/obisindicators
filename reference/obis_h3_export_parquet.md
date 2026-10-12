@@ -1,0 +1,173 @@
+# Export an obis_h3 store to hive-partitioned Parquet
+
+Writes the indicator layers of a store built by
+[`build_obis_h3_duckdb()`](https://marinebon.org/obisindicators/reference/build_obis_h3_duckdb.md)
+to a directory of hive-partitioned Parquet files that a static web app
+can read directly with DuckDB-WASM (one small file per map layer and H3
+resolution):
+
+## Usage
+
+``` r
+obis_h3_export_parquet(
+  con,
+  dir_out,
+  release,
+  res_decade = 1:5,
+  parent_res = c(`6` = 2L, `7` = 3L),
+  parent_res_taxon = c(`6` = 0L, `7` = 0L),
+  parent_min_rows = 50000,
+  max_open = EXPORT_MAX_OPEN,
+  compression = "zstd",
+  overwrite = FALSE,
+  decades = seq(1960L, 2020L, by = 10L),
+  esn = 50L,
+  memory_limit = NULL,
+  threads = NULL,
+  verbose = TRUE
+)
+```
+
+## Arguments
+
+- con:
+
+  connection from
+  [`obis_store_connect()`](https://marinebon.org/obisindicators/reference/obis_store_connect.md)
+  (read-only is fine).
+
+- dir_out:
+
+  output directory; files go under `dir_out/release/`.
+
+- release:
+
+  release tag, e.g. `"v20260728"` (the OBIS snapshot date the store was
+  built from); recorded in `release.json`.
+
+- res_decade:
+
+  H3 resolutions for the decade layers (default 1-5).
+
+- parent_res:
+
+  named integer vector, fine resolution -\> parent resolution, for the
+  `all` and `eov` layers: those resolutions are written one file per
+  parent cell (`res=<r>/p=<parent>/`). Default `c("6" = 2L, "7" = 3L)`;
+  `NULL` writes every resolution whole.
+
+- parent_res_taxon:
+
+  the same for the taxon layer (default `c("6" = 0L, "7" = 0L)`, the
+  base cell).
+
+- parent_min_rows:
+
+  a (layer key, res) with at most this many rows is written whole even
+  when its res is in `parent_res` (default 50000).
+
+- max_open:
+
+  max partitions written by one COPY (default 100); each open partition
+  holds a file open, so keep it under the process limit (`ulimit -n`,
+  256 on macOS by default).
+
+- compression:
+
+  Parquet compression codec (default `"zstd"`).
+
+- overwrite:
+
+  replace an existing `dir_out/release/` (default FALSE: stop).
+
+- decades:
+
+  decades (first year) to export in the decade layers; default
+  1960-2020. NULL exports every decade present.
+
+- esn:
+
+  expected sample size for ES(n) in the decade layers; default 50 (as in
+  the store).
+
+- memory_limit:
+
+  optional DuckDB `memory_limit` (e.g. `"24GB"`).
+
+- threads:
+
+  optional DuckDB thread count (e.g. `8`).
+
+- verbose:
+
+  print progress and the summary (default TRUE).
+
+## Value
+
+invisibly, a character vector of the files written (absolute paths).
+
+## Details
+
+    <dir_out>/<release>/
+      release.json                              build metadata, row counts, layout, columns, file manifest
+      all/res=<1..5>/data_0.parquet             idx_h3 (all taxa, all years)
+      all/res=<6,7>/p=<parent>/data_0.parquet   the fine res, one file per parent cell
+      eov/eov=<eov>/res=<r>/data_0.parquet      idx_h3_eov
+      taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order)
+      decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
+      decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
+      stats.parquet                             value ranges per layer x key x res x variable
+      taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
+      files.parquet                             manifest: layer, path, url_path, rows, bytes per file
+
+Every indicator file has the columns `h3` (lowercase hex string),
+`cell_id`, `n`, `sp`, `shannon`, `simpson`, `es`; the partition keys
+live in the path (read with `hive_partitioning = true`). The decade
+layers are computed from `occ_h3` with the same SQL builder as `idx_h3`
+/ `idx_h3_eov` (so the math is identical to the store): `n` = records,
+`sp` = distinct species, Shannon, Simpson and ES(`esn`), grouped by cell
+and `decade = floor(date_year / 10) * 10`; records without a year are
+left out of the decade layers. EOV membership is the store's `eov` table
+(`occ_h3.aphiaid = eov.taxonID`), as in
+[`obis_eov_bake()`](https://marinebon.org/obisindicators/reference/obis_eov_bake.md).
+Layers whose source tables are missing (e.g. no `idx_h3_eov` in a store
+without taxonomy) are skipped with a message.
+
+Partition values are percent-encoded by DuckDB (a space becomes `%20`),
+and DuckDB decodes them on read. A static web server decodes the URL
+once, so a browser must request the on-disk name with `%` itself encoded
+(`%2520`); `taxon_groups.parquet` carries both `path` (on disk) and
+`url_path` (to fetch), and `files.parquet` lists every file with both
+forms. Each partition is exactly one `data_0.parquet`.
+
+**Parent partitions for the fine resolutions.** A whole res-7 layer is
+tens of MB, too much for a browser to load at once, so the resolutions
+named in `parent_res` are split by parent cell: every row of
+`all/res=7/` goes to
+`all/res=7/p=<h3 of its res-3 parent>/data_0.parquet` (default res 6 by
+its res-2 parent, res 7 by its res-3 parent), and a viewer loads only
+the parent cells that cover its viewport. The taxon layer uses
+`parent_res_taxon` (default the res-0 base cell: res-3 parents would
+make over a million files across ~5k taxa). A (layer key, res) with at
+most `parent_min_rows` rows stays one whole file, since splitting it
+would only add requests. The decade layers are never split (their
+default resolutions are 1-5). `files.parquet` has a `parent` column (the
+partition's parent cell, NULL for a whole file; its resolution is the
+parent resolution), and each layer in `release.json` lists the
+`parent_res` actually used.
+
+`stats.parquet` has one row per (`layer`, `key`, `decade`, `res`,
+`variable`) with `min`, `p02`, `p50`, `p98`, `max` and `n_cells` (cells
+with a non-NULL value; a variable NULL everywhere in a partition gets a
+row with NULL ranges and `n_cells` 0), for colour ramps. `key` is the
+EOV or taxon name (” for the all-taxa layers), `rank` the taxon rank (”
+otherwise), `decade` NA outside the decade layers.
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+con <- obis_store_connect("~/data/obis/obis_h3.duckdb")
+obis_h3_export_parquet(con, "~/data/obis-h3", "v20260728")
+} # }
+```

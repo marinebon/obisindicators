@@ -1,5 +1,97 @@
 # Changelog
 
+## obisindicators 0.7.2
+
+- **Family is a precomputed taxon rank.** `H3T_IDX_RANKS` gains
+  `"family"`, so the store’s `idx_h3_taxon` and the export’s
+  `taxon/rank=family/` layer carry every family (about 5,800 in the
+  v20260728 store), and a single-family h3t query takes the precomputed
+  path. `migrate_add_idx_h3_taxon.R` adds it to an existing store.
+- **The monthly `obis-h3` refresh runs in Docker on the Mac mini.** New
+  `data-raw/docker/Dockerfile` (R 4.6.1, CRAN from a dated Posit Package
+  Manager snapshot, duckdb 1.5.5, the h3/spatial/httpfs extensions, AWS
+  CLI v2) and `data-raw/run_refresh_docker.sh` (Colima VM started and
+  stopped per run, data on the external drive mounted at `/share/data`,
+  the new store rsynced to msens for h3t). `refresh_obis_h3.sh` runs R
+  directly when `BUILD_CONTAINER` is empty (inside the image); msens’s
+  `docker exec plumber` mode is unchanged.
+- `refresh_obis_h3.sh` sources every file in `R/` for the export: the
+  subset it sourced before lacked `eov.R`, so the export stopped at
+  `taxon_groups` (`could not find function "obis_eov_label"`).
+- [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
+  computes `stats.parquet` one layer and variable at a time: the single
+  UNPIVOT over every layer held all values in `quantile_cont()` states
+  at once and, with the family rank, was killed for lack of memory in a
+  24 GiB VM. Same rows, values and column types (regression test).
+- **The WoRMS taxonomy is refreshed by the monthly run.** New step (a2)
+  in `refresh_obis_h3.sh`: when the `version` of ChecklistBank dataset
+  2011 (WoRMS’s monthly DwC-A, public) differs from
+  `taxon.parquet.json`, it downloads the archive, runs
+  `build_taxon_parquet.R` and records the version, which `release.json`
+  carries as `worms_version`. New flags `--skip-taxonomy` and
+  `--taxonomy-only`. The build’s gap-fill of AphiaIDs missing from the
+  download (WoRMS REST) is unchanged. `run_refresh_docker.sh` skips a
+  separate mount for a checkout that sits inside the data folder (Colima
+  refuses overlapping mounts).
+- `release.json`’s `obisindicators_version` comes from the checkout’s
+  `DESCRIPTION` when `OBIS_PKG_ROOT` is set
+  (`.obisindicators_version()`), so the image needs no installed
+  package.
+
+## obisindicators 0.7.1
+
+- **[`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
+  splits the fine resolutions by parent cell**, so a browser loads only
+  the cells covering its viewport instead of a whole 33 MB `all/res=7`
+  file. New arguments `parent_res` (default `c("6" = 2L, "7" = 3L)`: res
+  6 by its res-2 parent, res 7 by its res-3 parent, for the `all` and
+  `eov` layers), `parent_res_taxon` (default the res-0 base cell, which
+  keeps the taxon layer to thousands rather than millions of files),
+  `parent_min_rows` (default 50000: smaller (layer key, res) partitions
+  stay whole) and `max_open` (partitions per COPY). Split partitions are
+  written to `.../res=<r>/p=<parent h3>/data_0.parquet`; res 1-5 and the
+  decade layers stay whole. `files.parquet` gains a `parent` column
+  (NULL for whole files) and `release.json` documents each layer’s
+  `parent_res` and the rule (`parents`).
+- **New `data-raw/refresh_obis_h3.sh`: the monthly `obis-h3` release
+  pipeline** (sync OBIS open data, build the store,
+  [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md),
+  validate against the previous release, upload to S3, then write
+  `obis-h3/latest.json`). Scheduled from `oceanmetrics/erddap-places` on
+  the msens runner; documented in `data-raw/README.md`. Supports
+  `--skip-sync/-build/-export/-upload`, `--release` and `--dry-run`.
+
+## obisindicators 0.7.0
+
+- **New
+  [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md):
+  export a store to hive-partitioned Parquet for a serverless web app**
+  (static hosting + DuckDB-WASM + deck.gl `H3HexagonLayer`). Writes
+  `<dir_out>/<release>/` with `all/res=N/` (`idx_h3`),
+  `eov/eov=<eov>/res=N/` (`idx_h3_eov`),
+  `taxon/rank=<rank>/taxon=<taxon>/res=N/` (`idx_h3_taxon`), and two
+  layers computed from `occ_h3` per decade
+  (`decade/all/decade=<yyy0>/res=N/`,
+  `decade/eov/eov=<eov>/decade=<yyy0>/res=N/`; res 1-5 and decades
+  1960-2020 by default). Every file has `h3` (lowercase hex string),
+  `cell_id`, `n`, `sp`, `shannon`, `simpson`, `es`. Also writes
+  `stats.parquet` (min, 2nd, 50th, 98th percentile, max and cell count
+  per layer x key x res x variable, for colour ramps),
+  `taxon_groups.parquet` (the taxa and EOVs on offer, with totals and
+  on-disk / URL paths), `files.parquet` (a manifest of every file with
+  its row count and size, since HTTP cannot glob) and `release.json`
+  (release, snapshot, package and DuckDB versions, row counts per layer,
+  layout and columns). Each partition is exactly one `data_0.parquet`;
+  the taxon layer is written in batches of at most 100 partitions per
+  COPY to stay under the OS open-file limit. Partition values are
+  percent-encoded by DuckDB; `url_path` gives the form to fetch over
+  HTTP.
+- The indicator SQL behind `idx_h3`, `idx_h3_taxon` and `idx_h3_eov` now
+  comes from one internal builder (`.h3t_indicators_sql()`), which the
+  decade layers of the export reuse. The output of the store build is
+  unchanged.
+- `jsonlite` added to Suggests (used by the export).
+
 ## obisindicators 0.6.1
 
 - **Precomputed store articles: the figures now show on the pkgdown site

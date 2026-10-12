@@ -108,6 +108,8 @@ R.
   : Benchmark queries against a store
 - [`obis_bench_queries()`](https://marinebon.org/obisindicators/reference/obis_bench_queries.md)
   : The paper's default benchmark query set
+- [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
+  : Export an obis_h3 store to hive-partitioned Parquet
 - [`obis_h3t_query()`](https://marinebon.org/obisindicators/reference/obis_h3t_query.md)
   : Run a tile SQL at a fixed H3 resolution
 - [`obis_store_connect()`](https://marinebon.org/obisindicators/reference/obis_store_connect.md)
