@@ -348,16 +348,14 @@ obis_h3_export_parquet <- function(
     decade_all = "'' AS key, '' AS rank, decade",
     decade_eov = "eov AS key, '' AS rank, decade")
   live     <- names(layers)[vapply(layers, function(l) l$rows > 0, logical(1))]
-  vals     <- paste(sprintf("%s::DOUBLE AS %s", EXPORT_VARS, EXPORT_VARS), collapse = ", ")
-  union    <- paste(vapply(live, function(l) rd_layer(l, glue::glue(
-    "'{l}' AS layer, {key_sql[[l]]}, res, {vals}")), character(1)),
-    collapse = "\nUNION ALL\n")
-  f_stats <- file.path(out, "stats.parquet")
-  DBI::dbExecute(con, glue::glue("
-    COPY (
-      WITH d AS ({union}),
-      u AS (SELECT * FROM d UNPIVOT INCLUDE NULLS
-              (value FOR variable IN ({paste(EXPORT_VARS, collapse = ', ')})))
+  # one query per layer and variable, collected in R and written once: a single UNPIVOT over every
+  # layer held all values in quantile_cont() states at once (not spillable) and, with the family
+  # rank, outgrew a 24 GiB VM (killed 2026-10-12); per (layer, variable) the largest input is the
+  # taxon layer's one column
+  stats <- list()
+  for (l in live) for (v in EXPORT_VARS) {
+    src <- rd_layer(l, glue::glue("'{l}' AS layer, {key_sql[[l]]}, res, '{v}' AS variable, {v}::DOUBLE AS value"))
+    stats[[length(stats) + 1L]] <- DBI::dbGetQuery(con, glue::glue("
       SELECT layer, key, rank, decade, res, variable,
         MIN(value)                 AS min,
         quantile_cont(value, 0.02) AS p02,
@@ -365,10 +363,19 @@ obis_h3_export_parquet <- function(
         quantile_cont(value, 0.98) AS p98,
         MAX(value)                 AS max,
         COUNT(value)               AS n_cells
-      FROM u
-      GROUP BY ALL
+      FROM ({src}) GROUP BY ALL"))
+  }
+  f_stats <- file.path(out, "stats.parquet")
+  duckdb::duckdb_register(con, "export_stats", do.call(rbind, stats))
+  on.exit(try(duckdb::duckdb_unregister(con, "export_stats"), silent = TRUE), add = TRUE)
+  DBI::dbExecute(con, glue::glue("
+    COPY (
+      SELECT layer, key, rank, decade::INTEGER AS decade, res::INTEGER AS res, variable,
+             min, p02, p50, p98, max, n_cells::BIGINT AS n_cells
+      FROM export_stats
       ORDER BY layer, key, rank, decade, res, variable
     ) TO '{q(f_stats)}' (FORMAT PARQUET, COMPRESSION {compression});"))
+  duckdb::duckdb_unregister(con, "export_stats")
 
   # taxon_groups.parquet: what the app can offer, with paths ----
   say("taxon_groups ...")

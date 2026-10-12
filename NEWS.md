@@ -15,6 +15,10 @@
 * `refresh_obis_h3.sh` sources every file in `R/` for the export: the subset it
   sourced before lacked `eov.R`, so the export stopped at `taxon_groups`
   (`could not find function "obis_eov_label"`).
+* `obis_h3_export_parquet()` computes `stats.parquet` one layer and variable at a
+  time: the single UNPIVOT over every layer held all values in `quantile_cont()`
+  states at once and, with the family rank, was killed for lack of memory in a
+  24 GiB VM. Same rows, values and column types (regression test).
 * `release.json`'s `obisindicators_version` comes from the checkout's
   `DESCRIPTION` when `OBIS_PKG_ROOT` is set (`.obisindicators_version()`), so
   the image needs no installed package.

@@ -294,6 +294,24 @@ test_that("export of the paper fixture: eov, taxon, decade_eov layers", {
   expect_equal(sum(st$layer == "eov"), 2L * 7L * 5L)
   es_t <- st[st$layer == "eov" & st$key == "seaTurtles" & st$res == 7 & st$variable == "es", ]
   expect_equal(es_t$n_cells, 2)  # A 200, C 260 have ES50; B (45) is NULL -> not counted
+  # regression (2026-10-12): stats are computed per layer and variable, since one UNPIVOT over every
+  # layer ran out of memory once the family rank was added; same rows, values and column types
+  ty <- DBI::dbGetQuery(con, glue::glue("DESCRIBE SELECT * FROM read_parquet('{out}/stats.parquet')"))
+  expect_equal(setNames(ty$column_type, ty$column_name)[c("decade", "res", "n_cells")],
+               c(decade = "INTEGER", res = "INTEGER", n_cells = "BIGINT"))
+  ref <- DBI::dbGetQuery(con, glue::glue("
+    WITH d AS (SELECT eov AS key, res, n::DOUBLE AS n, sp::DOUBLE AS sp, shannon::DOUBLE AS shannon,
+                      simpson::DOUBLE AS simpson, es::DOUBLE AS es
+               FROM read_parquet('{out}/eov/*/*/*.parquet', hive_partitioning = true,
+                                 hive_types = {{'eov': 'VARCHAR', 'res': 'INTEGER'}})),
+         u AS (SELECT * FROM d UNPIVOT INCLUDE NULLS (value FOR variable IN (n, sp, shannon, simpson, es)))
+    SELECT key, res, variable, MIN(value) AS min, quantile_cont(value, 0.5) AS p50,
+           MAX(value) AS max, COUNT(value) AS n_cells
+    FROM u GROUP BY ALL ORDER BY key, res, variable"))
+  got <- st[st$layer == "eov", c("key", "res", "variable", "min", "p50", "max", "n_cells")]
+  got <- got[order(got$key, got$res, got$variable), ]
+  rownames(got) <- NULL
+  expect_equal(got, ref, ignore_attr = TRUE)
   js <- jsonlite::read_json(file.path(out, "release.json"))
   expect_setequal(names(js$layers), c("all", "eov", "taxon", "decade_all", "decade_eov"))
   expect_null(js$layers$taxon$parent_res)  # tiny fixture: below parent_min_rows
