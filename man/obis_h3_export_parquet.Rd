@@ -17,6 +17,7 @@ obis_h3_export_parquet(
   overwrite = FALSE,
   decades = seq(1960L, 2020L, by = 10L),
   esn = 50L,
+  place_collections = NULL,
   memory_limit = NULL,
   threads = NULL,
   verbose = TRUE
@@ -60,6 +61,12 @@ partition holds a file open, so keep it under the process limit
 \item{esn}{expected sample size for ES(n) in the decade layers; default 50
 (as in the store).}
 
+\item{place_collections}{optional named list (or character vector), slug =
+the gazetteer collection's membership (a directory or URL, its
+\code{membership.json}, or anything \code{\link[=obis_place_indicators]{obis_place_indicators()}} takes as
+\code{membership}), e.g. \code{list(eez = "<gazetteer base>/eez")}. Default \code{NULL}:
+no place layer.}
+
 \item{memory_limit}{optional DuckDB \code{memory_limit} (e.g. \code{"24GB"}).}
 
 \item{threads}{optional DuckDB thread count (e.g. \code{8}).}
@@ -83,6 +90,7 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):
   taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family)
   decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
   decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
+  place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
   stats.parquet                             value ranges per layer x key x res x variable
   taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
   files.parquet                             manifest: layer, path, url_path, rows, bytes per file
@@ -118,6 +126,18 @@ decade layers are never split (their default resolutions are 1-5).
 \code{files.parquet} has a \code{parent} column (the partition's parent cell, NULL for
 a whole file; its resolution is the parent resolution), and each layer in
 \code{release.json} lists the \code{parent_res} actually used.
+
+\strong{Place layer (optional).} With \code{place_collections}, each gazetteer
+collection gets one file, \verb{place/coll=<slug>/data_0.parquet}, with the
+indicators of every place pooled from its res-7 member cells, records
+weighted by each cell's share of area inside the place
+(\code{\link[=obis_place_indicators]{obis_place_indicators()}}): columns \code{place_id}, \code{layer} (\code{all} | \code{eov}),
+\code{key} ('' or the EOV), \code{decade} (NULL = all years, else the decades above),
+\code{n} (fractional), \code{sp}, \code{shannon}, \code{simpson}, \code{es}, \code{cells}, \code{area}. These
+are true per-place indices of the pooled, area-weighted counts, not means of
+hexagon values. The files are listed in \code{files.parquet} (layer \code{place}) and
+\code{release.json} (\code{layers$place}, with each collection's membership version);
+\code{stats.parquet} does not cover them.
 
 \code{stats.parquet} has one row per (\code{layer}, \code{key}, \code{decade}, \code{res},
 \code{variable}) with \code{min}, \code{p02}, \code{p50}, \code{p98}, \code{max} and \code{n_cells} (cells with

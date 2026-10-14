@@ -1,0 +1,106 @@
+{
+  "version": "1.1.0",
+  "min_share": 0.01,
+  "columns": [
+    "place_id",
+    "h3",
+    "share"
+  ],
+  "share": "fraction of the cell's area inside the place (equal-area plane), float32",
+  "res": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "parent_res": {
+    "6": 2,
+    "7": 3
+  },
+  "files": [
+    {
+      "res": 1,
+      "parent": null,
+      "path": "h3/res=1/membership.parquet",
+      "rows": 10,
+      "places": 10,
+      "bytes": 1123
+    },
+    {
+      "res": 2,
+      "parent": null,
+      "path": "h3/res=2/membership.parquet",
+      "rows": 10,
+      "places": 10,
+      "bytes": 1135
+    },
+    {
+      "res": 3,
+      "parent": null,
+      "path": "h3/res=3/membership.parquet",
+      "rows": 10,
+      "places": 10,
+      "bytes": 1135
+    },
+    {
+      "res": 4,
+      "parent": null,
+      "path": "h3/res=4/membership.parquet",
+      "rows": 10,
+      "places": 10,
+      "bytes": 1136
+    },
+    {
+      "res": 5,
+      "parent": null,
+      "path": "h3/res=5/membership.parquet",
+      "rows": 13,
+      "places": 10,
+      "bytes": 1164
+    },
+    {
+      "res": 6,
+      "parent": "822917fffffffff",
+      "path": "h3/res=6/p=822917fffffffff/membership.parquet",
+      "rows": 17,
+      "places": 8,
+      "bytes": 1201
+    },
+    {
+      "res": 6,
+      "parent": "8229a7fffffffff",
+      "path": "h3/res=6/p=8229a7fffffffff/membership.parquet",
+      "rows": 3,
+      "places": 2,
+      "bytes": 1061
+    },
+    {
+      "res": 7,
+      "parent": "832912fffffffff",
+      "path": "h3/res=7/p=832912fffffffff/membership.parquet",
+      "rows": 36,
+      "places": 8,
+      "bytes": 1367
+    },
+    {
+      "res": 7,
+      "parent": "8329a1fffffffff",
+      "path": "h3/res=7/p=8329a1fffffffff/membership.parquet",
+      "rows": 6,
+      "places": 2,
+      "bytes": 1088
+    }
+  ],
+  "parents": "h3/parents.parquet",
+  "rows": 115,
+  "bytes": 10410,
+  "slug": "noaa_aoa_socal",
+  "collection_version": "1.1.0",
+  "places_sha256": "7944b8f81f8b08c84cba6310dcb13fbadbf50b8ef6ef949a459d7ae6cf08d3cb",
+  "built": "2026-10-14T17:22:10Z",
+  "seconds": 0.1,
+  "places": 10
+}

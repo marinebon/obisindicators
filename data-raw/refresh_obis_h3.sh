@@ -56,6 +56,9 @@
 #   PUBLIC_BASE=https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3
 #   PREV_RELEASE=<tag to compare with>  ALLOW_NO_PREV=1 (skip the comparison if none can be read)
 #   EXPORT_OVERWRITE=1 (replace a COMPLETE existing $DIR_OUT/<release>)
+#   OBIS_PLACE_COLLECTIONS="<slug> [<slug> ...]" (default empty = off): add the per-place layer,
+#     place/coll=<slug>/data_0.parquet, from each gazetteer collection's res-7 H3 membership
+#     at $GAZETTEER_BASE/<slug> (default https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer)
 
 set -euo pipefail
 
@@ -332,7 +335,10 @@ if [ "$SKIP_EXPORT" -eq 0 ]; then
   # the WoRMS version goes into release.json only when this run built the store from it
   # (so is the OBIS data date: with --skip-build the store may predate the files on disk)
   wv=""; od=""; [ "$SKIP_BUILD" -eq 0 ] && { wv="$WORMS_VERSION"; od="$OBIS_DATA_DATE"; }
-  run in_r OBIS_PKG_ROOT="$PKG_ROOT" OBIS_WORMS_VERSION="$wv" OBIS_DATA_DATE="$od" Rscript -e '
+  # the place layer is opt-in: OBIS_PLACE_COLLECTIONS lists gazetteer slugs (space or comma separated)
+  [ -z "${OBIS_PLACE_COLLECTIONS:-}" ] || echo "place layer for: $OBIS_PLACE_COLLECTIONS"
+  run in_r OBIS_PKG_ROOT="$PKG_ROOT" OBIS_WORMS_VERSION="$wv" OBIS_DATA_DATE="$od" \
+    OBIS_PLACE_COLLECTIONS="${OBIS_PLACE_COLLECTIONS:-}" GAZETTEER_BASE="${GAZETTEER_BASE:-}" Rscript -e '
     a <- commandArgs(TRUE)
     suppressMessages({library(DBI); library(duckdb); library(glue); library(jsonlite)})
     for (f in list.files(file.path(Sys.getenv("OBIS_PKG_ROOT"), "R"), "[.]R$", full.names = TRUE)) source(f)
@@ -340,8 +346,12 @@ if [ "$SKIP_EXPORT" -eq 0 ]; then
     on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
     dbExecute(con, sprintf("SET temp_directory = \x27%s\x27;", a[6]))
     dbExecute(con, sprintf("SET max_temp_directory_size = \x27%s\x27;", a[7]))
+    pc <- strsplit(trimws(Sys.getenv("OBIS_PLACE_COLLECTIONS")), "[ ,]+")[[1]]
+    gb <- Sys.getenv("GAZETTEER_BASE", PLACE_GAZETTEER_BASE)
+    if (!nzchar(gb)) gb <- PLACE_GAZETTEER_BASE
+    pc <- if (length(pc)) stats::setNames(as.list(paste0(sub("/+$", "", gb), "/", pc)), pc) else NULL
     obis_h3_export_parquet(con, a[2], a[3], memory_limit = a[4], threads = as.integer(a[5]),
-                           overwrite = identical(a[8], "TRUE"))' \
+                           overwrite = identical(a[8], "TRUE"), place_collections = pc)' \
     "${STORE:-}" "$DIR_OUT" "$RELEASE" "$EXPORT_MEMORY" "$EXPORT_THREADS" \
     "$OBIS_TEMP_DIR" "$OBIS_MAX_TEMP" "$overwrite"
 else
