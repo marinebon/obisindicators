@@ -11,7 +11,7 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):"></h
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -76,6 +76,7 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):</p>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  decades <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">1960L</span>, <span class="fl">2020L</span>, by <span class="op">=</span> <span class="fl">10L</span><span class="op">)</span>,</span>
 <span>  esn <span class="op">=</span> <span class="fl">50L</span>,</span>
+<span>  place_collections <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  memory_limit <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  threads <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
@@ -147,6 +148,14 @@ partition holds a file open, so keep it under the process limit
 (as in the store).</p></dd>
 
 
+<dt id="arg-place-collections">place_collections<a class="anchor" aria-label="anchor" href="#arg-place-collections"></a></dt>
+<dd><p>optional named list (or character vector), slug =
+the gazetteer collection's membership (a directory or URL, its
+<code>membership.json</code>, or anything <code><a href="obis_place_indicators.html">obis_place_indicators()</a></code> takes as
+<code>membership</code>), e.g. <code>list(eez = "&lt;gazetteer base&gt;/eez")</code>. Default <code>NULL</code>:
+no place layer.</p></dd>
+
+
 <dt id="arg-memory-limit">memory_limit<a class="anchor" aria-label="anchor" href="#arg-memory-limit"></a></dt>
 <dd><p>optional DuckDB <code>memory_limit</code> (e.g. <code>"24GB"</code>).</p></dd>
 
@@ -173,9 +182,10 @@ partition holds a file open, so keep it under the process limit
 <span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  taxon<span class="sc">/</span>rank<span class="ot">=</span><span class="er">&lt;</span>rank<span class="sc">&gt;</span><span class="er">/</span>taxon<span class="ot">=</span><span class="er">&lt;</span>taxon<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>  <span class="fu">idx_h3_taxon</span> (phylum <span class="sc">/</span> class <span class="sc">/</span> order <span class="sc">/</span> family)</span>
 <span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>  decade<span class="sc">/</span>all<span class="sc">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>yyy0<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>         per decade, all <span class="fu">taxa</span>  (res <span class="cf">in</span> res_decade)</span>
 <span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  decade<span class="sc">/</span>eov<span class="sc">/</span>eov<span class="ot">=</span><span class="er">&lt;</span>eov<span class="sc">&gt;</span><span class="er">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>yyy0<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>  per decade and <span class="fu">EOV</span> (res <span class="cf">in</span> res_decade)</span>
-<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  stats.parquet                             value ranges per layer x key x res x variable</span>
-<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  taxon_groups.parquet                      the taxa and EOVs available, with totals and paths</span>
-<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>  files.parquet                             manifest<span class="sc">:</span> layer, path, url_path, rows, bytes per file</span></code></pre><p></p></div>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  place<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>slug<span class="sc">&gt;</span><span class="er">/</span>data_0.parquet          per<span class="sc">-</span>place pooled <span class="fu">indicators</span> (only with place_collections)</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  stats.parquet                             value ranges per layer x key x res x variable</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>  taxon_groups.parquet                      the taxa and EOVs available, with totals and paths</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>  files.parquet                             manifest<span class="sc">:</span> layer, path, url_path, rows, bytes per file</span></code></pre><p></p></div>
 <p>Every indicator file has the columns <code>h3</code> (lowercase hex string), <code>cell_id</code>,
 <code>n</code>, <code>sp</code>, <code>shannon</code>, <code>simpson</code>, <code>es</code>; the partition keys live in the path
 (read with <code>hive_partitioning = true</code>). The decade layers are computed from
@@ -204,6 +214,17 @@ decade layers are never split (their default resolutions are 1-5).
 <code>files.parquet</code> has a <code>parent</code> column (the partition's parent cell, NULL for
 a whole file; its resolution is the parent resolution), and each layer in
 <code>release.json</code> lists the <code>parent_res</code> actually used.</p>
+<p><strong>Place layer (optional).</strong> With <code>place_collections</code>, each gazetteer
+collection gets one file, <code>place/coll=&lt;slug&gt;/data_0.parquet</code>, with the
+indicators of every place pooled from its res-7 member cells, records
+weighted by each cell's share of area inside the place
+(<code><a href="obis_place_indicators.html">obis_place_indicators()</a></code>): columns <code>place_id</code>, <code>layer</code> (<code>all</code> | <code>eov</code>),
+<code>key</code> (” or the EOV), <code>decade</code> (NULL = all years, else the decades above),
+<code>n</code> (fractional), <code>sp</code>, <code>shannon</code>, <code>simpson</code>, <code>es</code>, <code>cells</code>, <code>area</code>. These
+are true per-place indices of the pooled, area-weighted counts, not means of
+hexagon values. The files are listed in <code>files.parquet</code> (layer <code>place</code>) and
+<code>release.json</code> (<code>layers$place</code>, with each collection's membership version);
+<code>stats.parquet</code> does not cover them.</p>
 <p><code>stats.parquet</code> has one row per (<code>layer</code>, <code>key</code>, <code>decade</code>, <code>res</code>,
 <code>variable</code>) with <code>min</code>, <code>p02</code>, <code>p50</code>, <code>p98</code>, <code>max</code> and <code>n_cells</code> (cells with
 a non-NULL value; a variable NULL everywhere in a partition gets a row with

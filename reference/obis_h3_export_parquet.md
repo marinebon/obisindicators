@@ -22,6 +22,7 @@ obis_h3_export_parquet(
   overwrite = FALSE,
   decades = seq(1960L, 2020L, by = 10L),
   esn = 50L,
+  place_collections = NULL,
   memory_limit = NULL,
   threads = NULL,
   verbose = TRUE
@@ -93,6 +94,15 @@ obis_h3_export_parquet(
   expected sample size for ES(n) in the decade layers; default 50 (as in
   the store).
 
+- place_collections:
+
+  optional named list (or character vector), slug = the gazetteer
+  collection's membership (a directory or URL, its `membership.json`, or
+  anything
+  [`obis_place_indicators()`](https://marinebon.org/obisindicators/reference/obis_place_indicators.md)
+  takes as `membership`), e.g. `list(eez = "<gazetteer base>/eez")`.
+  Default `NULL`: no place layer.
+
 - memory_limit:
 
   optional DuckDB `memory_limit` (e.g. `"24GB"`).
@@ -119,6 +129,7 @@ invisibly, a character vector of the files written (absolute paths).
       taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family)
       decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
       decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
+      place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
       stats.parquet                             value ranges per layer x key x res x variable
       taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
       files.parquet                             manifest: layer, path, url_path, rows, bytes per file
@@ -158,6 +169,19 @@ default resolutions are 1-5). `files.parquet` has a `parent` column (the
 partition's parent cell, NULL for a whole file; its resolution is the
 parent resolution), and each layer in `release.json` lists the
 `parent_res` actually used.
+
+**Place layer (optional).** With `place_collections`, each gazetteer
+collection gets one file, `place/coll=<slug>/data_0.parquet`, with the
+indicators of every place pooled from its res-7 member cells, records
+weighted by each cell's share of area inside the place
+([`obis_place_indicators()`](https://marinebon.org/obisindicators/reference/obis_place_indicators.md)):
+columns `place_id`, `layer` (`all` \| `eov`), `key` (” or the EOV),
+`decade` (NULL = all years, else the decades above), `n` (fractional),
+`sp`, `shannon`, `simpson`, `es`, `cells`, `area`. These are true
+per-place indices of the pooled, area-weighted counts, not means of
+hexagon values. The files are listed in `files.parquet` (layer `place`)
+and `release.json` (`layers$place`, with each collection's membership
+version); `stats.parquet` does not cover them.
 
 `stats.parquet` has one row per (`layer`, `key`, `decade`, `res`,
 `variable`) with `min`, `p02`, `p50`, `p98`, `max` and `n_cells` (cells

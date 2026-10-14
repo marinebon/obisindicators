@@ -57,6 +57,10 @@ roll-ups.
   : Aggregate a raster (e.g. an SDM) to H3 cells
 - [`obis_cell_indicators()`](https://marinebon.org/obisindicators/reference/obis_cell_indicators.md)
   : Per-cell indicators for a filter at one resolution
+- [`obis_place_indicators()`](https://marinebon.org/obisindicators/reference/obis_place_indicators.md)
+  : Indicators per place, pooled from area-weighted H3 cells
+- [`obis_place_membership()`](https://marinebon.org/obisindicators/reference/obis_place_membership.md)
+  : H3 membership files of a gazetteer collection
 - [`obis_rank_presets()`](https://marinebon.org/obisindicators/reference/obis_rank_presets.md)
   : Default taxon-group presets for the rank-vs-subtree comparison
 - [`place_cells()`](https://marinebon.org/obisindicators/reference/place_cells.md)

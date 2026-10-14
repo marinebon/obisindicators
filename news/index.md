@@ -1,5 +1,40 @@
 # Changelog
 
+## obisindicators 0.8.0
+
+- **New
+  [`obis_place_indicators()`](https://marinebon.org/obisindicators/reference/obis_place_indicators.md):
+  indicators per place, pooled from area-weighted H3 cells.** It takes a
+  place-cell membership (`place_id`, `h3`, `share`, as the Ocean Metrics
+  gazetteer publishes it per collection) and, for each place, sums every
+  species’ records over the member cells weighted by the cell’s share of
+  area inside the place (`ni = sum(records * share)`; the gazetteer
+  keeps shares of at least 1%), then computes `n`, `sp`, Shannon,
+  Simpson and ES(50) with the store’s indicator SQL. Layers `all` and
+  `eov` (per EOV), each for all years and per decade (1960-2020, as the
+  export’s decade layers); also `cells` (member cells with records) and
+  `area` (their summed share). These are true per-place indices of the
+  pooled, area-weighted counts, not means of hexagon values: `n` is
+  fractional because of the weighting, richness counts every species
+  with any weighted record inside the place, and ES(50) is NA where the
+  weighted `n` is below 50.
+- New
+  [`obis_place_membership()`](https://marinebon.org/obisindicators/reference/obis_place_membership.md)
+  resolves a gazetteer collection (slug, directory, URL or
+  `membership.json`) to its membership parquet files at one resolution.
+- [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
+  gains `place_collections` (default `NULL`, no change): a named list of
+  collections, each written as one file
+  `place/coll=<slug>/data_0.parquet` with every place, layer and decade,
+  listed in `files.parquet` (layer `place`) and `release.json`
+  (`layers$place`, with each collection’s membership version).
+  `stats.parquet` does not cover it. The monthly refresh turns it on
+  with `OBIS_PLACE_COLLECTIONS="<slug> ..."` (optionally
+  `GAZETTEER_BASE`), passed through by `run_refresh_docker.sh`.
+- The shared indicator SQL (`.h3t_indicators_sql()`) is documented for
+  fractional counts; it needed no change, and integer results are
+  unchanged.
+
 ## obisindicators 0.7.3
 
 - **`release.json`’s `obis_snapshot` is the OBIS data date**, the date

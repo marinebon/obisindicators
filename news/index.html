@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -50,6 +50,15 @@
       <small>Source: <a href="https://github.com/marinebon/obisindicators/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.8.0" id="obisindicators-080">obisindicators 0.8.0<a class="anchor" aria-label="anchor" href="#obisindicators-080"></a></h2>
+<ul><li>
+<strong>New <code><a href="../reference/obis_place_indicators.html">obis_place_indicators()</a></code>: indicators per place, pooled from area-weighted H3 cells.</strong> It takes a place-cell membership (<code>place_id</code>, <code>h3</code>, <code>share</code>, as the Ocean Metrics gazetteer publishes it per collection) and, for each place, sums every species’ records over the member cells weighted by the cell’s share of area inside the place (<code>ni = sum(records * share)</code>; the gazetteer keeps shares of at least 1%), then computes <code>n</code>, <code>sp</code>, Shannon, Simpson and ES(50) with the store’s indicator SQL. Layers <code>all</code> and <code>eov</code> (per EOV), each for all years and per decade (1960-2020, as the export’s decade layers); also <code>cells</code> (member cells with records) and <code>area</code> (their summed share). These are true per-place indices of the pooled, area-weighted counts, not means of hexagon values: <code>n</code> is fractional because of the weighting, richness counts every species with any weighted record inside the place, and ES(50) is NA where the weighted <code>n</code> is below 50.</li>
+<li>New <code><a href="../reference/obis_place_membership.html">obis_place_membership()</a></code> resolves a gazetteer collection (slug, directory, URL or <code>membership.json</code>) to its membership parquet files at one resolution.</li>
+<li>
+<code><a href="../reference/obis_h3_export_parquet.html">obis_h3_export_parquet()</a></code> gains <code>place_collections</code> (default <code>NULL</code>, no change): a named list of collections, each written as one file <code>place/coll=&lt;slug&gt;/data_0.parquet</code> with every place, layer and decade, listed in <code>files.parquet</code> (layer <code>place</code>) and <code>release.json</code> (<code>layers$place</code>, with each collection’s membership version). <code>stats.parquet</code> does not cover it. The monthly refresh turns it on with <code>OBIS_PLACE_COLLECTIONS="&lt;slug&gt; ..."</code> (optionally <code>GAZETTEER_BASE</code>), passed through by <code>run_refresh_docker.sh</code>.</li>
+<li>The shared indicator SQL (<code>.h3t_indicators_sql()</code>) is documented for fractional counts; it needed no change, and integer results are unchanged.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.3" id="obisindicators-073">obisindicators 0.7.3<a class="anchor" aria-label="anchor" href="#obisindicators-073"></a></h2>
 <ul><li>
