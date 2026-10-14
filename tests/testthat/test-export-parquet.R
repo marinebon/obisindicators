@@ -352,6 +352,66 @@ test_that("export of the paper fixture: eov, taxon, decade_eov layers", {
   expect_equal(s_split, s_whole)
 })
 
+test_that("export with place_collections writes one place file per collection", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("jsonlite")
+  skip_if_not_installed("h3")
+  skip_if_not(h3_ext_ok(), "duckdb h3 community extension unavailable")
+
+  fx  <- make_paper_fixture()
+  con <- fx$con
+  dir <- tempfile("export_")
+  gz  <- tempfile("gazetteer_")
+  on.exit({
+    DBI::dbDisconnect(con, shutdown = TRUE); unlink(fx$db)
+    unlink(c(dir, gz), recursive = TRUE) }, add = TRUE)
+
+  # a gazetteer collection as published: h3/membership.json + h3/res=7/membership.parquet
+  cl <- paper_fixture_cells(con)
+  m  <- data.frame(place_id = c("P1", "P1", "P2"), h3 = cl$cell[c(1, 2, 3)],
+                   share = c(1, 0.5, 1), stringsAsFactors = FALSE)
+  d7 <- file.path(gz, "test_coll", "h3", "res=7")
+  dir.create(d7, recursive = TRUE)
+  duckdb::duckdb_register(con, "m_df", m)
+  DBI::dbExecute(con, glue::glue(
+    "COPY (SELECT place_id, h3, share::FLOAT AS share FROM m_df)
+     TO '{d7}/membership.parquet' (FORMAT PARQUET);"))
+  duckdb::duckdb_unregister(con, "m_df")
+  jsonlite::write_json(list(
+    version = "1.1.0", min_share = 0.01, res = I(7L), slug = "test_coll",
+    collection_version = "0.0.1", places_sha256 = "abc",
+    files = list(list(res = 7L, parent = NULL, path = "h3/res=7/membership.parquet", rows = 3L))),
+    file.path(gz, "test_coll", "h3", "membership.json"), auto_unbox = TRUE, null = "null")
+
+  obis_h3_export_parquet(con, dir, "v1", res_decade = 5L, verbose = FALSE,
+                         place_collections = list(test_coll = file.path(gz, "test_coll")))
+  out <- file.path(dir, "v1")
+  f   <- file.path(out, "place", "coll=test_coll", "data_0.parquet")
+  expect_true(file.exists(f))
+  got <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{f}', hive_partitioning = false)"))
+  want <- obis_place_indicators(con, m, decades = TRUE, eov = TRUE)
+  expect_equal(got, want, ignore_attr = TRUE)
+  # P1 all years: A (200) + B (45 x 0.5) = 222.5 records; P2 = C (260)
+  a <- got[got$layer == "all" & is.na(got$decade), ]
+  expect_equal(a$n, c(222.5, 260))
+  expect_setequal(unique(got$key[got$layer == "eov"]), "seaTurtles")
+
+  mf <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/files.parquet')"))
+  pf <- mf[mf$layer == "place", ]
+  expect_equal(pf$path, "place/coll=test_coll/data_0.parquet")
+  expect_equal(pf$rows, nrow(got))
+  expect_true(is.na(pf$parent))
+  js <- jsonlite::read_json(file.path(out, "release.json"))
+  expect_equal(js$layers$place$template, "place/coll=<coll>/data_0.parquet")
+  expect_equal(js$layers$place$collections$test_coll$collection_version, "0.0.1")
+  expect_equal(js$layers$place$collections$test_coll$places, 2L)
+  expect_equal(js$layers$place$rows, nrow(got))
+  # stats are unchanged: no place rows
+  st <- DBI::dbGetQuery(con, glue::glue("SELECT DISTINCT layer FROM read_parquet('{out}/stats.parquet')"))
+  expect_false("place" %in% st$layer)
+})
+
 test_that("export writes exactly one data_0.parquet per partition", {
   # regression: on the global store (~11k taxon partitions) DuckDB split 251
   # partitions into data_0 + data_1 once more than partitioned_write_max_open_files

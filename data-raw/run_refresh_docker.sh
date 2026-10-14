@@ -29,6 +29,7 @@
 #   passed into the container when set: OBIS_MEMORY (16GB) OBIS_THREADS (6) OBIS_MAX_TEMP (200GB)
 #   EXPORT_MEMORY (12GB) EXPORT_THREADS (6) MIN_FREE_GB MIN_PCT PREV_RELEASE ALLOW_NO_PREV
 #   EXPORT_OVERWRITE STORE (a path under /share/data)
+#   OBIS_PLACE_COLLECTIONS GAZETTEER_BASE (the opt-in per-place layer; see refresh_obis_h3.sh)
 
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -113,7 +114,7 @@ envs=(-e BUILD_CONTAINER= -e LOCK_FILE=/tmp/refresh_obis_h3.lock
       -e "OBIS_MAX_TEMP=${OBIS_MAX_TEMP:-200GB}"
       -e "EXPORT_MEMORY=${EXPORT_MEMORY:-12GB}" -e "EXPORT_THREADS=${EXPORT_THREADS:-6}"
       -e AWS_PROFILE -e "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}")
-for v in MIN_FREE_GB MIN_PCT PREV_RELEASE ALLOW_NO_PREV EXPORT_OVERWRITE STORE; do
+for v in MIN_FREE_GB MIN_PCT PREV_RELEASE ALLOW_NO_PREV EXPORT_OVERWRITE STORE OBIS_PLACE_COLLECTIONS GAZETTEER_BASE; do
   [ -z "${!v:-}" ] || envs+=(-e "$v=${!v}")
 done
 

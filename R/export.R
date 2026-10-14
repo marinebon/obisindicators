@@ -33,6 +33,7 @@ EXPORT_MAX_OPEN <- 100L
 #'   taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family)
 #'   decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
 #'   decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
+#'   place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
 #'   stats.parquet                             value ranges per layer x key x res x variable
 #'   taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
 #'   files.parquet                             manifest: layer, path, url_path, rows, bytes per file
@@ -70,6 +71,18 @@ EXPORT_MAX_OPEN <- 100L
 #' a whole file; its resolution is the parent resolution), and each layer in
 #' `release.json` lists the `parent_res` actually used.
 #'
+#' **Place layer (optional).** With `place_collections`, each gazetteer
+#' collection gets one file, `place/coll=<slug>/data_0.parquet`, with the
+#' indicators of every place pooled from its res-7 member cells, records
+#' weighted by each cell's share of area inside the place
+#' ([obis_place_indicators()]): columns `place_id`, `layer` (`all` | `eov`),
+#' `key` ('' or the EOV), `decade` (NULL = all years, else the decades above),
+#' `n` (fractional), `sp`, `shannon`, `simpson`, `es`, `cells`, `area`. These
+#' are true per-place indices of the pooled, area-weighted counts, not means of
+#' hexagon values. The files are listed in `files.parquet` (layer `place`) and
+#' `release.json` (`layers$place`, with each collection's membership version);
+#' `stats.parquet` does not cover them.
+#'
 #' `stats.parquet` has one row per (`layer`, `key`, `decade`, `res`,
 #' `variable`) with `min`, `p02`, `p50`, `p98`, `max` and `n_cells` (cells with
 #' a non-NULL value; a variable NULL everywhere in a partition gets a row with
@@ -102,6 +115,11 @@ EXPORT_MAX_OPEN <- 100L
 #'   1960-2020. NULL exports every decade present.
 #' @param esn expected sample size for ES(n) in the decade layers; default 50
 #'   (as in the store).
+#' @param place_collections optional named list (or character vector), slug =
+#'   the gazetteer collection's membership (a directory or URL, its
+#'   `membership.json`, or anything [obis_place_indicators()] takes as
+#'   `membership`), e.g. `list(eez = "<gazetteer base>/eez")`. Default `NULL`:
+#'   no place layer.
 #' @param memory_limit optional DuckDB `memory_limit` (e.g. `"24GB"`).
 #' @param threads optional DuckDB thread count (e.g. `8`).
 #' @param verbose print progress and the summary (default TRUE).
@@ -127,6 +145,7 @@ obis_h3_export_parquet <- function(
   overwrite    = FALSE,
   decades      = seq(1960L, 2020L, by = 10L),
   esn          = 50L,
+  place_collections = NULL,
   memory_limit = NULL,
   threads      = NULL,
   verbose      = TRUE) {
@@ -322,6 +341,64 @@ obis_h3_export_parquet <- function(
     add_layer("decade_eov", "decade/eov", c("eov", "decade", "res"), rows_eov)
   else say("skipping decade_eov: no eov table")
 
+  # place layer: per-place pooled, area-weighted indicators, one file per collection ----
+  if (length(place_collections)) {
+    slugs <- names(place_collections)
+    stopifnot(
+      "place_collections must be named by collection slug" =
+        !is.null(slugs) && all(grepl("^[A-Za-z0-9._-]+$", slugs)) && !anyDuplicated(slugs))
+    dec_place <- decades
+    if (is.null(dec_place))
+      dec_place <- DBI::dbGetQuery(con, glue::glue(
+        "SELECT DISTINCT {dec_expr()} AS d FROM occ_h3 WHERE date_year IS NOT NULL ORDER BY 1"))$d
+    rows_place <- 0
+    colls      <- list()
+    for (slug in slugs) {
+      say("place: ", slug, " ...")
+      mem <- place_collections[[slug]]
+      if (is.character(mem) && length(mem) == 1L && !grepl("\\.parquet$", mem) &&
+          !mem %in% DBI::dbListTables(con))
+        mem <- obis_place_membership(mem, res = 7L)
+      pl <- obis_place_indicators(con, mem, esn = esn, res = 7L,
+                                  decades = if (length(dec_place)) dec_place else FALSE,
+                                  eov = has_eov)
+      d  <- file.path(out, "place", paste0("coll=", slug))
+      dir.create(d, recursive = TRUE, showWarnings = FALSE)
+      vw <- "export_place"
+      duckdb::duckdb_register(con, vw, pl)
+      DBI::dbExecute(con, glue::glue("
+        COPY (
+          SELECT place_id::VARCHAR AS place_id, layer::VARCHAR AS layer, key::VARCHAR AS key,
+                 decade::INTEGER AS decade, n::DOUBLE AS n, sp::INTEGER AS sp,
+                 shannon::DOUBLE AS shannon, simpson::DOUBLE AS simpson, es::DOUBLE AS es,
+                 cells::INTEGER AS cells, area::DOUBLE AS area
+          FROM {vw} ORDER BY place_id, layer, key, decade NULLS FIRST
+        ) TO '{q(file.path(d, 'data_0.parquet'))}' (FORMAT PARQUET, COMPRESSION {compression});"))
+      duckdb::duckdb_unregister(con, vw)
+      rows_place <- rows_place + nrow(pl)
+      info <- if (is.list(mem) && !is.data.frame(mem)) mem$info else NULL
+      colls[[slug]] <- list(
+        source             = if (is.character(place_collections[[slug]]))
+                               place_collections[[slug]][1] else NULL,
+        res                = 7L,
+        places             = length(unique(pl$place_id)),
+        collection_version = info$collection_version,
+        places_sha256      = info$places_sha256,
+        membership_version = info$version)
+    }
+    add_layer("place", "place", "coll", rows_place)
+    layers$place$collections <- colls
+    layers$place$columns <- I(c("place_id", "layer", "key", "decade", "n", "sp", "shannon",
+                                "simpson", "es", "cells", "area"))
+    layers$place$note <- paste(
+      "one row per place x layer (all | eov) x key ('' | EOV) x decade (NULL = all years):",
+      "indicators of the place's species counts pooled over its res-7 member cells, each",
+      "cell's records weighted by its share of area inside the place (gazetteer",
+      "membership, shares >= 0.01), so n is fractional; true per-place indices, not means",
+      "of hexagon values. sp counts every species with a weighted record; es is NULL",
+      "where n < esn; cells = member cells with records, area = their summed share.")
+  }
+
   # stats.parquet: value ranges for colour ramps, read back from the files ----
   say("stats ...")
   # explicit hive types, so a taxon or EOV name is never auto-cast to a number
@@ -356,7 +433,8 @@ obis_h3_export_parquet <- function(
   # rank, outgrew a 24 GiB VM (killed 2026-10-12); per (layer, variable) the largest input is the
   # taxon layer's one column
   stats <- list()
-  for (l in live) for (v in EXPORT_VARS) {
+  # (the place layer has no res: not in stats)
+  for (l in intersect(live, names(key_sql))) for (v in EXPORT_VARS) {
     src <- rd_layer(l, glue::glue("'{l}' AS layer, {key_sql[[l]]}, res, '{v}' AS variable, {v}::DOUBLE AS value"))
     stats[[length(stats) + 1L]] <- DBI::dbGetQuery(con, glue::glue("
       SELECT layer, key, rank, decade, res, variable,

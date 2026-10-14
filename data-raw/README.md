@@ -137,6 +137,12 @@ Steps:
 5. **Export** `obis_h3_export_parquet()` (from `R/export.R`, sourced from the checkout) into
    `/share/data/obis-h3/<release>/` (`EXPORT_MEMORY`, `EXPORT_THREADS`). A half-written output folder
    (no `release.json`) is replaced; a complete one needs `EXPORT_OVERWRITE=1`.
+   **Per-place layer (opt-in, default off):** set `OBIS_PLACE_COLLECTIONS` to one or more gazetteer slugs
+   (space or comma separated) and the export also writes `place/coll=<slug>/data_0.parquet`, the indicators
+   of every place pooled from its res-7 cells with records weighted by each cell's area share
+   (`obis_place_indicators()`), from `$GAZETTEER_BASE/<slug>/h3/membership.json` (default base
+   `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer`). `run_refresh_docker.sh` passes both
+   variables into the container, e.g. `OBIS_PLACE_COLLECTIONS="noaa_aoa_socal" data-raw/run_refresh_docker.sh`.
 6. **Validate**: `release.json` parses and carries the release tag; `files.parquet`, `stats.parquet` and
    `taxon_groups.parquet` are non-empty; total records (the sum of `n` over `all/res=1`, since every record
    falls in exactly one res-1 cell) is at least 90% of the previous release's (`MIN_PCT`). Else exit 4,

@@ -328,6 +328,10 @@ build_obis_h3_duckdb <- function(
 # cell), one row per (keys, cell_id, species). `select` is the leading column
 # list of the output (default: the keys then cell_id); it is followed by
 # n, sp, shannon, simpson, es. ES(esn) is NULL for a cell with n < esn.
+# `ni` may be fractional (obis_place_indicators() passes area-weighted counts):
+# the proportions are DOUBLE and lgamma() takes reals, so integer input gives
+# the same results as before and real input the real-valued generalisation;
+# sp = COUNT(*) counts the species rows, so `src` must carry no ni <= 0.
 # PARITY: the `es` branch of obis_h3t_sql() carries the same ES(esn) term —
 # change one, change both, and keep test-h3t-parity.R + test-eov-parity.R green.
 .h3t_indicators_sql <- function(src, keys = character(0), select = NULL, esn = 50L) {
