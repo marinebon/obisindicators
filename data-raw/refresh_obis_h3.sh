@@ -59,6 +59,13 @@
 #   OBIS_PLACE_COLLECTIONS="<slug> [<slug> ...]" (default empty = off): add the per-place layer,
 #     place/coll=<slug>/data_0.parquet, from each gazetteer collection's res-7 H3 membership
 #     at $GAZETTEER_BASE/<slug> (default https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer)
+#   OBIS_PLACE_EXACT_COLLECTIONS="<slug> [<slug> ...]" (default empty = off): add the exact
+#     point-in-polygon layer, place_exact/coll=<slug>/{indicators,years}.parquet, computed by
+#     obis_place_indicators_exact() from the local snapshot ($OCC_DIR/*.parquet) and the polygons
+#     $PLACES_INTERNAL/<slug>/places.parquet (default /share/data/places-internal, internal copies
+#     that are never published; only the values are). Hours on the global snapshot for the EEZs.
+#     The files go into the release folder, listed in files.parquet and release.json
+#     (layers$place_exact). data-raw/run_place_exact.R runs the same computation standalone.
 
 set -euo pipefail
 
@@ -77,6 +84,7 @@ OBIS_TEMP_DIR="${OBIS_TEMP_DIR:-$OBIS_DIR/tmp}"
 EXPORT_MEMORY="${EXPORT_MEMORY:-6GB}"
 EXPORT_THREADS="${EXPORT_THREADS:-2}"
 TAXON_PARQUET="${TAXON_PARQUET:-$(dirname "$OBIS_DIR")/derived/taxon.parquet}"
+PLACES_INTERNAL="${PLACES_INTERNAL:-/share/data/places-internal}"
 WORMS_DIR="${WORMS_DIR:-$(dirname "$TAXON_PARQUET")/worms}"
 CLB_DATASET="${CLB_DATASET:-2011}"
 CLB_API="https://api.checklistbank.org/dataset/$CLB_DATASET"
@@ -98,7 +106,7 @@ while [ $# -gt 0 ]; do
     --taxonomy-only) TAXONOMY_ONLY=1; SKIP_SYNC=1; SKIP_EXPORT=1; SKIP_UPLOAD=1 ;;
     --dry-run)     DRY=1 ;;
     --release)     RELEASE="${2:?--release needs vYYYYMMDD}"; shift ;;
-    -h|--help)     sed -n '2,47p' "$0"; exit 0 ;;
+    -h|--help)     sed -n '2,68p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
   shift
@@ -337,8 +345,21 @@ if [ "$SKIP_EXPORT" -eq 0 ]; then
   wv=""; od=""; [ "$SKIP_BUILD" -eq 0 ] && { wv="$WORMS_VERSION"; od="$OBIS_DATA_DATE"; }
   # the place layer is opt-in: OBIS_PLACE_COLLECTIONS lists gazetteer slugs (space or comma separated)
   [ -z "${OBIS_PLACE_COLLECTIONS:-}" ] || echo "place layer for: $OBIS_PLACE_COLLECTIONS"
+  # the exact place layer is opt-in too: OBIS_PLACE_EXACT_COLLECTIONS lists slugs whose polygons are
+  # $PLACES_INTERNAL/<slug>/places.parquet; check them now, not after the export has run for hours
+  exact_slugs="$(echo "${OBIS_PLACE_EXACT_COLLECTIONS:-}" | tr ',' ' ' | xargs)"
+  if [ -n "${exact_slugs// /}" ]; then
+    echo "exact place layer for: $exact_slugs (polygons in $PLACES_INTERNAL, occurrences $OCC_DIR/*.parquet)"
+    for slug in $exact_slugs; do
+      [[ "$slug" =~ ^[A-Za-z0-9._-]+$ ]] || die "bad slug '$slug' in OBIS_PLACE_EXACT_COLLECTIONS"
+      [ "$DRY" -eq 1 ] || [ -f "$PLACES_INTERNAL/$slug/places.parquet" ] \
+        || die "no $PLACES_INTERNAL/$slug/places.parquet for OBIS_PLACE_EXACT_COLLECTIONS (is PLACES_INTERNAL mounted?)"
+    done
+  fi
   run in_r OBIS_PKG_ROOT="$PKG_ROOT" OBIS_WORMS_VERSION="$wv" OBIS_DATA_DATE="$od" \
-    OBIS_PLACE_COLLECTIONS="${OBIS_PLACE_COLLECTIONS:-}" GAZETTEER_BASE="${GAZETTEER_BASE:-}" Rscript -e '
+    OBIS_PLACE_COLLECTIONS="${OBIS_PLACE_COLLECTIONS:-}" GAZETTEER_BASE="${GAZETTEER_BASE:-}" \
+    OBIS_PLACE_EXACT_COLLECTIONS="$exact_slugs" PLACES_INTERNAL="$PLACES_INTERNAL" \
+    OBIS_OCC_GLOB="$OCC_DIR/*.parquet" Rscript -e '
     a <- commandArgs(TRUE)
     suppressMessages({library(DBI); library(duckdb); library(glue); library(jsonlite)})
     for (f in list.files(file.path(Sys.getenv("OBIS_PKG_ROOT"), "R"), "[.]R$", full.names = TRUE)) source(f)
@@ -350,8 +371,13 @@ if [ "$SKIP_EXPORT" -eq 0 ]; then
     gb <- Sys.getenv("GAZETTEER_BASE", PLACE_GAZETTEER_BASE)
     if (!nzchar(gb)) gb <- PLACE_GAZETTEER_BASE
     pc <- if (length(pc)) stats::setNames(as.list(paste0(sub("/+$", "", gb), "/", pc)), pc) else NULL
+    px <- strsplit(trimws(Sys.getenv("OBIS_PLACE_EXACT_COLLECTIONS")), "[ ,]+")[[1]]
+    px <- if (length(px)) stats::setNames(
+      as.list(file.path(Sys.getenv("PLACES_INTERNAL"), px, "places.parquet")), px) else NULL
     obis_h3_export_parquet(con, a[2], a[3], memory_limit = a[4], threads = as.integer(a[5]),
-                           overwrite = identical(a[8], "TRUE"), place_collections = pc)' \
+                           overwrite = identical(a[8], "TRUE"), place_collections = pc,
+                           place_exact = px, place_exact_occ = Sys.getenv("OBIS_OCC_GLOB"),
+                           temp_dir = a[6], max_temp_dir_size = a[7])' \
     "${STORE:-}" "$DIR_OUT" "$RELEASE" "$EXPORT_MEMORY" "$EXPORT_THREADS" \
     "$OBIS_TEMP_DIR" "$OBIS_MAX_TEMP" "$overwrite"
 else

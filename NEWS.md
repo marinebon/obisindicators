@@ -1,3 +1,42 @@
+# obisindicators 0.9.0
+
+* **New `obis_place_indicators_exact()`: indicators per place from the OBIS
+  occurrences inside the true polygon, with no H3 approximation.** It takes the
+  occurrences (a data frame, or OBIS open-data parquet files, nested or flat,
+  filtered as `build_obis_h3_duckdb()` does) and the places (an `sf` object or a
+  GeoParquet with `place_id` and WKB `geometry`, such as a gazetteer
+  `places.parquet`), clips each polygon to a 1 degree grid, joins every distinct
+  location to the pieces with DuckDB spatial, and computes the indicators with the
+  same SQL as the store's layers. Polygons split at +/-180 work as they are.
+  Returns `indicators` (place x `eov` x `decade`; `eov` is `"all"` or an EOV from
+  the `eov` membership given as a data frame or a store connection; `decade` NA =
+  all years), `years` (place x `eov` x `year`) and `diagnostics`. Columns: `n`,
+  `sp`, `shannon`, `simpson`, `es`, `hill_1` (`exp(shannon)`), `hill_2`
+  (`1 / simpson`), `bp` (Berger-Parker, `max(ni) / n`) and `density` (`n /
+  area_km2`, records per km2, from `area_km2` or the geodesic polygon area).
+  `diagnostics` holds `records_in`, `records_out` and `records_total` (inside
+  plus outside equals the total unless places overlap), `records_in_unique` and
+  the overlapping locations with their `place_id`s, which also raise a warning.
+  Resource guards (`memory_limit`, `threads`, `temp_dir`, `max_temp_dir_size`) as
+  in `build_obis_h3_duckdb()`. The results equal `calc_indicators()` on the points
+  inside the polygon (tested for all taxa, per decade, per year and for each of the
+  seven EOVs).
+* New `obis_place_exact_write()` writes that result as
+  `place_exact/coll=<coll>/indicators.parquet` and `years.parquet` (ZSTD, values
+  only, no geometry) plus a `meta.json` (places, rows, record totals, overlaps,
+  package version).
+* `obis_h3_export_parquet()` gains `place_exact` (a named list of slug = places
+  GeoParquet; default `NULL`, no change), `place_exact_occ` (the occurrence
+  parquet files), `temp_dir` and `max_temp_dir_size`: the exact place tables are
+  written to `place_exact/coll=<slug>/` in the release and listed in
+  `files.parquet` (layer `place_exact`) and `release.json`
+  (`layers$place_exact`); `stats.parquet` does not cover them. The monthly
+  refresh turns it on with `OBIS_PLACE_EXACT_COLLECTIONS="<slug> ..."`, reading
+  `$PLACES_INTERNAL/<slug>/places.parquet` (default `/share/data/places-internal`),
+  passed through, and mounted read-only, by `run_refresh_docker.sh`.
+  `data-raw/run_place_exact.R` runs the same computation standalone.
+* No change to the indicator math or to the output of any existing function.
+
 # obisindicators 0.8.0
 
 * **New `obis_place_indicators()`: indicators per place, pooled from

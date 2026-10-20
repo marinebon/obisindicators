@@ -412,6 +412,81 @@ test_that("export with place_collections writes one place file per collection", 
   expect_false("place" %in% st$layer)
 })
 
+test_that("export with place_exact writes the exact place tables, listed in files.parquet and release.json", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("jsonlite")
+  skip_if_not_installed("sf")
+  skip_if_not_installed("h3")
+  skip_if_not(h3_ext_ok(), "duckdb h3 community extension unavailable")
+  skip_if_not(spatial_ext_ok(), "duckdb spatial extension unavailable")
+
+  fx  <- make_paper_fixture()
+  con <- fx$con
+  dir <- tempfile("export_")
+  src <- tempfile("exact_src_")
+  dir.create(src)
+  on.exit({
+    DBI::dbDisconnect(con, shutdown = TRUE); unlink(fx$db)
+    unlink(c(dir, src), recursive = TRUE) }, add = TRUE)
+
+  # the fixture's points as OBIS-like occurrences (flat parquet), and two box places
+  b7  <- paper_fixture_cells(con)
+  bll <- as.data.frame(h3::h3_to_geo(b7$cell[2]))
+  occ <- data.frame(
+    decimalLongitude = c(-50, -50, bll$lng, -60, -60, 60),
+    decimalLatitude  = c(10, 10, bll$lat, 20, 20, 40),
+    species   = c("Chelonia mydas", "Caretta caretta", "Chelonia mydas", "Caretta caretta",
+                  "Chelonia mydas", "Larus argentatus"),
+    date_year = c(2015L, 1975L, 2015L, 1975L, 2015L, 2015L),
+    aphiaid   = c(987097L, 987098L, 987097L, 987098L, 987097L, 1840L),
+    records   = c(120L, 80L, 45L, 200L, 60L, 300L))
+  duckdb::duckdb_register(con, "exact_occ", occ)
+  DBI::dbExecute(con, glue::glue("COPY exact_occ TO '{src}/occ.parquet' (FORMAT PARQUET)"))
+  duckdb::duckdb_unregister(con, "exact_occ")
+  box <- function(x0, y0, x1, y1) pe_poly(matrix(c(x0, y0, x1, y0, x1, y1, x0, y1), ncol = 2, byrow = TRUE))
+  f_pl <- file.path(src, "places.parquet")
+  pe_write_places(f_pl, pe_sf(P1 = box(-65, 5, -45, 25), P2 = box(55, 35, 65, 45)))
+
+  obis_h3_export_parquet(con, dir, "v1", res_decade = 5L, verbose = FALSE,
+                         place_exact = list(test_coll = f_pl),
+                         place_exact_occ = file.path(src, "occ.parquet"))
+  out <- file.path(dir, "v1")
+  d   <- file.path(out, "place_exact", "coll=test_coll")
+  expect_true(all(file.exists(file.path(d, c("indicators.parquet", "years.parquet", "meta.json")))))
+  ind <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT * FROM read_parquet('{d}/indicators.parquet', hive_partitioning = false)"))
+  # P1 holds A (200) + B (45) + C (260); P2 the gull (300); seaTurtles from the store's eov table
+  a <- ind[ind$eov == "all" & is.na(ind$decade), ]
+  expect_equal(a$place_id, c("P1", "P2"))
+  expect_equal(a$n, c(505, 300))
+  expect_equal(ind$n[ind$eov == "seaTurtles" & is.na(ind$decade) & ind$place_id == "P1"], 505)
+  expect_false("P2" %in% ind$place_id[ind$eov == "seaTurtles"])
+  expect_true("seabirds" %in% ind$eov)
+  # the same numbers as calling the function directly
+  want <- obis_place_indicators_exact(file.path(src, "occ.parquet"), f_pl, eov = con)
+  expect_equal(ind, want$indicators, ignore_attr = TRUE)
+
+  mf <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/files.parquet')"))
+  pf <- mf[mf$layer == "place_exact", ]
+  expect_equal(sort(pf$path), c("place_exact/coll=test_coll/indicators.parquet",
+                                "place_exact/coll=test_coll/years.parquet"))
+  js <- jsonlite::read_json(file.path(out, "release.json"))
+  expect_equal(js$layers$place_exact$collections$test_coll$places, 2L)
+  expect_equal(js$layers$place_exact$collections$test_coll$records_total, 805)
+  expect_equal(js$layers$place_exact$collections$test_coll$records_in, 805)
+  expect_equal(js$layers$place_exact$rows, nrow(want$indicators) + nrow(want$years))
+  expect_equal(length(js$layers$place_exact$template), 2L)
+  # stats are unchanged: no place_exact rows
+  st <- DBI::dbGetQuery(con, glue::glue("SELECT DISTINCT layer FROM read_parquet('{out}/stats.parquet')"))
+  expect_false("place_exact" %in% st$layer)
+  # without the argument, nothing is written
+  obis_h3_export_parquet(con, dir, "v2", res_decade = 5L, verbose = FALSE)
+  expect_false(dir.exists(file.path(dir, "v2", "place_exact")))
+  expect_error(obis_h3_export_parquet(con, dir, "v3", verbose = FALSE, place_exact = list(x = f_pl)),
+               "place_exact_occ")
+})
+
 test_that("export writes exactly one data_0.parquet per partition", {
   # regression: on the global store (~11k taxon partitions) DuckDB split 251
   # partitions into data_0 + data_1 once more than partitioned_write_max_open_files
