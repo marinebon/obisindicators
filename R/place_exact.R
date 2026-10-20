@@ -6,6 +6,8 @@
 
 # default decades, as the export's decade layers ----
 PLACE_EXACT_DECADES <- seq(1960L, 2020L, by = 10L)
+# most quadrant-subdivision rounds of the place polygons before giving up
+PLACE_EXACT_MAX_ROUNDS <- 24L
 
 #' Exact point-in-polygon indicators per place
 #'
@@ -22,11 +24,14 @@ PLACE_EXACT_DECADES <- seq(1960L, 2020L, by = 10L)
 #'    not true. Records are grouped by (longitude, latitude, `aphiaid`,
 #'    `species`, year), `records` being the row count (or the sum of a
 #'    `records` column when the source has one).
-#' 2. **Place pieces**: each polygon is clipped to a `grid_deg` degree grid
-#'    (`ST_Intersection` with the grid cells covering its bounding box), so the
-#'    spatial join tests points against small pieces instead of rings with
-#'    hundreds of thousands of vertices. Polygons already split at +/-180
-#'    (gazetteer geometries are) need nothing special.
+#' 2. **Place pieces**: each polygon is dumped into its parts (so a place split
+#'    at +/-180 becomes local parts with local bounding boxes), and every part
+#'    with more than `max_vertices` vertices is cut into the four quadrants of its
+#'    own bounding box (`ST_Intersection`, empties dropped, parts dumped again),
+#'    round after round until every piece is small. The spatial join then tests
+#'    points against small pieces instead of rings with hundreds of thousands of
+#'    vertices. Each round is a table (so DuckDB can spill) and copies a geometry
+#'    at most four times; at most 24 rounds, else an error.
 #' 3. **Join**: each distinct location is matched to the pieces with
 #'    `ST_Intersects` (DuckDB's R-tree spatial join) and then to its `place_id`.
 #'    A location on the shared boundary of two places matches both; these are
@@ -57,8 +62,9 @@ PLACE_EXACT_DECADES <- seq(1960L, 2020L, by = 10L)
 #' @param years per-year rows: `TRUE` (default) every year with records,
 #'   `FALSE` or `NULL` none, or an integer vector of years.
 #' @param esn expected sample size for ES(n); default 50.
-#' @param grid_deg size in degrees of the grid the polygons are clipped to
-#'   (default 1). It only affects speed, not results.
+#' @param max_vertices the most vertices a polygon piece may have before it is
+#'   cut into quadrants (default 256, at least 8). It only affects speed and
+#'   memory, not results.
 #' @param con optional DuckDB connection to use (the `spatial` extension is
 #'   loaded into it); default a private in-memory one. Temporary tables are
 #'   dropped on exit.
@@ -68,6 +74,8 @@ PLACE_EXACT_DECADES <- seq(1960L, 2020L, by = 10L)
 #' @param s3_region,s3_anonymous for `s3://` sources, as in
 #'   [build_obis_h3_duckdb()].
 #' @param verbose message progress.
+#' @param grid_deg deprecated and ignored (the polygons used to be clipped to a
+#'   grid); a message is shown when it is given.
 #'
 #' @return a list with
 #'   - `indicators`: one row per place x `eov` (`"all"` or the EOV) x `decade`
@@ -83,7 +91,8 @@ PLACE_EXACT_DECADES <- seq(1960L, 2020L, by = 10L)
 #'     records_out`, `records_in` without double counting overlaps), `overlaps`
 #'     (a list: `n` locations that match more than one place, their `place_ids`
 #'     and `records`), `n_places`, `n_places_with_records`, `n_locations`
-#'     (distinct locations), `n_pieces` and `grid_deg`.
+#'     (distinct locations), `n_pieces`, `max_vertices`, `max_piece_vertices` (the largest piece) and
+#'     `subdivision_rounds`.
 #'
 #'   Without overlapping places, `records_in + records_out == records_total`.
 #' @concept analyze
@@ -103,7 +112,7 @@ obis_place_indicators_exact <- function(
   decades           = TRUE,
   years             = TRUE,
   esn               = 50L,
-  grid_deg          = 1,
+  max_vertices      = 256L,
   con               = NULL,
   memory_limit      = NULL,
   threads           = NULL,
@@ -111,12 +120,17 @@ obis_place_indicators_exact <- function(
   max_temp_dir_size = NULL,
   s3_region         = "us-east-1",
   s3_anonymous      = TRUE,
-  verbose           = FALSE) {
+  verbose           = FALSE,
+  grid_deg          = NULL) {
 
   stopifnot(requireNamespace("DBI", quietly = TRUE),
             requireNamespace("duckdb", quietly = TRUE),
             is.numeric(esn), length(esn) == 1L, esn >= 1,
-            is.numeric(grid_deg), length(grid_deg) == 1L, is.finite(grid_deg), grid_deg > 0)
+            is.numeric(max_vertices), length(max_vertices) == 1L, is.finite(max_vertices),
+            max_vertices >= 8)
+  if (!is.null(grid_deg))
+    message("`grid_deg` is deprecated and ignored: polygons are now subdivided to at most ",
+            "`max_vertices` vertices per piece (quadrant subdivision, see ?obis_place_indicators_exact)")
   esn <- as.integer(esn)
   say <- function(...) if (verbose) message(...)
 
@@ -134,7 +148,8 @@ obis_place_indicators_exact <- function(
   id  <- as.integer(stats::runif(1, 1e6, 1e7))
   nm  <- function(x) paste0("pe", id, "_", x)
   tbl <- list(pl = nm("places"), pcs = nm("pieces"), occ = nm("occ"), loc = nm("loc"),
-              lp = nm("loc_place"), po = nm("place_occ"), ov = nm("overlap"), eov = nm("eov"))
+              lp = nm("loc_place"), po = nm("place_occ"), ov = nm("overlap"), eov = nm("eov"),
+              cur = nm("cur"), nxt = nm("next"))
   vws <- character(0)
   on.exit({
     for (v in vws) try(duckdb::duckdb_unregister(con, v), silent = TRUE)
@@ -158,31 +173,58 @@ obis_place_indicators_exact <- function(
   if (np$u != np$n) stop("`places$place_id` must be unique")
   say("places: ", np$n)
 
-  # place pieces: each polygon clipped to the grid cells covering its bbox ----
-  g <- format(grid_deg, digits = 15, scientific = FALSE)
+  # place pieces: each polygon part cut into quadrants until it has <= max_vertices vertices ----
+  # (each round writes a table, so DuckDB can spill; a geometry is copied at most 4 times per round)
+  mv <- as.integer(max_vertices)
   DBI::dbExecute(con, glue::glue("
-    CREATE TEMP TABLE {tbl$pcs} AS
-    WITH b AS (
-      SELECT place_id, geom,
-             floor(ST_XMin(geom) / {g})::BIGINT AS x0,
-             GREATEST(ceil(ST_XMax(geom) / {g}), floor(ST_XMin(geom) / {g}) + 1)::BIGINT AS x1,
-             floor(ST_YMin(geom) / {g})::BIGINT AS y0,
-             GREATEST(ceil(ST_YMax(geom) / {g}), floor(ST_YMin(geom) / {g}) + 1)::BIGINT AS y1
-      FROM {tbl$pl}),
-    gx AS (
-      SELECT place_id, geom, y0, y1, unnest(range(x0, x1)) AS ix FROM b),
-    gxy AS (
-      SELECT place_id, geom, ix, unnest(range(y0, y1)) AS iy FROM gx),
-    cel AS (
-      SELECT place_id, geom,
-             ST_MakeEnvelope(ix * {g}, iy * {g}, (ix + 1) * {g}, (iy + 1) * {g}) AS env
-      FROM gxy),
-    pcs AS (
-      SELECT place_id, ST_CollectionExtract(ST_Intersection(geom, env), 3) AS geom
-      FROM cel WHERE ST_Intersects(geom, env))
-    SELECT place_id, geom FROM pcs WHERE NOT ST_IsEmpty(geom)"))
-  n_pieces <- DBI::dbGetQuery(con, glue::glue("SELECT COUNT(*)::DOUBLE AS n FROM {tbl$pcs}"))$n
-  say("place pieces: ", format(n_pieces, big.mark = ",", scientific = FALSE), " at ", g, " degrees")
+    CREATE TEMP TABLE {tbl$cur} AS
+    SELECT place_id, g AS geom, ST_NPoints(g)::INTEGER AS npts
+    FROM (SELECT place_id, d.geom AS g, ST_GeometryType(d.geom) AS gt
+          FROM (SELECT place_id, unnest(ST_Dump(geom)) AS d FROM {tbl$pl}))
+    WHERE gt = 'POLYGON' AND NOT ST_IsEmpty(g)"))
+  DBI::dbExecute(con, glue::glue("CREATE TEMP TABLE {tbl$pcs} (place_id VARCHAR, geom GEOMETRY)"))
+  rounds <- 0L
+  repeat {
+    DBI::dbExecute(con, glue::glue(
+      "INSERT INTO {tbl$pcs} SELECT place_id, geom FROM {tbl$cur} WHERE npts <= {mv}"))
+    n_big <- DBI::dbGetQuery(con, glue::glue(
+      "SELECT COUNT(*)::DOUBLE AS n FROM {tbl$cur} WHERE npts > {mv}"))$n
+    if (n_big == 0) break
+    if (rounds >= PLACE_EXACT_MAX_ROUNDS)
+      stop(n_big, " polygon piece(s) still have more than ", mv, " vertices after ",
+           PLACE_EXACT_MAX_ROUNDS, " subdivision rounds; raise `max_vertices`", call. = FALSE)
+    rounds <- rounds + 1L
+    say("subdivision round ", rounds, ": ", format(n_big, big.mark = ",", scientific = FALSE),
+        " piece(s) over ", mv, " vertices")
+    DBI::dbExecute(con, glue::glue("
+      CREATE TEMP TABLE {tbl$nxt} AS
+      WITH big AS (
+        SELECT place_id, geom,
+               ST_XMin(geom) AS x0, ST_YMin(geom) AS y0,
+               (ST_XMin(geom) + ST_XMax(geom)) / 2 AS xm, (ST_YMin(geom) + ST_YMax(geom)) / 2 AS ym,
+               ST_XMax(geom) AS x1, ST_YMax(geom) AS y1
+        FROM {tbl$cur} WHERE npts > {mv}),
+      quad AS (
+        SELECT place_id, geom,
+               ST_MakeEnvelope(CASE i WHEN 0 THEN x0 ELSE xm END, CASE j WHEN 0 THEN y0 ELSE ym END,
+                               CASE i WHEN 0 THEN xm ELSE x1 END, CASE j WHEN 0 THEN ym ELSE y1 END) AS env
+        FROM big, (VALUES (0, 0), (0, 1), (1, 0), (1, 1)) q(i, j)),
+      cut AS (
+        SELECT place_id, ST_CollectionExtract(ST_Intersection(geom, env), 3) AS g
+        FROM quad WHERE ST_Intersects(geom, env)),
+      prt AS (
+        SELECT place_id, unnest(ST_Dump(g)) AS d FROM cut WHERE NOT ST_IsEmpty(g))
+      SELECT place_id, d.geom AS geom, ST_NPoints(d.geom)::INTEGER AS npts
+      FROM prt WHERE ST_GeometryType(d.geom) = 'POLYGON' AND NOT ST_IsEmpty(d.geom)"))
+    DBI::dbExecute(con, glue::glue("DROP TABLE {tbl$cur}"))
+    DBI::dbExecute(con, glue::glue("ALTER TABLE {tbl$nxt} RENAME TO {tbl$cur}"))
+  }
+  DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {tbl$cur}"))
+  pc <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT COUNT(*)::DOUBLE AS n, COALESCE(MAX(ST_NPoints(geom)), 0)::DOUBLE AS mx FROM {tbl$pcs}"))
+  n_pieces <- pc$n
+  say("place pieces: ", format(n_pieces, big.mark = ",", scientific = FALSE), " of at most ", mv,
+      " vertices after ", rounds, " round(s)")
 
   # occurrences, filtered and grouped as build_obis_h3_duckdb() ----
   src <- .pe_occ_source(con, occ, nm("occ_src"), s3_region, s3_anonymous)
@@ -241,7 +283,9 @@ obis_place_indicators_exact <- function(
     n_places_with_records = dg$n_with,
     n_locations           = n_loc,
     n_pieces              = n_pieces,
-    grid_deg              = grid_deg)
+    max_vertices          = mv,
+    max_piece_vertices    = pc$mx,
+    subdivision_rounds    = rounds)
   if (dg$ov_n > 0)
     warning(format(dg$ov_n, big.mark = ",", scientific = FALSE), " location(s) match more than one place (",
             dg$ov_records, " records counted in each): ",

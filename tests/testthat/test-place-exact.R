@@ -254,22 +254,83 @@ test_that("places from a GeoParquet (WKB blob or native geometry) equal places f
   }
 })
 
-test_that("grid clipping does not change results: grid_deg 1, 0.7 and 10 agree", {
+test_that("subdivision does not change results: max_vertices 16, 256 and unsplit agree", {
   skip_exact()
   occ <- pe_occ()
   eov <- pe_eov(occ$aphiaid)
-  pl  <- pe_sf(BOX = PE_BOX, ELL = PE_ELL)
-  r1  <- obis_place_indicators_exact(occ, pl, eov = eov, grid_deg = 1, decades = c(1990, 2000), years = 2000)
-  r07 <- obis_place_indicators_exact(occ, pl, eov = eov, grid_deg = 0.7, decades = c(1990, 2000), years = 2000)
-  r10 <- obis_place_indicators_exact(occ, pl, eov = eov, grid_deg = 10, decades = c(1990, 2000), years = 2000)
-  expect_gt(r1$diagnostics$n_pieces, r10$diagnostics$n_pieces)
-  expect_gt(r07$diagnostics$n_pieces, r1$diagnostics$n_pieces)
-  expect_equal(r1$indicators, r10$indicators)
-  expect_equal(r1$indicators, r07$indicators)
-  expect_equal(r1$years, r10$years)
-  expect_equal(r1$diagnostics$records_in, r10$diagnostics$records_in)
-  expect_equal(sort(unique(r1$years$year)), 2000L)
-  expect_setequal(stats::na.omit(unique(r1$indicators$decade)), c(1990L, 2000L))
+  # the concave L, plus a 400-vertex circle so that a small max_vertices has to cut it
+  th  <- seq(0, 2 * pi, length.out = 401)[-401]
+  circ <- pe_poly(cbind(-5 + 4 * cos(th), -45 + 4 * sin(th)))
+  pl  <- pe_sf(BOX = PE_BOX, ELL = PE_ELL, CIRC = circ)
+  run <- function(mv) obis_place_indicators_exact(occ, pl, eov = eov, max_vertices = mv,
+                                                  decades = c(1990, 2000), years = 2000)
+  r16  <- run(16)
+  r256 <- run(256)
+  rbig <- run(1e7)
+  expect_equal(rbig$diagnostics$subdivision_rounds, 0L)
+  expect_equal(rbig$diagnostics$max_piece_vertices, 401)  # a closed 400-gon
+  expect_gt(r256$diagnostics$subdivision_rounds, 0L)
+  expect_lte(r256$diagnostics$max_piece_vertices, 256)
+  expect_lte(r16$diagnostics$max_piece_vertices, 16)
+  expect_gt(r16$diagnostics$n_pieces, r256$diagnostics$n_pieces)
+  expect_gt(r256$diagnostics$n_pieces, rbig$diagnostics$n_pieces)
+  expect_gt(pe_row(rbig, "CIRC")$n, 0)
+  expect_equal(r256$indicators, rbig$indicators)
+  expect_equal(r16$indicators, rbig$indicators)
+  expect_equal(r256$years, rbig$years)
+  expect_equal(r16$years, rbig$years)
+  expect_equal(r16$diagnostics$records_in, rbig$diagnostics$records_in)
+  expect_setequal(stats::na.omit(unique(r16$indicators$decade)), c(1990L, 2000L))
+})
+
+test_that("a 5,000-vertex place split at +/-180 subdivides into small pieces and keeps its points", {
+  skip_exact()
+  # two wavy parts, one each side of the antimeridian, 2,500 vertices each
+  y  <- seq(10, -10, length.out = 2500)
+  xe <- 176 + 1.2 * sin(60 * y) + 0.3 * sin(500 * y)
+  east <- rbind(c(180, -10), c(180, 10), cbind(xe, y))
+  west <- cbind(-east[, 1], east[, 2])
+  east <- rbind(east, east[1, ]); west <- rbind(west, west[1, ])
+  mp <- sf::st_multipolygon(list(list(east), list(west)))
+  expect_gte(nrow(east) + nrow(west), 5000)
+  set.seed(7)
+  n <- 30000
+  lon <- c(runif(n, 170, 180), -runif(n, 170, 180), 180, -180, 180)
+  lat <- c(runif(2 * n, -12, 12), 0, 0, 5)
+  d <- data.frame(decimalLongitude = lon, decimalLatitude = lat,
+                  species = sample(letters, length(lon), TRUE), records = 1L)
+  pl <- pe_sf(AM = mp)
+
+  # the truth, independently: GEOS planar intersects (not s2)
+  old <- suppressMessages(sf::sf_use_s2(FALSE))
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  pts <- sf::st_as_sf(d, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
+  want <- sum(lengths(suppressMessages(sf::st_intersects(pts, pl))) > 0)
+  expect_gt(want, 1000)
+  expect_lt(want, nrow(d))
+
+  r  <- obis_place_indicators_exact(d, pl, decades = FALSE, years = FALSE, max_vertices = 256)
+  r0 <- obis_place_indicators_exact(d, pl, decades = FALSE, years = FALSE, max_vertices = 1e6)
+  dg <- r$diagnostics
+  expect_lte(dg$max_piece_vertices, 256)
+  expect_gt(dg$n_pieces, 20)
+  expect_gt(dg$subdivision_rounds, 1L)
+  expect_equal(r0$diagnostics$n_pieces, 2)    # one part per side, never cut
+  expect_equal(pe_row(r, "AM")$n, want)
+  expect_equal(pe_row(r0, "AM")$n, want)
+  expect_equal(dg$records_in, want)
+  expect_equal(dg$records_in + dg$records_out, dg$records_total)
+  expect_equal(r$indicators, r0$indicators)
+})
+
+test_that("max_vertices is validated, and the old grid_deg is deprecated with a message", {
+  skip_exact()
+  d  <- data.frame(decimalLongitude = 1, decimalLatitude = 1, species = "A", records = 3)
+  pl <- pe_sf(P = pe_poly(matrix(c(0, 0, 2, 0, 2, 2, 0, 2), ncol = 2, byrow = TRUE)))
+  expect_error(obis_place_indicators_exact(d, pl, max_vertices = 4))
+  expect_message(r <- obis_place_indicators_exact(d, pl, grid_deg = 1, decades = FALSE, years = FALSE),
+                 "grid_deg. is deprecated")
+  expect_equal(pe_row(r, "P")$n, 3)
 })
 
 test_that("a point on a grid line inside a place is counted once", {
@@ -405,7 +466,7 @@ test_that("eov from a store connection's eov table, and input validation", {
   expect_error(obis_place_indicators_exact(occ, sf::st_sf(id = "x", geometry = sf::st_geometry(pl))), "place_id")
   expect_error(obis_place_indicators_exact(occ[, setdiff(names(occ), "species")], pl), "species")
   expect_error(obis_place_indicators_exact(occ[, setdiff(names(occ), "aphiaid")], pl, eov = m), "aphiaid")
-  expect_error(obis_place_indicators_exact(occ, pl, grid_deg = 0))
+  expect_error(obis_place_indicators_exact(occ, pl, max_vertices = 0))
   expect_error(obis_place_indicators_exact(occ, pl, eov = data.frame(a = 1)), "eov")
   # no data in the places: empty tables, still the documented columns
   far <- pe_sf(FAR = pe_poly(matrix(c(100, 60, 101, 60, 101, 61, 100, 61), ncol = 2, byrow = TRUE)))

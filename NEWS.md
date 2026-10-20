@@ -5,7 +5,9 @@
   occurrences (a data frame, or OBIS open-data parquet files, nested or flat,
   filtered as `build_obis_h3_duckdb()` does) and the places (an `sf` object or a
   GeoParquet with `place_id` and WKB `geometry`, such as a gazetteer
-  `places.parquet`), clips each polygon to a 1 degree grid, joins every distinct
+  `places.parquet`), splits each polygon into its parts and cuts them into quadrants until every piece has
+  at most `max_vertices` (default 256) vertices (a place split at +/-180 gets local
+  parts, so memory stays a few times the geometry size), joins every distinct
   location to the pieces with DuckDB spatial, and computes the indicators with the
   same SQL as the store's layers. Polygons split at +/-180 work as they are.
   Returns `indicators` (place x `eov` x `decade`; `eov` is `"all"` or an EOV from
@@ -35,6 +37,13 @@
   `$PLACES_INTERNAL/<slug>/places.parquet` (default `/share/data/places-internal`),
   passed through, and mounted read-only, by `run_refresh_docker.sh`.
   `data-raw/run_place_exact.R` runs the same computation standalone.
+* `obis_place_indicators_exact()` takes `max_vertices` instead of `grid_deg`
+  (deprecated: ignored, with a message). The 1 degree grid clip repeated each
+  place's whole geometry in every cell of its bounding box, which ran out of memory
+  on EEZs and high seas that span +/-180; the quadrant subdivision writes one table
+  per round and copies a geometry at most four times. `diagnostics` reports
+  `max_vertices`, `max_piece_vertices` and `subdivision_rounds` instead of
+  `grid_deg`; `data-raw/run_place_exact.R` reads `OBIS_MAX_VERTICES`.
 * No change to the indicator math or to the output of any existing function.
 
 # obisindicators 0.8.0

@@ -13,7 +13,7 @@
 #   coll            the collection slug
 #
 # Env (defaults): OBIS_MEMORY=16GB OBIS_THREADS=6 OBIS_MAX_TEMP=200GB OBIS_TEMP_DIR=<out dir>/.tmp
-#   OBIS_GRID_DEG=1  OBIS_ESN=50  OBIS_PKG_ROOT=<this checkout>
+#   OBIS_MAX_VERTICES=256  OBIS_ESN=50  OBIS_PKG_ROOT=<this checkout>
 #
 # Prints the timing and the totals check, and exits 1 when records_in + records_out differs from
 # records_total although no places overlap (records are being lost or double counted), 2 on a usage
@@ -66,7 +66,7 @@ message(format(t0, "%Y-%m-%dT%H:%M:%S"), " exact place indicators: ", coll, " fr
 res <- obis_place_indicators_exact(
   snapshot, places, eov = eov,
   esn               = as.integer(Sys.getenv("OBIS_ESN", "50")),
-  grid_deg          = as.numeric(Sys.getenv("OBIS_GRID_DEG", "1")),
+  max_vertices      = as.integer(Sys.getenv("OBIS_MAX_VERTICES", "256")),
   memory_limit      = Sys.getenv("OBIS_MEMORY", "16GB"),
   threads           = as.integer(Sys.getenv("OBIS_THREADS", "6")),
   temp_dir          = tmp,

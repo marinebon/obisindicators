@@ -179,14 +179,16 @@ data-raw/deploy_obis_h3.sh --skip-sync --skip-build --store /share/data/obis/obi
 ### Exact place indicators on their own (`run_place_exact.R`)
 
 `obis_place_indicators_exact()` tests every OBIS occurrence location against the true polygons (DuckDB spatial:
-each polygon is clipped to a 1 degree grid, then an R-tree `ST_Intersects` join), then computes the indicators
+each polygon is dumped into its parts and cut into quadrants until every piece has at most `max_vertices` vertices,
+256 by default, then an R-tree `ST_Intersects` join), then computes the indicators
 with the store's indicator SQL: per place, per EOV (`all` plus the store's `eov` table), per decade and per year,
 with Hill numbers, Berger-Parker and density (records per km2). `run_place_exact.R` runs it for one collection and
 writes `place_exact/coll=<coll>/` into a release folder; it prints the timing and the totals check (records inside
 all places plus records outside every place must equal the filtered total) and exits 1 when they differ although
 no places overlap. On the Mac mini, in tmux (R with DBI, duckdb, glue and jsonlite, no Docker needed; the
 duckdb spatial extension is installed on first use; memory and spill follow `OBIS_MEMORY` 16GB, `OBIS_THREADS` 6,
-`OBIS_MAX_TEMP` 200GB, spill in `<out dir>/.tmp`):
+`OBIS_MAX_TEMP` 200GB, spill in `<out dir>/.tmp`; `OBIS_MAX_VERTICES` 256 is the piece size of the polygon
+subdivision):
 
 ```bash
 cd ~/Github/marinebon/obisindicators

@@ -11,7 +11,7 @@ obis_place_indicators_exact(
   decades = TRUE,
   years = TRUE,
   esn = 50L,
-  grid_deg = 1,
+  max_vertices = 256L,
   con = NULL,
   memory_limit = NULL,
   threads = NULL,
@@ -19,7 +19,8 @@ obis_place_indicators_exact(
   max_temp_dir_size = NULL,
   s3_region = "us-east-1",
   s3_anonymous = TRUE,
-  verbose = FALSE
+  verbose = FALSE,
+  grid_deg = NULL
 )
 }
 \arguments{
@@ -48,8 +49,9 @@ integer vector.}
 
 \item{esn}{expected sample size for ES(n); default 50.}
 
-\item{grid_deg}{size in degrees of the grid the polygons are clipped to
-(default 1). It only affects speed, not results.}
+\item{max_vertices}{the most vertices a polygon piece may have before it is
+cut into quadrants (default 256, at least 8). It only affects speed and
+memory, not results.}
 
 \item{con}{optional DuckDB connection to use (the \code{spatial} extension is
 loaded into it); default a private in-memory one. Temporary tables are
@@ -63,6 +65,9 @@ scan, which otherwise can exhaust RAM.}
 \code{\link[=build_obis_h3_duckdb]{build_obis_h3_duckdb()}}.}
 
 \item{verbose}{message progress.}
+
+\item{grid_deg}{deprecated and ignored (the polygons used to be clipped to a
+grid); a message is shown when it is given.}
 }
 \value{
 a list with
@@ -79,7 +84,8 @@ years), \code{records_out} (filtered records outside every place),
 \code{records_total} (filtered records), \code{records_in_unique} (\code{records_total - records_out}, \code{records_in} without double counting overlaps), \code{overlaps}
 (a list: \code{n} locations that match more than one place, their \code{place_ids}
 and \code{records}), \code{n_places}, \code{n_places_with_records}, \code{n_locations}
-(distinct locations), \code{n_pieces} and \code{grid_deg}.
+(distinct locations), \code{n_pieces}, \code{max_vertices}, \code{max_piece_vertices} (the largest piece) and
+\code{subdivision_rounds}.
 }
 
 Without overlapping places, \code{records_in + records_out == records_total}.
@@ -99,11 +105,14 @@ The method:
 not true. Records are grouped by (longitude, latitude, \code{aphiaid},
 \code{species}, year), \code{records} being the row count (or the sum of a
 \code{records} column when the source has one).
-\item \strong{Place pieces}: each polygon is clipped to a \code{grid_deg} degree grid
-(\code{ST_Intersection} with the grid cells covering its bounding box), so the
-spatial join tests points against small pieces instead of rings with
-hundreds of thousands of vertices. Polygons already split at +/-180
-(gazetteer geometries are) need nothing special.
+\item \strong{Place pieces}: each polygon is dumped into its parts (so a place split
+at +/-180 becomes local parts with local bounding boxes), and every part
+with more than \code{max_vertices} vertices is cut into the four quadrants of its
+own bounding box (\code{ST_Intersection}, empties dropped, parts dumped again),
+round after round until every piece is small. The spatial join then tests
+points against small pieces instead of rings with hundreds of thousands of
+vertices. Each round is a table (so DuckDB can spill) and copies a geometry
+at most four times; at most 24 rounds, else an error.
 \item \strong{Join}: each distinct location is matched to the pieces with
 \code{ST_Intersects} (DuckDB's R-tree spatial join) and then to its \code{place_id}.
 A location on the shared boundary of two places matches both; these are
