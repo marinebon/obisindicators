@@ -120,8 +120,8 @@ R.
 ## Analyze
 
 Calculate indicators, and the paper’s analyses: scale curves,
-rank-column vs subtree, EOV totals, SPUE vs SDM, periods, and place
-roll-ups.
+rank-column vs subtree, EOV totals, SPUE vs SDM, periods, place
+roll-ups, and exact point-in-polygon indicators per place.
 
 - [`calc_eov_totals()`](https://marinebon.org/obisindicators/reference/calc_eov_totals.md)
   : Records, species and cells per Essential Ocean Variable
@@ -150,8 +150,12 @@ roll-ups.
   : Aggregate a raster (e.g. an SDM) to H3 cells
 - [`obis_cell_indicators()`](https://marinebon.org/obisindicators/reference/obis_cell_indicators.md)
   : Per-cell indicators for a filter at one resolution
+- [`obis_place_exact_write()`](https://marinebon.org/obisindicators/reference/obis_place_exact_write.md)
+  : Write the exact place indicators as Parquet
 - [`obis_place_indicators()`](https://marinebon.org/obisindicators/reference/obis_place_indicators.md)
   : Indicators per place, pooled from area-weighted H3 cells
+- [`obis_place_indicators_exact()`](https://marinebon.org/obisindicators/reference/obis_place_indicators_exact.md)
+  : Exact point-in-polygon indicators per place
 - [`obis_place_membership()`](https://marinebon.org/obisindicators/reference/obis_place_membership.md)
   : H3 membership files of a gazetteer collection
 - [`obis_rank_presets()`](https://marinebon.org/obisindicators/reference/obis_rank_presets.md)

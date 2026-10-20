@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -120,7 +120,7 @@
       </dl></div><div class="section level2">
       <h2 id="analyze">Analyze<a class="anchor" aria-label="anchor" href="#analyze"></a></h2>
 
-      <div class="section-desc"><p>Calculate indicators, and the paper’s analyses: scale curves, rank-column vs subtree, EOV totals, SPUE vs SDM, periods, and place roll-ups.</p></div>
+      <div class="section-desc"><p>Calculate indicators, and the paper’s analyses: scale curves, rank-column vs subtree, EOV totals, SPUE vs SDM, periods, place roll-ups, and exact point-in-polygon indicators per place.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -220,10 +220,24 @@
 
         <dt>
 
+          <code><a href="obis_place_exact_write.html">obis_place_exact_write()</a></code>
+
+        </dt>
+        <dd>Write the exact place indicators as Parquet</dd>
+
+        <dt>
+
           <code><a href="obis_place_indicators.html">obis_place_indicators()</a></code>
 
         </dt>
         <dd>Indicators per place, pooled from area-weighted H3 cells</dd>
+
+        <dt>
+
+          <code><a href="obis_place_indicators_exact.html">obis_place_indicators_exact()</a></code>
+
+        </dt>
+        <dd>Exact point-in-polygon indicators per place</dd>
 
         <dt>
 

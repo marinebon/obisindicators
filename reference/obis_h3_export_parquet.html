@@ -11,7 +11,7 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):"></h
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -77,6 +77,10 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):</p>
 <span>  decades <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">1960L</span>, <span class="fl">2020L</span>, by <span class="op">=</span> <span class="fl">10L</span><span class="op">)</span>,</span>
 <span>  esn <span class="op">=</span> <span class="fl">50L</span>,</span>
 <span>  place_collections <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  place_exact <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  place_exact_occ <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  temp_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  max_temp_dir_size <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  memory_limit <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  threads <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
@@ -156,6 +160,25 @@ the gazetteer collection's membership (a directory or URL, its
 no place layer.</p></dd>
 
 
+<dt id="arg-place-exact">place_exact<a class="anchor" aria-label="anchor" href="#arg-place-exact"></a></dt>
+<dd><p>optional named list (or character vector), slug = the path
+of the collection's GeoParquet of polygons (<code>place_id</code>, WKB <code>geometry</code>, an
+optional <code>area_km2</code>), e.g. <code>list(mr_eez = "&lt;places-internal&gt;/mr_eez/places.parquet")</code>.
+Default <code>NULL</code>: no exact place layer. Needs <code>place_exact_occ</code>.</p></dd>
+
+
+<dt id="arg-place-exact-occ">place_exact_occ<a class="anchor" aria-label="anchor" href="#arg-place-exact-occ"></a></dt>
+<dd><p>the occurrence parquet path(s)/glob(s) the exact place
+indicators are computed from (OBIS open data, nested or flat; see
+<code><a href="obis_place_indicators_exact.html">obis_place_indicators_exact()</a></code>).</p></dd>
+
+
+<dt id="arg-temp-dir-max-temp-dir-size">temp_dir, max_temp_dir_size<a class="anchor" aria-label="anchor" href="#arg-temp-dir-max-temp-dir-size"></a></dt>
+<dd><p>DuckDB spill directory and cap for the exact
+place computation (it runs in its own DuckDB instance with this
+<code>memory_limit</code> and <code>threads</code>).</p></dd>
+
+
 <dt id="arg-memory-limit">memory_limit<a class="anchor" aria-label="anchor" href="#arg-memory-limit"></a></dt>
 <dd><p>optional DuckDB <code>memory_limit</code> (e.g. <code>"24GB"</code>).</p></dd>
 
@@ -183,9 +206,11 @@ no place layer.</p></dd>
 <span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>  decade<span class="sc">/</span>all<span class="sc">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>yyy0<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>         per decade, all <span class="fu">taxa</span>  (res <span class="cf">in</span> res_decade)</span>
 <span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  decade<span class="sc">/</span>eov<span class="sc">/</span>eov<span class="ot">=</span><span class="er">&lt;</span>eov<span class="sc">&gt;</span><span class="er">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>yyy0<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>  per decade and <span class="fu">EOV</span> (res <span class="cf">in</span> res_decade)</span>
 <span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  place<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>slug<span class="sc">&gt;</span><span class="er">/</span>data_0.parquet          per<span class="sc">-</span>place pooled <span class="fu">indicators</span> (only with place_collections)</span>
-<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  stats.parquet                             value ranges per layer x key x res x variable</span>
-<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>  taxon_groups.parquet                      the taxa and EOVs available, with totals and paths</span>
-<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>  files.parquet                             manifest<span class="sc">:</span> layer, path, url_path, rows, bytes per file</span></code></pre><p></p></div>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  place_exact<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>slug<span class="sc">&gt;</span><span class="er">/</span>indicators.parquet, years.parquet, meta.json</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>                                            exact point<span class="sc">-</span><span class="cf">in</span><span class="sc">-</span>polygon <span class="fu">indicators</span> (only with place_exact)</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>  stats.parquet                             value ranges per layer x key x res x variable</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>  taxon_groups.parquet                      the taxa and EOVs available, with totals and paths</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>  files.parquet                             manifest<span class="sc">:</span> layer, path, url_path, rows, bytes per file</span></code></pre><p></p></div>
 <p>Every indicator file has the columns <code>h3</code> (lowercase hex string), <code>cell_id</code>,
 <code>n</code>, <code>sp</code>, <code>shannon</code>, <code>simpson</code>, <code>es</code>; the partition keys live in the path
 (read with <code>hive_partitioning = true</code>). The decade layers are computed from
@@ -224,6 +249,17 @@ weighted by each cell's share of area inside the place
 are true per-place indices of the pooled, area-weighted counts, not means of
 hexagon values. The files are listed in <code>files.parquet</code> (layer <code>place</code>) and
 <code>release.json</code> (<code>layers$place</code>, with each collection's membership version);
+<code>stats.parquet</code> does not cover them.</p>
+<p><strong>Exact place layer (optional).</strong> With <code>place_exact</code>, each polygon collection gets
+<code>place_exact/coll=&lt;slug&gt;/indicators.parquet</code> and <code>years.parquet</code>
+(<code><a href="obis_place_indicators_exact.html">obis_place_indicators_exact()</a></code>, written by <code><a href="obis_place_exact_write.html">obis_place_exact_write()</a></code>):
+the indicators of every place computed from the OBIS occurrences inside the true
+polygon, with no H3 approximation, per EOV (<code>all</code> and the store's <code>eov</code> table), per
+decade and per year, with Berger-Parker and density. They are values only (no
+geometry), computed from the occurrence parquet files <code>place_exact_occ</code> (the local
+snapshot the store was built from), which takes far longer than the layers above.
+The files are listed in <code>files.parquet</code> (layer <code>place_exact</code>) and <code>release.json</code>
+(<code>layers$place_exact</code>, with each collection's places and record totals);
 <code>stats.parquet</code> does not cover them.</p>
 <p><code>stats.parquet</code> has one row per (<code>layer</code>, <code>key</code>, <code>decade</code>, <code>res</code>,
 <code>variable</code>) with <code>min</code>, <code>p02</code>, <code>p50</code>, <code>p98</code>, <code>max</code> and <code>n_cells</code> (cells with

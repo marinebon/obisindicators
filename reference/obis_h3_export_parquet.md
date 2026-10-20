@@ -23,6 +23,10 @@ obis_h3_export_parquet(
   decades = seq(1960L, 2020L, by = 10L),
   esn = 50L,
   place_collections = NULL,
+  place_exact = NULL,
+  place_exact_occ = NULL,
+  temp_dir = NULL,
+  max_temp_dir_size = NULL,
   memory_limit = NULL,
   threads = NULL,
   verbose = TRUE
@@ -103,6 +107,26 @@ obis_h3_export_parquet(
   takes as `membership`), e.g. `list(eez = "<gazetteer base>/eez")`.
   Default `NULL`: no place layer.
 
+- place_exact:
+
+  optional named list (or character vector), slug = the path of the
+  collection's GeoParquet of polygons (`place_id`, WKB `geometry`, an
+  optional `area_km2`), e.g.
+  `list(mr_eez = "<places-internal>/mr_eez/places.parquet")`. Default
+  `NULL`: no exact place layer. Needs `place_exact_occ`.
+
+- place_exact_occ:
+
+  the occurrence parquet path(s)/glob(s) the exact place indicators are
+  computed from (OBIS open data, nested or flat; see
+  [`obis_place_indicators_exact()`](https://marinebon.org/obisindicators/reference/obis_place_indicators_exact.md)).
+
+- temp_dir, max_temp_dir_size:
+
+  DuckDB spill directory and cap for the exact place computation (it
+  runs in its own DuckDB instance with this `memory_limit` and
+  `threads`).
+
 - memory_limit:
 
   optional DuckDB `memory_limit` (e.g. `"24GB"`).
@@ -130,6 +154,8 @@ invisibly, a character vector of the files written (absolute paths).
       decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
       decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
       place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
+      place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
+                                                exact point-in-polygon indicators (only with place_exact)
       stats.parquet                             value ranges per layer x key x res x variable
       taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
       files.parquet                             manifest: layer, path, url_path, rows, bytes per file
@@ -182,6 +208,22 @@ per-place indices of the pooled, area-weighted counts, not means of
 hexagon values. The files are listed in `files.parquet` (layer `place`)
 and `release.json` (`layers$place`, with each collection's membership
 version); `stats.parquet` does not cover them.
+
+**Exact place layer (optional).** With `place_exact`, each polygon
+collection gets `place_exact/coll=<slug>/indicators.parquet` and
+`years.parquet`
+([`obis_place_indicators_exact()`](https://marinebon.org/obisindicators/reference/obis_place_indicators_exact.md),
+written by
+[`obis_place_exact_write()`](https://marinebon.org/obisindicators/reference/obis_place_exact_write.md)):
+the indicators of every place computed from the OBIS occurrences inside
+the true polygon, with no H3 approximation, per EOV (`all` and the
+store's `eov` table), per decade and per year, with Berger-Parker and
+density. They are values only (no geometry), computed from the
+occurrence parquet files `place_exact_occ` (the local snapshot the store
+was built from), which takes far longer than the layers above. The files
+are listed in `files.parquet` (layer `place_exact`) and `release.json`
+(`layers$place_exact`, with each collection's places and record totals);
+`stats.parquet` does not cover them.
 
 `stats.parquet` has one row per (`layer`, `key`, `decade`, `res`,
 `variable`) with `min`, `p02`, `p50`, `p98`, `max` and `n_cells` (cells
