@@ -41,7 +41,8 @@ reference:
 - title: "Analyze"
   desc: >
     Calculate indicators, and the paper's analyses: scale curves, rank-column vs
-    subtree, EOV totals, SPUE vs SDM, periods, and place roll-ups.
+    subtree, EOV totals, SPUE vs SDM, periods, place roll-ups, and exact
+    point-in-polygon indicators per place.
   contents:
   - has_concept("analyze")
 - title: "H3 grid & tiles"

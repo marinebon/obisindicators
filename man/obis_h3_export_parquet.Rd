@@ -18,6 +18,10 @@ obis_h3_export_parquet(
   decades = seq(1960L, 2020L, by = 10L),
   esn = 50L,
   place_collections = NULL,
+  place_exact = NULL,
+  place_exact_occ = NULL,
+  temp_dir = NULL,
+  max_temp_dir_size = NULL,
   memory_limit = NULL,
   threads = NULL,
   verbose = TRUE
@@ -67,6 +71,19 @@ the gazetteer collection's membership (a directory or URL, its
 \code{membership}), e.g. \code{list(eez = "<gazetteer base>/eez")}. Default \code{NULL}:
 no place layer.}
 
+\item{place_exact}{optional named list (or character vector), slug = the path
+of the collection's GeoParquet of polygons (\code{place_id}, WKB \code{geometry}, an
+optional \code{area_km2}), e.g. \code{list(mr_eez = "<places-internal>/mr_eez/places.parquet")}.
+Default \code{NULL}: no exact place layer. Needs \code{place_exact_occ}.}
+
+\item{place_exact_occ}{the occurrence parquet path(s)/glob(s) the exact place
+indicators are computed from (OBIS open data, nested or flat; see
+\code{\link[=obis_place_indicators_exact]{obis_place_indicators_exact()}}).}
+
+\item{temp_dir, max_temp_dir_size}{DuckDB spill directory and cap for the exact
+place computation (it runs in its own DuckDB instance with this
+\code{memory_limit} and \code{threads}).}
+
 \item{memory_limit}{optional DuckDB \code{memory_limit} (e.g. \code{"24GB"}).}
 
 \item{threads}{optional DuckDB thread count (e.g. \code{8}).}
@@ -91,6 +108,8 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):
   decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
   decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
   place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
+  place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
+                                            exact point-in-polygon indicators (only with place_exact)
   stats.parquet                             value ranges per layer x key x res x variable
   taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
   files.parquet                             manifest: layer, path, url_path, rows, bytes per file
@@ -137,6 +156,18 @@ weighted by each cell's share of area inside the place
 are true per-place indices of the pooled, area-weighted counts, not means of
 hexagon values. The files are listed in \code{files.parquet} (layer \code{place}) and
 \code{release.json} (\code{layers$place}, with each collection's membership version);
+\code{stats.parquet} does not cover them.
+
+\strong{Exact place layer (optional).} With \code{place_exact}, each polygon collection gets
+\verb{place_exact/coll=<slug>/indicators.parquet} and \code{years.parquet}
+(\code{\link[=obis_place_indicators_exact]{obis_place_indicators_exact()}}, written by \code{\link[=obis_place_exact_write]{obis_place_exact_write()}}):
+the indicators of every place computed from the OBIS occurrences inside the true
+polygon, with no H3 approximation, per EOV (\code{all} and the store's \code{eov} table), per
+decade and per year, with Berger-Parker and density. They are values only (no
+geometry), computed from the occurrence parquet files \code{place_exact_occ} (the local
+snapshot the store was built from), which takes far longer than the layers above.
+The files are listed in \code{files.parquet} (layer \code{place_exact}) and \code{release.json}
+(\code{layers$place_exact}, with each collection's places and record totals);
 \code{stats.parquet} does not cover them.
 
 \code{stats.parquet} has one row per (\code{layer}, \code{key}, \code{decade}, \code{res},

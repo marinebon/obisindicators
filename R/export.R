@@ -34,6 +34,8 @@ EXPORT_MAX_OPEN <- 100L
 #'   decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
 #'   decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
 #'   place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
+#'   place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
+#'                                             exact point-in-polygon indicators (only with place_exact)
 #'   stats.parquet                             value ranges per layer x key x res x variable
 #'   taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
 #'   files.parquet                             manifest: layer, path, url_path, rows, bytes per file
@@ -83,6 +85,18 @@ EXPORT_MAX_OPEN <- 100L
 #' `release.json` (`layers$place`, with each collection's membership version);
 #' `stats.parquet` does not cover them.
 #'
+#' **Exact place layer (optional).** With `place_exact`, each polygon collection gets
+#' `place_exact/coll=<slug>/indicators.parquet` and `years.parquet`
+#' ([obis_place_indicators_exact()], written by [obis_place_exact_write()]):
+#' the indicators of every place computed from the OBIS occurrences inside the true
+#' polygon, with no H3 approximation, per EOV (`all` and the store's `eov` table), per
+#' decade and per year, with Berger-Parker and density. They are values only (no
+#' geometry), computed from the occurrence parquet files `place_exact_occ` (the local
+#' snapshot the store was built from), which takes far longer than the layers above.
+#' The files are listed in `files.parquet` (layer `place_exact`) and `release.json`
+#' (`layers$place_exact`, with each collection's places and record totals);
+#' `stats.parquet` does not cover them.
+#'
 #' `stats.parquet` has one row per (`layer`, `key`, `decade`, `res`,
 #' `variable`) with `min`, `p02`, `p50`, `p98`, `max` and `n_cells` (cells with
 #' a non-NULL value; a variable NULL everywhere in a partition gets a row with
@@ -120,6 +134,16 @@ EXPORT_MAX_OPEN <- 100L
 #'   `membership.json`, or anything [obis_place_indicators()] takes as
 #'   `membership`), e.g. `list(eez = "<gazetteer base>/eez")`. Default `NULL`:
 #'   no place layer.
+#' @param place_exact optional named list (or character vector), slug = the path
+#'   of the collection's GeoParquet of polygons (`place_id`, WKB `geometry`, an
+#'   optional `area_km2`), e.g. `list(mr_eez = "<places-internal>/mr_eez/places.parquet")`.
+#'   Default `NULL`: no exact place layer. Needs `place_exact_occ`.
+#' @param place_exact_occ the occurrence parquet path(s)/glob(s) the exact place
+#'   indicators are computed from (OBIS open data, nested or flat; see
+#'   [obis_place_indicators_exact()]).
+#' @param temp_dir,max_temp_dir_size DuckDB spill directory and cap for the exact
+#'   place computation (it runs in its own DuckDB instance with this
+#'   `memory_limit` and `threads`).
 #' @param memory_limit optional DuckDB `memory_limit` (e.g. `"24GB"`).
 #' @param threads optional DuckDB thread count (e.g. `8`).
 #' @param verbose print progress and the summary (default TRUE).
@@ -146,6 +170,10 @@ obis_h3_export_parquet <- function(
   decades      = seq(1960L, 2020L, by = 10L),
   esn          = 50L,
   place_collections = NULL,
+  place_exact       = NULL,
+  place_exact_occ   = NULL,
+  temp_dir          = NULL,
+  max_temp_dir_size = NULL,
   memory_limit = NULL,
   threads      = NULL,
   verbose      = TRUE) {
@@ -397,6 +425,52 @@ obis_h3_export_parquet <- function(
       "membership, shares >= 0.01), so n is fractional; true per-place indices, not means",
       "of hexagon values. sp counts every species with a weighted record; es is NULL",
       "where n < esn; cells = member cells with records, area = their summed share.")
+  }
+
+  # exact place layer: point-in-polygon indicators from the occurrence files, values only ----
+  if (length(place_exact)) {
+    slugs_x <- names(place_exact)
+    stopifnot(
+      "place_exact must be named by collection slug" =
+        !is.null(slugs_x) && all(grepl("^[A-Za-z0-9._-]+$", slugs_x)) && !anyDuplicated(slugs_x),
+      "place_exact needs place_exact_occ (the occurrence parquet files)" =
+        is.character(place_exact_occ) && length(place_exact_occ) >= 1L)
+    rows_x <- 0
+    colls_x <- list()
+    for (slug in slugs_x) {
+      say("place_exact: ", slug, " ...")
+      px  <- obis_place_indicators_exact(
+        place_exact_occ, as.character(place_exact[[slug]]),
+        eov = if (has_eov) con else NULL,
+        decades = if (is.null(decades)) TRUE else decades, years = TRUE, esn = esn,
+        memory_limit = memory_limit, threads = threads, temp_dir = temp_dir,
+        max_temp_dir_size = max_temp_dir_size, verbose = verbose)
+      obis_place_exact_write(px, out, slug)
+      rows_x <- rows_x + nrow(px$indicators) + nrow(px$years)
+      dg <- px$diagnostics
+      colls_x[[slug]] <- list(
+        source        = as.character(place_exact[[slug]])[1],
+        places        = length(unique(px$indicators$place_id)),
+        records_in    = dg$records_in,
+        records_out   = dg$records_out,
+        records_total = dg$records_total,
+        overlaps      = dg$overlaps$n)
+    }
+    add_layer("place_exact", "place_exact", "coll", rows_x)
+    layers$place_exact$template <- I(c("place_exact/coll=<coll>/indicators.parquet",
+                                       "place_exact/coll=<coll>/years.parquet"))
+    layers$place_exact$collections <- colls_x
+    layers$place_exact$columns <- list(
+      indicators = I(c("place_id", "eov", "decade", "n", "sp", "shannon", "simpson", "es",
+                       "hill_1", "hill_2", "bp", "density")),
+      years      = I(c("place_id", "eov", "year", "n", "sp", "shannon", "simpson", "es",
+                       "hill_1", "hill_2", "bp", "density")))
+    layers$place_exact$note <- paste(
+      "indicators of each place computed from the OBIS occurrences inside the true polygon",
+      "(exact point-in-polygon, no H3), one row per place x eov ('all' | EOV) x decade",
+      "(NULL = all years) in indicators.parquet and x year in years.parquet; n = records,",
+      "sp = species, bp = Berger-Parker max(ni)/n, hill_1 = exp(shannon), hill_2 = 1/simpson,",
+      "density = n / area_km2 (records per km2); es is NULL where n < esn. values only, no geometry.")
   }
 
   # stats.parquet: value ranges for colour ramps, read back from the files ----

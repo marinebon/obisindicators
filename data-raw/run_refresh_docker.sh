@@ -17,6 +17,7 @@
 #   $DATA_ROOT      -> /share/data                              (obis/, obis-h3/, derived/)
 #   this checkout   -> /share/github/marinebon/obisindicators   (read-only; the R code is sourced)
 #   $AWS_DIR        -> /root/.aws                               (read-only)
+#   $PLACES_INTERNAL -> /share/places-internal                  (read-only; only when set, for the exact place layer)
 # -> after a published release, rsync the new store to msens (h3t reads it; the swap stays manual:
 # deploy_obis_h3.sh there) -> write $DATA_ROOT/obis/log/refresh_YYYYMMDD.done -> stop the VM.
 #
@@ -30,6 +31,9 @@
 #   EXPORT_MEMORY (12GB) EXPORT_THREADS (6) MIN_FREE_GB MIN_PCT PREV_RELEASE ALLOW_NO_PREV
 #   EXPORT_OVERWRITE STORE (a path under /share/data)
 #   OBIS_PLACE_COLLECTIONS GAZETTEER_BASE (the opt-in per-place layer; see refresh_obis_h3.sh)
+#   OBIS_PLACE_EXACT_COLLECTIONS PLACES_INTERNAL (the opt-in exact point-in-polygon layer; PLACES_INTERNAL is the
+#   host folder holding <slug>/places.parquet, e.g. ~/data/oceanmetrics/places-internal, mounted read-only into the
+#   container and also into a Colima VM started by this run; a VM already running keeps its own mounts)
 
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -52,7 +56,7 @@ for a in "$@"; do
   case "$a" in
     --keep-vm)     KEEP_VM=1 ;;
     --no-msens)    NO_MSENS=1 ;;
-    -h|--help)     sed -n '2,31p' "$0"; exit 0 ;;
+    -h|--help)     sed -n '2,36p' "$0"; exit 0 ;;
     *)             args+=("$a")
                    [ "$a" = --dry-run ] && DRY=1
                    [ "$a" = --skip-upload ] && SKIP_UPLOAD=1 ;;
@@ -82,6 +86,7 @@ else
   say "colima start $COLIMA_PROFILE (${COLIMA_CPU} CPU, ${COLIMA_MEMORY} GiB)"
   # Colima refuses overlapping mounts, so a checkout inside $DATA_ROOT rides on that mount
   mounts=(--mount "$DATA_ROOT:w" --mount "$AWS_DIR")
+  [ -z "${PLACES_INTERNAL:-}" ] || mounts+=(--mount "$PLACES_INTERNAL")
   case "$PKG_ROOT/" in "$DATA_ROOT"/*) ;; *) mounts+=(--mount "$PKG_ROOT") ;; esac
   colima start --profile "$COLIMA_PROFILE" --vm-type vz --mount-type virtiofs \
     --cpu "$COLIMA_CPU" --memory "$COLIMA_MEMORY" --disk "$COLIMA_DISK" "${mounts[@]}" \
@@ -114,9 +119,19 @@ envs=(-e BUILD_CONTAINER= -e LOCK_FILE=/tmp/refresh_obis_h3.lock
       -e "OBIS_MAX_TEMP=${OBIS_MAX_TEMP:-200GB}"
       -e "EXPORT_MEMORY=${EXPORT_MEMORY:-12GB}" -e "EXPORT_THREADS=${EXPORT_THREADS:-6}"
       -e AWS_PROFILE -e "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}")
-for v in MIN_FREE_GB MIN_PCT PREV_RELEASE ALLOW_NO_PREV EXPORT_OVERWRITE STORE OBIS_PLACE_COLLECTIONS GAZETTEER_BASE; do
+for v in MIN_FREE_GB MIN_PCT PREV_RELEASE ALLOW_NO_PREV EXPORT_OVERWRITE STORE OBIS_PLACE_COLLECTIONS GAZETTEER_BASE \
+         OBIS_PLACE_EXACT_COLLECTIONS; do
   [ -z "${!v:-}" ] || envs+=(-e "$v=${!v}")
 done
+# the internal polygons of the exact place layer: a host folder, read-only in the container, whose path
+# (not the host's) is what refresh_obis_h3.sh sees as PLACES_INTERNAL
+vols=()
+if [ -n "${PLACES_INTERNAL:-}" ]; then
+  [ -d "$PLACES_INTERNAL" ] || die "PLACES_INTERNAL=$PLACES_INTERNAL is not a folder" 5
+  PLACES_INTERNAL=$(cd "$PLACES_INTERNAL" && pwd)
+  vols+=(-v "$PLACES_INTERNAL:/share/places-internal:ro")
+  envs+=(-e PLACES_INTERNAL=/share/places-internal)
+fi
 
 say "refresh_obis_h3.sh ${args[*]+${args[*]}}"
 set +e
@@ -124,6 +139,7 @@ dk run --rm --name "$CTR_NAME" \
   -v "$DATA_ROOT:/share/data" \
   -v "$PKG_ROOT:/share/github/marinebon/obisindicators:ro" \
   -v "$AWS_DIR:/root/.aws:ro" \
+  ${vols[@]+"${vols[@]}"} \
   "${envs[@]}" "$IMAGE" ${args[@]+"${args[@]}"}
 rc=$?
 set -e

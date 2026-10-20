@@ -10,6 +10,7 @@ msens`). Not on a laptop. Excluded from the built package (`.Rbuildignore`).
 | `build_obis_h3_duckdb.R` | builds `/share/data/obis/obis_h3_global_vYYYYMMDD.duckdb` from the local OBIS parquet snapshot (in the obis-h3 image, or msens's `plumber` container) |
 | `deploy_obis_h3.sh` | swaps the store the `h3t` tile service serves (needs sudo), restarts h3t, verifies |
 | `refresh_obis_h3.sh` | the monthly `obis-h3` release for the obis-hex app: sync, build, export, validate, upload, `latest.json` |
+| `run_place_exact.R` | the exact point-in-polygon place indicators (`obis_place_indicators_exact()`) for one polygon collection, standalone, from the local OBIS snapshot; the Mac mini runs it in tmux (below) |
 | `run_refresh_docker.sh` | runs `refresh_obis_h3.sh` in the `docker/Dockerfile` image on the Mac mini (Colima), data on the external drive; copies the new store to msens for h3t |
 
 ## Monthly `obis-h3` refresh (`refresh_obis_h3.sh`)
@@ -143,6 +144,24 @@ Steps:
    (`obis_place_indicators()`), from `$GAZETTEER_BASE/<slug>/h3/membership.json` (default base
    `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer`). `run_refresh_docker.sh` passes both
    variables into the container, e.g. `OBIS_PLACE_COLLECTIONS="noaa_aoa_socal" data-raw/run_refresh_docker.sh`.
+   **Exact place layer (opt-in, default off):** set `OBIS_PLACE_EXACT_COLLECTIONS` to one or more collection slugs
+   (space or comma separated) and the export also computes, for each, the indicators of every place from the
+   OBIS occurrences inside its true polygon, with no H3 approximation (`obis_place_indicators_exact()`,
+   `R/place_exact.R`), from the local snapshot (`$OCC_DIR/*.parquet`) and the polygons
+   `$PLACES_INTERNAL/<slug>/places.parquet` (`PLACES_INTERNAL`, default `/share/data/places-internal` in the
+   container: internal copies of reference polygons such as Marine Regions, which are never published; only the
+   values are, and VLIZ agreed to derived tables, 2026-10-16). It writes `place_exact/coll=<slug>/indicators.parquet`
+   (place_id, eov, decade, n, sp, shannon, simpson, es, hill_1, hill_2, bp, density), `years.parquet` (the same with
+   `year`) and `meta.json` (records in/out/total, overlaps, version) into the release, listed in `files.parquet`
+   (layer `place_exact`) and `release.json` (`layers$place_exact`); `eov` is `all` plus every EOV of the store's
+   `eov` table. The step checks the polygon files exist before the export starts. `run_refresh_docker.sh` passes
+   `OBIS_PLACE_EXACT_COLLECTIONS` into the container and, when the host's `PLACES_INTERNAL` is set (e.g.
+   `~/data/oceanmetrics/places-internal`), mounts that folder read-only at `/share/places-internal`; the Colima VM
+   needs the folder as a mount, which `run_refresh_docker.sh` adds only when it starts the VM (stop a running VM
+   first). This is the slowest step of the export: run `run_place_exact.R` by hand first to time a collection.
+   ```bash
+   OBIS_PLACE_EXACT_COLLECTIONS="mr_eez" PLACES_INTERNAL=~/data/oceanmetrics/places-internal data-raw/run_refresh_docker.sh
+   ```
 6. **Validate**: `release.json` parses and carries the release tag; `files.parquet`, `stats.parquet` and
    `taxon_groups.parquet` are non-empty; total records (the sum of `n` over `all/res=1`, since every record
    falls in exactly one res-1 cell) is at least 90% of the previous release's (`MIN_PCT`). Else exit 4,
@@ -156,6 +175,34 @@ and the wrapper's copy:
 ```bash
 data-raw/deploy_obis_h3.sh --skip-sync --skip-build --store /share/data/obis/obis_h3_global_vYYYYMMDD.duckdb --yes
 ```
+
+### Exact place indicators on their own (`run_place_exact.R`)
+
+`obis_place_indicators_exact()` tests every OBIS occurrence location against the true polygons (DuckDB spatial:
+each polygon is dumped into its parts and cut into quadrants until every piece has at most `max_vertices` vertices,
+256 by default, then an R-tree `ST_Intersects` join), then computes the indicators
+with the store's indicator SQL: per place, per EOV (`all` plus the store's `eov` table), per decade and per year,
+with Hill numbers, Berger-Parker and density (records per km2). `run_place_exact.R` runs it for one collection and
+writes `place_exact/coll=<coll>/` into a release folder; it prints the timing and the totals check (records inside
+all places plus records outside every place must equal the filtered total) and exits 1 when they differ although
+no places overlap. On the Mac mini, in tmux (R with DBI, duckdb, glue and jsonlite, no Docker needed; the
+duckdb spatial extension is installed on first use; memory and spill follow `OBIS_MEMORY` 16GB, `OBIS_THREADS` 6,
+`OBIS_MAX_TEMP` 200GB, spill in `<out dir>/.tmp`; `OBIS_MAX_VERTICES` 256 is the piece size of the polygon
+subdivision):
+
+```bash
+cd ~/Github/marinebon/obisindicators
+tmux new-window -n place_exact 'Rscript data-raw/run_place_exact.R \
+  "/Volumes/msens_big/_big/obis/obis/occurrence/*.parquet" \
+  ~/data/oceanmetrics/places-internal/mr_eez/places.parquet \
+  /Volumes/msens_big/_big/obis/obis_h3_global_v20261012.duckdb \
+  /Volumes/msens_big/_big/obis/obis-h3/v20261012 mr_eez \
+  > /tmp/place_exact_mr_eez.log 2>&1; touch /tmp/place_exact_mr_eez.done'
+```
+
+The arguments are the snapshot glob, the places GeoParquet, the store (for its `eov` table; `none` for all-taxa
+rows only), the release folder and the collection slug. Polygons must be valid; overlapping places (shared
+boundaries, joint regimes) are reported with their `place_id`s and counted in each place.
 
 ### Prerequisites and manual inputs
 
