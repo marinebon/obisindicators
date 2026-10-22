@@ -43,6 +43,48 @@ devtools::install_local()
 library(obisindicators)
 ```
 
+## Data layout
+
+`obis_h3_export_parquet()` writes an obis_h3 store to the `obis-h3` release, a
+folder of hive-partitioned Parquet that a static web app reads with
+DuckDB-WASM. Every indicator file has the columns `h3` (hex string),
+`cell_id`, `n`, `sp`, `shannon`, `simpson`, `es`; the partition keys are in the
+path, and each partition is exactly one `data_0.parquet`.
+
+```
+<release>/
+  release.json                                     layers, row counts, columns, notes
+  collection.json                                  STAC Collection (Ocean Metrics h3 profile)
+  files.parquet                                    manifest: layer, path, url_path, rows, bytes, parent
+  stats.parquet                                    value ranges per layer x key x decade x year x res x variable
+  taxon_groups.parquet                             the taxa and EOVs on offer, with totals and paths
+  all/res=<1..5>/data_0.parquet                    all taxa, all years
+  all/res=<6,7>/p=<parent>/data_0.parquet          res 6 and 7 split by res-2 / res-3 parent cell
+  eov/eov=<eov>/res=<r>/                           per Essential Ocean Variable
+  taxon/rank=<rank>/taxon=<taxon>/res=<r>/         per phylum, class, order, family
+  decade/all/decade=<yyy0>/res=<r>/                per decade (res 1-5)
+  decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/      per decade and EOV
+  year/all/year=<yyyy>/res=<r>/                    per year, every year present (res 1-5)
+  year/eov/eov=<eov>/year=<yyyy>/res=<r>/          per year and EOV
+  species/res=<3,4,5>/class=<class>/data_0.parquet species x hex x count: h3, cell_id, name_key, aphiaid, n
+  species/species.parquet                          one row per aphiaid: name_key, names, ranks, lineage, records
+  species/heads.json                               taxa that still need a pre-aggregated head
+  species_decade/res=<r>/decade=<d>/class=<class>/ per decade (species_decades = TRUE only)
+  place/coll=<slug>/data_0.parquet                 per-place pooled indicators (place_collections only)
+  place_exact/coll=<slug>/indicators.parquet       exact point-in-polygon indicators, plus years.parquet
+                                                   and meta.json (place_exact only)
+```
+
+The species table answers a WoRMS subtree, or the species of a cell, in the
+browser: its files are sorted by `cell_id, aphiaid`, so a cell reads one row
+group, and a NULL class is written `class=_none`. A subtree is the aphiaids
+whose `lineage` contains the taxon; `obis_h3_species_subtree_sql()` writes
+that query, and it matches the store's own subtree SQL cell for cell. Richness
+counts species names (`name_key`), not aphiaids. Taxa spanning several classes
+(Animalia, and the 125 taxa listed in `heads.json` for the 2026-10 global
+store) read many class files, so they are to get pre-aggregated heads in the
+next version.
+
 ## Developer Stuff
 ### Setup
 ```r

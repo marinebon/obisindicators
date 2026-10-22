@@ -241,6 +241,13 @@ Rscript data-raw/migrate_add_spatial_cluster.R <in.duckdb> <out.duckdb>
 - `R/taxon.R` — WoRMS children resolution + the SPUE effort proxy.
 - `R/taxon_gapfill.R` — WoRMS REST supplement closing the `taxon` coverage gap.
 - `R/eov.R` — Essential Ocean Variables as multi-seed AphiaID subtrees.
+- `R/export.R` — `obis_h3_export_parquet()` (the obis-h3 release: indicator,
+  decade and year layers, stats, manifest, `release.json`), `obis_h3_year_sql()`,
+  `obis_h3_stac_collection()` (the `h3` STAC profile).
+- `R/species.R` — the release's species x hex x count table: the SQL builders,
+  the lookup with `name_key` and `lineage`, the heads list, the explicit
+  per-partition writer, and the subtree query that must match h3t's
+  (`test-species-table.R`).
 - `R/visualize.R` — `gmap_indicator()` static ggplot maps, plus `hex_sf()`,
   `gmap_cells()`, `plot_scale_curves()`, `plot_spue_sdm()`.
 - `R/store.R` — analysis-side access to a store: `obis_store_connect()`,

@@ -9,6 +9,10 @@ obis_h3_export_parquet(
   dir_out,
   release,
   res_decade = 1:5,
+  res_year = 1:5,
+  years = NULL,
+  res_species = c(3L, 4L, 5L),
+  species_decades = FALSE,
   parent_res = c(`6` = 2L, `7` = 3L),
   parent_res_taxon = c(`6` = 0L, `7` = 0L),
   parent_min_rows = 50000,
@@ -39,6 +43,18 @@ OBIS object's date, which \code{refresh_obis_h3.sh} passes) when that is a
 \code{YYYY-MM-DD} date, else the date in the tag.}
 
 \item{res_decade}{H3 resolutions for the decade layers (default 1-5).}
+
+\item{res_year}{H3 resolutions for the year layers (default 1-5);
+\code{integer(0)} skips them.}
+
+\item{years}{years to export in the year layers; default NULL, every year
+present.}
+
+\item{res_species}{H3 resolutions of the species table (default 3, 4, 5);
+\code{integer(0)} skips it.}
+
+\item{species_decades}{also write the per-decade species table
+\verb{species_decade/} (default FALSE).}
 
 \item{parent_res}{named integer vector, fine resolution -> parent
 resolution, for the \code{all} and \code{eov} layers: those resolutions are written
@@ -107,10 +123,17 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):
   taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family)
   decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
   decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
+  year/all/year=<yyyy>/res=<r>/             per year, all taxa    (res in res_year)
+  year/eov/eov=<eov>/year=<yyyy>/res=<r>/   per year and EOV      (res in res_year)
+  species/res=<r>/class=<class>/data_0.parquet  species x hex x count (res in res_species)
+  species/species.parquet                   the species lookup: names, name_key, lineage
+  species/heads.json                        the pre-aggregated heads still to build
+  species_decade/res=<r>/decade=<d>/class=<class>/  per decade (species_decades = TRUE)
   place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
   place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
                                             exact point-in-polygon indicators (only with place_exact)
-  stats.parquet                             value ranges per layer x key x res x variable
+  collection.json                           STAC Collection (h3 profile), obis_h3_stac_collection()
+  stats.parquet                             value ranges per layer x key x period x res x variable
   taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
   files.parquet                             manifest: layer, path, url_path, rows, bytes per file
 }\if{html}{\out{</div>}}
@@ -170,12 +193,41 @@ The files are listed in \code{files.parquet} (layer \code{place_exact}) and \cod
 (\code{layers$place_exact}, with each collection's places and record totals);
 \code{stats.parquet} does not cover them.
 
-\code{stats.parquet} has one row per (\code{layer}, \code{key}, \code{decade}, \code{res},
-\code{variable}) with \code{min}, \code{p02}, \code{p50}, \code{p98}, \code{max} and \code{n_cells} (cells with
-a non-NULL value; a variable NULL everywhere in a partition gets a row with
-NULL ranges and \code{n_cells} 0), for colour ramps. \code{key} is the EOV or taxon
-name ('' for the all-taxa layers), \code{rank} the taxon rank ('' otherwise),
-\code{decade} NA outside the decade layers.
+\strong{Year layers.} \code{year/all} and \code{year/eov} are the decade layers per year:
+the same SQL (\code{\link[=obis_h3_year_sql]{obis_h3_year_sql()}}) grouped by \code{year = date_year}, one
+partition per year present from \code{min(date_year)} to \code{max(date_year)} (or
+the \code{years} asked for), at the resolutions \code{res_year} (default 1-5, never
+split by parent). \code{release.json} lists the years written (\code{years}).
+
+\strong{The species table} (\verb{species/}, spike 2 of the Ocean Metrics
+restructure): one row per (cell, aphiaid) with \code{n} = records, at the
+resolutions \code{res_species} (default 3, 4, 5; res 4 rolled up from the res-5
+tier), so a browser answers a WoRMS subtree or "which species are in this
+cell" from static files. Columns \verb{h3, cell_id, name_key, aphiaid, n}
+(\code{\link[=obis_h3_species_sql]{obis_h3_species_sql()}}); one \code{data_0.parquet} per (res, class) written by
+\code{\link[=obis_h3_write_partitions]{obis_h3_write_partitions()}}, sorted by \verb{cell_id, aphiaid} in row groups of
+100k; a NULL class is \verb{class=_none}. \code{species/species.parquet}
+(\code{\link[=obis_h3_species_lookup_sql]{obis_h3_species_lookup_sql()}}) has one row per aphiaid with its names, a
+\code{name_key} per distinct name (richness counts names) and its \code{lineage}
+(self, then ancestors up the store's \code{taxon} table); a subtree is
+\verb{list_contains(lineage, <aphiaid>)} (\code{\link[=obis_h3_species_subtree_sql]{obis_h3_species_subtree_sql()}}).
+\code{species/heads.json} lists the taxa that need a pre-aggregated head
+(\code{\link[=obis_h3_species_heads]{obis_h3_species_heads()}}: Animalia and every taxon spanning two or more
+named classes); they are not built in this version. The per-decade variant
+\verb{species_decade/} is written only with \code{species_decades = TRUE}. Rows with
+no aphiaid are left out; a store without one (e.g. the demo store built from
+\code{occ_SAtlantic}) gets no species layer.
+
+\code{collection.json} is a STAC Collection of the release for the Ocean Metrics
+\code{h3} profile (\code{\link[=obis_h3_stac_collection]{obis_h3_stac_collection()}}).
+
+\code{stats.parquet} has one row per indicator layer and (\code{key}, \code{decade},
+\code{year}, \code{res}, \code{variable}) with \code{min}, \code{p02}, \code{p50}, \code{p98}, \code{max} and
+\code{n_cells} (cells with a non-NULL value; a variable NULL everywhere in a
+partition gets a row with NULL ranges and \code{n_cells} 0), for colour ramps.
+\code{key} is the EOV or taxon name ('' for the all-taxa layers), \code{rank} the
+taxon rank ('' otherwise), \code{decade} NA outside the decade layers, \code{year} NA
+outside the year layers.
 }
 \examples{
 \dontrun{

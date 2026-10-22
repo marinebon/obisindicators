@@ -82,9 +82,14 @@ test_that("export of the demo store: layout, counts, h3, decade math, stats, jso
   st <- DBI::dbGetQuery(con, glue::glue(
     "SELECT * FROM read_parquet('{out}/stats.parquet')"))
   expect_setequal(unique(st$variable), c("n", "sp", "shannon", "simpson", "es"))
-  expect_equal(nrow(dplyr::distinct(st, layer, key, rank, decade, res, variable)),
+  expect_equal(nrow(dplyr::distinct(st, layer, key, rank, decade, year, res, variable)),
                nrow(st))
   expect_equal(sum(st$layer == "all"), nrow(cnt) * 5L)
+  # year layers: one stats row per year file and variable; years from min to max date_year
+  n_yr <- length(list.files(file.path(out, "year", "all"), "\\.parquet$", recursive = TRUE))
+  expect_equal(sum(st$layer == "year_all"), n_yr * 5L)
+  yr <- DBI::dbGetQuery(con, "SELECT MIN(date_year)::INTEGER AS lo, MAX(date_year)::INTEGER AS hi,
+                                     COUNT(DISTINCT date_year)::INTEGER AS n FROM occ_h3")
   n_dec <- length(list.files(file.path(out, "decade", "all"), "\\.parquet$",
                              recursive = TRUE))
   expect_equal(sum(st$layer == "decade_all"), n_dec * 5L)
@@ -109,9 +114,16 @@ test_that("export of the demo store: layout, counts, h3, decade math, stats, jso
                   c("h3", "cell_id", "n", "sp", "shannon", "simpson", "es"))
   mf <- DBI::dbGetQuery(con, glue::glue(
     "SELECT * FROM read_parquet('{out}/files.parquet')"))
-  expect_equal(nrow(mf), length(files) - 2L)  # all but release.json, files.parquet
+  n_pq <- sum(grepl("\\.parquet$", files))
+  expect_equal(nrow(mf), n_pq - 1L)  # every parquet file but files.parquet
   expect_equal(sum(mf$rows[mf$layer == "all"]), sum(cnt$n))
-  expect_equal(js$files$n_files, length(files) - 1L)
+  expect_equal(js$files$n_files, n_pq)
+  # the year layers cover every year present; the demo store has no aphiaid, so no species layer
+  expect_equal(unlist(js$year_range), c(yr$lo, yr$hi))
+  expect_equal(length(js$years), yr$n)
+  expect_equal(js$layers$year_all$files, sum(mf$layer == "year_all"))
+  expect_null(js$layers$species)
+  expect_true(file.exists(file.path(out, "collection.json")))
 
   # idempotence: refuses to clobber, replaces with overwrite = TRUE
   expect_error(obis_h3_export_parquet(con, dir, "v20260728", verbose = FALSE),
@@ -296,16 +308,17 @@ test_that("export of the paper fixture: eov, taxon, decade_eov layers", {
 
   # stats cover every layer, one row per key x decade x res x variable
   st <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/stats.parquet')"))
-  expect_setequal(unique(st$layer), c("all", "eov", "taxon", "decade_all", "decade_eov"))
-  expect_equal(nrow(dplyr::distinct(st, layer, key, rank, decade, res, variable)), nrow(st))
+  expect_setequal(unique(st$layer), c("all", "eov", "taxon", "decade_all", "decade_eov",
+                                      "year_all", "year_eov"))
+  expect_equal(nrow(dplyr::distinct(st, layer, key, rank, decade, year, res, variable)), nrow(st))
   expect_equal(sum(st$layer == "eov"), 2L * 7L * 5L)
   es_t <- st[st$layer == "eov" & st$key == "seaTurtles" & st$res == 7 & st$variable == "es", ]
   expect_equal(es_t$n_cells, 2)  # A 200, C 260 have ES50; B (45) is NULL -> not counted
   # regression (2026-10-12): stats are computed per layer and variable, since one UNPIVOT over every
   # layer ran out of memory once the family rank was added; same rows, values and column types
   ty <- DBI::dbGetQuery(con, glue::glue("DESCRIBE SELECT * FROM read_parquet('{out}/stats.parquet')"))
-  expect_equal(setNames(ty$column_type, ty$column_name)[c("decade", "res", "n_cells")],
-               c(decade = "INTEGER", res = "INTEGER", n_cells = "BIGINT"))
+  expect_equal(setNames(ty$column_type, ty$column_name)[c("decade", "year", "res", "n_cells")],
+               c(decade = "INTEGER", year = "INTEGER", res = "INTEGER", n_cells = "BIGINT"))
   ref <- DBI::dbGetQuery(con, glue::glue("
     WITH d AS (SELECT eov AS key, res, n::DOUBLE AS n, sp::DOUBLE AS sp, shannon::DOUBLE AS shannon,
                       simpson::DOUBLE AS simpson, es::DOUBLE AS es
@@ -320,8 +333,13 @@ test_that("export of the paper fixture: eov, taxon, decade_eov layers", {
   rownames(got) <- NULL
   expect_equal(got, ref, ignore_attr = TRUE)
   js <- jsonlite::read_json(file.path(out, "release.json"))
-  expect_setequal(names(js$layers), c("all", "eov", "taxon", "decade_all", "decade_eov"))
+  expect_setequal(names(js$layers), c("all", "eov", "taxon", "decade_all", "decade_eov",
+                                      "year_all", "year_eov", "species"))
   expect_null(js$layers$taxon$parent_res)  # tiny fixture: below parent_min_rows
+  # regression: no taxon spans two classes here (two separate roots), so heads.json lists none
+  hj <- jsonlite::read_json(file.path(out, "species", "heads.json"))
+  expect_equal(hj$n, 0L)
+  expect_length(hj$heads, 0)
 
   # split every fine partition: taxon by base cell, encoded names kept
   obis_h3_export_parquet(con, dir, "split", res_decade = 5L, parent_min_rows = 0,

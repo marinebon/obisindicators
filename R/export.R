@@ -33,10 +33,17 @@ EXPORT_MAX_OPEN <- 100L
 #'   taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family)
 #'   decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
 #'   decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
+#'   year/all/year=<yyyy>/res=<r>/             per year, all taxa    (res in res_year)
+#'   year/eov/eov=<eov>/year=<yyyy>/res=<r>/   per year and EOV      (res in res_year)
+#'   species/res=<r>/class=<class>/data_0.parquet  species x hex x count (res in res_species)
+#'   species/species.parquet                   the species lookup: names, name_key, lineage
+#'   species/heads.json                        the pre-aggregated heads still to build
+#'   species_decade/res=<r>/decade=<d>/class=<class>/  per decade (species_decades = TRUE)
 #'   place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
 #'   place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
 #'                                             exact point-in-polygon indicators (only with place_exact)
-#'   stats.parquet                             value ranges per layer x key x res x variable
+#'   collection.json                           STAC Collection (h3 profile), obis_h3_stac_collection()
+#'   stats.parquet                             value ranges per layer x key x period x res x variable
 #'   taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
 #'   files.parquet                             manifest: layer, path, url_path, rows, bytes per file
 #' ```
@@ -97,12 +104,41 @@ EXPORT_MAX_OPEN <- 100L
 #' (`layers$place_exact`, with each collection's places and record totals);
 #' `stats.parquet` does not cover them.
 #'
-#' `stats.parquet` has one row per (`layer`, `key`, `decade`, `res`,
-#' `variable`) with `min`, `p02`, `p50`, `p98`, `max` and `n_cells` (cells with
-#' a non-NULL value; a variable NULL everywhere in a partition gets a row with
-#' NULL ranges and `n_cells` 0), for colour ramps. `key` is the EOV or taxon
-#' name ('' for the all-taxa layers), `rank` the taxon rank ('' otherwise),
-#' `decade` NA outside the decade layers.
+#' **Year layers.** `year/all` and `year/eov` are the decade layers per year:
+#' the same SQL ([obis_h3_year_sql()]) grouped by `year = date_year`, one
+#' partition per year present from `min(date_year)` to `max(date_year)` (or
+#' the `years` asked for), at the resolutions `res_year` (default 1-5, never
+#' split by parent). `release.json` lists the years written (`years`).
+#'
+#' **The species table** (`species/`, spike 2 of the Ocean Metrics
+#' restructure): one row per (cell, aphiaid) with `n` = records, at the
+#' resolutions `res_species` (default 3, 4, 5; res 4 rolled up from the res-5
+#' tier), so a browser answers a WoRMS subtree or "which species are in this
+#' cell" from static files. Columns `h3, cell_id, name_key, aphiaid, n`
+#' ([obis_h3_species_sql()]); one `data_0.parquet` per (res, class) written by
+#' [obis_h3_write_partitions()], sorted by `cell_id, aphiaid` in row groups of
+#' 100k; a NULL class is `class=_none`. `species/species.parquet`
+#' ([obis_h3_species_lookup_sql()]) has one row per aphiaid with its names, a
+#' `name_key` per distinct name (richness counts names) and its `lineage`
+#' (self, then ancestors up the store's `taxon` table); a subtree is
+#' `list_contains(lineage, <aphiaid>)` ([obis_h3_species_subtree_sql()]).
+#' `species/heads.json` lists the taxa that need a pre-aggregated head
+#' ([obis_h3_species_heads()]: Animalia and every taxon spanning two or more
+#' named classes); they are not built in this version. The per-decade variant
+#' `species_decade/` is written only with `species_decades = TRUE`. Rows with
+#' no aphiaid are left out; a store without one (e.g. the demo store built from
+#' `occ_SAtlantic`) gets no species layer.
+#'
+#' `collection.json` is a STAC Collection of the release for the Ocean Metrics
+#' `h3` profile ([obis_h3_stac_collection()]).
+#'
+#' `stats.parquet` has one row per indicator layer and (`key`, `decade`,
+#' `year`, `res`, `variable`) with `min`, `p02`, `p50`, `p98`, `max` and
+#' `n_cells` (cells with a non-NULL value; a variable NULL everywhere in a
+#' partition gets a row with NULL ranges and `n_cells` 0), for colour ramps.
+#' `key` is the EOV or taxon name ('' for the all-taxa layers), `rank` the
+#' taxon rank ('' otherwise), `decade` NA outside the decade layers, `year` NA
+#' outside the year layers.
 #'
 #' @param con connection from [obis_store_connect()] (read-only is fine).
 #' @param dir_out output directory; files go under `dir_out/release/`.
@@ -112,6 +148,14 @@ EXPORT_MAX_OPEN <- 100L
 #'   OBIS object's date, which `refresh_obis_h3.sh` passes) when that is a
 #'   `YYYY-MM-DD` date, else the date in the tag.
 #' @param res_decade H3 resolutions for the decade layers (default 1-5).
+#' @param res_year H3 resolutions for the year layers (default 1-5);
+#'   `integer(0)` skips them.
+#' @param years years to export in the year layers; default NULL, every year
+#'   present.
+#' @param res_species H3 resolutions of the species table (default 3, 4, 5);
+#'   `integer(0)` skips it.
+#' @param species_decades also write the per-decade species table
+#'   `species_decade/` (default FALSE).
 #' @param parent_res named integer vector, fine resolution -> parent
 #'   resolution, for the `all` and `eov` layers: those resolutions are written
 #'   one file per parent cell (`res=<r>/p=<parent>/`). Default
@@ -161,6 +205,10 @@ obis_h3_export_parquet <- function(
   dir_out,
   release,
   res_decade       = 1:5,
+  res_year         = 1:5,
+  years            = NULL,
+  res_species      = c(3L, 4L, 5L),
+  species_decades  = FALSE,
   parent_res       = c("6" = 2L, "7" = 3L),
   parent_res_taxon = c("6" = 0L, "7" = 0L),
   parent_min_rows  = 50000,
@@ -186,6 +234,10 @@ obis_h3_export_parquet <- function(
     is.character(compression), length(compression) == 1L,
     grepl("^[A-Za-z0-9]+$", compression),
     all(as.integer(res_decade) %in% H3T_RES_IDX),
+    all(as.integer(res_year) %in% H3T_RES_IDX),
+    all(as.integer(res_species) %in% H3T_RES_IDX),
+    is.null(years) || is.numeric(years),
+    is.logical(species_decades), length(species_decades) == 1L,
     is.numeric(parent_min_rows), length(parent_min_rows) == 1L,
     is.numeric(max_open), length(max_open) == 1L, max_open >= 1)
   check_pr <- function(pr) {
@@ -199,7 +251,9 @@ obis_h3_export_parquet <- function(
   max_open         <- as.integer(max_open)
   t0  <- Sys.time()
   say <- function(...) if (verbose) message(...)
-  res_decade <- sort(unique(as.integer(res_decade)))
+  res_decade  <- sort(unique(as.integer(res_decade)))
+  res_year    <- sort(unique(as.integer(res_year)))
+  res_species <- sort(unique(as.integer(res_species)))
   esn        <- as.integer(esn)
 
   out <- normalizePath(file.path(path.expand(dir_out), release), mustWork = FALSE)
@@ -328,41 +382,18 @@ obis_h3_export_parquet <- function(
   } else say("skipping taxon: no idx_h3_taxon table")
 
   # decade layers: computed from occ_h3 with the store's indicator SQL ----
-  dec_expr <- function(p = "") glue::glue("CAST(floor({p}date_year / 10) * 10 AS INTEGER)")
-  dec_filt <- function(p = "") if (is.null(decades)) "" else glue::glue(
-    " AND {dec_expr(p)} IN ({paste(as.integer(decades), collapse = ', ')})")
   has_eov  <- has("eov")
   rows_all <- 0
   rows_eov <- 0
   for (r in res_decade) {
-    tier <- .obis_tier(r)  # coarsest occ_h3 tier at least as fine as r
-    say("decade res ", r, " (occ_h3 tier ", tier, ") ...")
-    src <- glue::glue("
-      SELECT {dec_expr()} AS decade,
-             CAST(h3_cell_to_parent(cell_id, {r}) AS BIGINT) AS cell_id,
-             species, SUM(records) AS ni
-      FROM occ_h3
-      WHERE res = {tier} AND date_year IS NOT NULL{dec_filt()}
-      GROUP BY 1, 2, 3")
-    ind <- .h3t_indicators_sql(src, keys = "decade", esn = esn)
-    rows_all <- rows_all + copy(glue::glue(
-      "SELECT decade, {r}::UTINYINT AS res, {cols} FROM ({ind}) _d"),
+    say("decade res ", r, " (occ_h3 tier ", .obis_tier(r), ") ...")
+    rows_all <- rows_all + copy(
+      .obis_h3_period_sql(r, "decade", periods = decades, esn = esn),
       "decade/all", c("decade", "res"))
-
-    if (has_eov) {
-      src <- glue::glue("
-        SELECT e.eov, {dec_expr('o.')} AS decade,
-               CAST(h3_cell_to_parent(o.cell_id, {r}) AS BIGINT) AS cell_id,
-               o.species, SUM(o.records) AS ni
-        FROM occ_h3 o
-        JOIN eov e ON o.aphiaid = e.taxonID
-        WHERE o.res = {tier} AND o.date_year IS NOT NULL{dec_filt('o.')}
-        GROUP BY 1, 2, 3, 4")
-      ind <- .h3t_indicators_sql(src, keys = c("eov", "decade"), esn = esn)
-      rows_eov <- rows_eov + copy(glue::glue(
-        "SELECT eov, decade, {r}::UTINYINT AS res, {cols} FROM ({ind}) _d"),
+    if (has_eov)
+      rows_eov <- rows_eov + copy(
+        .obis_h3_period_sql(r, "decade", eov = TRUE, periods = decades, esn = esn),
         "decade/eov", c("eov", "decade", "res"))
-    }
   }
   add_layer("decade_all", "decade/all", c("decade", "res"), rows_all)
   if (has_eov)
@@ -378,7 +409,8 @@ obis_h3_export_parquet <- function(
     dec_place <- decades
     if (is.null(dec_place))
       dec_place <- DBI::dbGetQuery(con, glue::glue(
-        "SELECT DISTINCT {dec_expr()} AS d FROM occ_h3 WHERE date_year IS NOT NULL ORDER BY 1"))$d
+        "SELECT DISTINCT CAST(floor(date_year / 10) * 10 AS INTEGER) AS d
+         FROM occ_h3 WHERE date_year IS NOT NULL ORDER BY 1"))$d
     rows_place <- 0
     colls      <- list()
     for (slug in slugs) {
@@ -473,11 +505,163 @@ obis_h3_export_parquet <- function(
       "density = n / area_km2 (records per km2); es is NULL where n < esn. values only, no geometry.")
   }
 
+  # year layers: the same per year, from min(date_year) to max(date_year) ----
+  # (hundreds of years x EOVs is more partitions than files a process may hold
+  # open, so each res is computed once into a temp table and written in batches
+  # of max_open partitions)
+  occ_cols  <- names(DBI::dbGetQuery(con, "SELECT * FROM occ_h3 LIMIT 0"))
+  yr_rng    <- data.frame(lo = NA_integer_, hi = NA_integer_)
+  if (length(res_year) && "date_year" %in% occ_cols)
+    yr_rng <- DBI::dbGetQuery(con, "
+      SELECT MIN(date_year)::INTEGER AS lo, MAX(date_year)::INTEGER AS hi FROM occ_h3")
+  yrs_out   <- integer(0)
+  if (length(res_year) && !is.na(yr_rng$lo)) {
+    rows_yall <- 0
+    rows_yeov <- 0
+    on.exit(DBI::dbExecute(con, "DROP TABLE IF EXISTS _export_year;"), add = TRUE)
+    for (r in res_year) for (e in c(FALSE, if (has_eov) TRUE)) {
+      say("year res ", r, if (e) " x eov" else "", " (occ_h3 tier ", .obis_tier(r), ") ...")
+      DBI::dbExecute(con, glue::glue(
+        "CREATE OR REPLACE TEMP TABLE _export_year AS
+         {obis_h3_year_sql(r, eov = e, years = years, esn = esn)}"))
+      parts <- c(if (e) "eov", "year", "res")
+      grp   <- DBI::dbGetQuery(con, glue::glue(
+        "SELECT DISTINCT {paste(parts, collapse = ', ')} FROM _export_year ORDER BY ALL"))
+      n <- copy_batched("SELECT * FROM _export_year", if (e) "year/eov" else "year/all",
+                        parts, grp)
+      if (e) rows_yeov <- rows_yeov + n else {
+        rows_yall <- rows_yall + n
+        yrs_out   <- sort(unique(c(yrs_out, as.integer(grp$year))))
+      }
+    }
+    DBI::dbExecute(con, "DROP TABLE IF EXISTS _export_year;")
+    add_layer("year_all", "year/all", c("year", "res"), rows_yall)
+    if (has_eov)
+      add_layer("year_eov", "year/eov", c("eov", "year", "res"), rows_yeov)
+  } else if (length(res_year)) say("skipping year layers: no date_year in occ_h3")
+
+  # species x hex x count table: species/res=<r>/class=<class>/data_0.parquet ----
+  # plus the lookup (species/species.parquet) and the heads still to build
+  # (species/heads.json); one explicit COPY per partition, sorted by cell
+  sp_need <- c("res", "cell_id", "aphiaid", "species", "genus", "family", "order",
+               "class", "phylum", "records")
+  n_heads <- NA_integer_
+  if (length(res_species) && all(sp_need %in% occ_cols)) {
+    taxon_tbl <- if (has("taxon")) "taxon" else NULL
+    if (is.null(taxon_tbl)) say("species: no taxon table, so each lineage is the aphiaid alone")
+    lk <- "_export_species_lookup"
+    on.exit(DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {lk};")), add = TRUE)
+    say("species lookup ...")
+    DBI::dbExecute(con, glue::glue(
+      "CREATE OR REPLACE TEMP TABLE {lk} AS {obis_h3_species_lookup_sql(taxon = taxon_tbl)}"))
+    n_lookup <- DBI::dbGetQuery(con, glue::glue("SELECT COUNT(*)::DOUBLE AS n FROM {lk}"))$n
+    if (n_lookup > 0) {
+      dir.create(file.path(out, "species"), showWarnings = FALSE)
+      DBI::dbExecute(con, glue::glue(
+        "COPY (SELECT * FROM {lk} ORDER BY aphiaid) TO '{q(file.path(out, 'species', 'species.parquet'))}'
+         (FORMAT PARQUET, COMPRESSION {compression}, ROW_GROUP_SIZE 100000);"))
+      rows_sp <- 0
+      for (r in res_species) {
+        say("species res ", r, " (occ_h3 tier ", .obis_tier(r), ") ...")
+        w <- obis_h3_write_partitions(
+          con, obis_h3_species_sql(r, lookup = lk),
+          file.path(out, "species", paste0("res=", r)),
+          partition_by = "class", order_by = c("cell_id", "aphiaid"),
+          compression = compression)
+        rows_sp <- rows_sp + sum(w$rows)
+      }
+      add_layer("species", "species", c("res", "class"), rows_sp)
+
+      if (species_decades) {
+        rows_sd <- 0
+        for (r in res_species) {
+          say("species x decade res ", r, " ...")
+          w <- obis_h3_write_partitions(
+            con, obis_h3_species_sql(r, lookup = lk, decade = TRUE, decades = decades),
+            file.path(out, "species_decade", paste0("res=", r)),
+            partition_by = c("decade", "class"), order_by = c("cell_id", "aphiaid"),
+            compression = compression)
+          rows_sd <- rows_sd + sum(w$rows)
+        }
+        add_layer("species_decade", "species_decade", c("res", "decade", "class"), rows_sd)
+        layers$species_decade$kind          <- "species"
+        layers$species_decade$href_template <-
+          "species_decade/res={res}/decade={decade}/class={class}/data_0.parquet"
+      }
+
+      # the heads: Animalia and every taxon spanning two or more named classes
+      say("species heads ...")
+      heads <- obis_h3_species_heads(con, lk, taxon_tbl)
+      heads$existing_layer <- rep(NA_character_, nrow(heads))
+      if (has("idx_h3_taxon") && nrow(heads)) {
+        tx <- DBI::dbGetQuery(con, "SELECT DISTINCT rank, taxon FROM idx_h3_taxon")
+        hit <- match(paste(tolower(heads$rank), heads$name), paste(tx$rank, tx$taxon))
+        heads$existing_layer[!is.na(hit)] <- paste0(
+          "taxon/rank=", tx$rank[hit[!is.na(hit)]], "/taxon=", tx$taxon[hit[!is.na(hit)]])
+      }
+      n_heads <- nrow(heads)
+      jsonlite::write_json(list(
+        built    = FALSE,
+        rule     = paste(
+          "Animalia (aphiaid 2) and every taxon whose subtree spans two or more named",
+          "classes (the lookup's OBIS class; NULL not counted). A subtree inside one",
+          "class reads one class file plus class=_none; these taxa read many, so each",
+          "gets a pre-aggregated indicator layer (like `all`). Not built yet: listed",
+          "for the next release."),
+        existing = list(
+          list(head = "all",    layer = "all"),
+          list(head = "eov",    layer = "eov"),
+          list(head = "phylum", layer = "taxon/rank=phylum"),
+          list(head = "class",  layer = "taxon/rank=class"),
+          list(head = "order",  layer = "taxon/rank=order"),
+          list(head = "family", layer = "taxon/rank=family")),
+        n        = n_heads,
+        columns  = c(names(heads)),
+        heads    = heads),
+        file.path(out, "species", "heads.json"),
+        auto_unbox = TRUE, pretty = TRUE, digits = NA, dataframe = "rows", na = "null")
+
+      layers$species <- c(layers$species, list(
+        kind          = "species",
+        href_template = "species/res={res}/class={class}/data_0.parquet",
+        resolutions   = I(res_species),
+        partition_by  = I("class"),
+        sorted_by     = I(c("cell_id", "aphiaid")),
+        columns       = list(cell = "cell_id", species = "aphiaid", count = "n"),
+        lookup        = list(
+          href           = "species/species.parquet",
+          key            = "aphiaid",
+          lineage_column = "lineage",
+          rank_columns   = list(phylum = "phylum", class = "class", order = "order",
+                                family = "family", genus = "genus", species = "species"),
+          name_column    = "species"),
+        name_key      = list(
+          column = "name_key",
+          note   = paste(
+            "richness (sp) counts distinct species names, as h3t does: count",
+            "DISTINCT name_key (in the files and the lookup), not aphiaid; some",
+            "names carry several aphiaids.")),
+        null_class    = "_none",
+        heads         = list(href = "species/heads.json", n = n_heads, built = FALSE),
+        lookup_rows   = n_lookup,
+        table_columns = SPECIES_COLUMNS,
+        lookup_columns = SPECIES_LOOKUP_COLUMNS,
+        note          = paste(
+          "one row per (cell, aphiaid) with n = SUM(records), one data_0.parquet per",
+          "(res, class), sorted by cell_id, aphiaid in row groups of 100k (ZSTD); res 4",
+          "is rolled up from the res-5 occ_h3 tier. A NULL class is class=_none. A",
+          "subtree is list_contains(lineage, <aphiaid>) on the lookup, joined on",
+          "aphiaid; obis_h3_species_subtree_sql() writes the indicator query.")))
+    } else say("skipping species: no aphiaid in occ_h3")
+    DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {lk};"))
+  } else if (length(res_species))
+    say("skipping species: occ_h3 lacks ", paste(setdiff(sp_need, occ_cols), collapse = ", "))
+
   # stats.parquet: value ranges for colour ramps, read back from the files ----
   say("stats ...")
   # explicit hive types, so a taxon or EOV name is never auto-cast to a number
-  hive_type <- c(res = "INTEGER", decade = "INTEGER", eov = "VARCHAR",
-                 rank = "VARCHAR", taxon = "VARCHAR")
+  hive_type <- c(res = "INTEGER", decade = "INTEGER", year = "INTEGER", eov = "VARCHAR",
+                 rank = "VARCHAR", taxon = "VARCHAR", class = "VARCHAR")
   hive_type <- c(hive_type, p = "VARCHAR")
   rd <- function(sub, parts) glue::glue(
     "read_parquet('{q(file.path(out, sub))}{strrep('/*', length(parts))}/*.parquet', ",
@@ -496,12 +680,16 @@ obis_h3_export_parquet <- function(
     paste(src, collapse = "\nUNION ALL\n")
   }
   key_sql <- list(
-    all        = "'' AS key, '' AS rank, NULL::INTEGER AS decade",
-    eov        = "eov AS key, '' AS rank, NULL::INTEGER AS decade",
-    taxon      = "taxon AS key, rank, NULL::INTEGER AS decade",
-    decade_all = "'' AS key, '' AS rank, decade",
-    decade_eov = "eov AS key, '' AS rank, decade")
-  live     <- names(layers)[vapply(layers, function(l) l$rows > 0, logical(1))]
+    all        = "'' AS key, '' AS rank, NULL::INTEGER AS decade, NULL::INTEGER AS year",
+    eov        = "eov AS key, '' AS rank, NULL::INTEGER AS decade, NULL::INTEGER AS year",
+    taxon      = "taxon AS key, rank, NULL::INTEGER AS decade, NULL::INTEGER AS year",
+    decade_all = "'' AS key, '' AS rank, decade, NULL::INTEGER AS year",
+    decade_eov = "eov AS key, '' AS rank, decade, NULL::INTEGER AS year",
+    year_all   = "'' AS key, '' AS rank, NULL::INTEGER AS decade, year",
+    year_eov   = "eov AS key, '' AS rank, NULL::INTEGER AS decade, year")
+  # the indicator layers with rows (the species layers have no indicators)
+  live     <- names(layers)[vapply(layers, function(l)
+    l$rows > 0 && is.null(l$kind), logical(1))]
   # one query per layer and variable, collected in R and written once: a single UNPIVOT over every
   # layer held all values in quantile_cont() states at once (not spillable) and, with the family
   # rank, outgrew a 24 GiB VM (killed 2026-10-12); per (layer, variable) the largest input is the
@@ -511,7 +699,7 @@ obis_h3_export_parquet <- function(
   for (l in intersect(live, names(key_sql))) for (v in EXPORT_VARS) {
     src <- rd_layer(l, glue::glue("'{l}' AS layer, {key_sql[[l]]}, res, '{v}' AS variable, {v}::DOUBLE AS value"))
     stats[[length(stats) + 1L]] <- DBI::dbGetQuery(con, glue::glue("
-      SELECT layer, key, rank, decade, res, variable,
+      SELECT layer, key, rank, decade, year, res, variable,
         MIN(value)                 AS min,
         quantile_cont(value, 0.02) AS p02,
         quantile_cont(value, 0.50) AS p50,
@@ -525,10 +713,11 @@ obis_h3_export_parquet <- function(
   on.exit(try(duckdb::duckdb_unregister(con, "export_stats"), silent = TRUE), add = TRUE)
   DBI::dbExecute(con, glue::glue("
     COPY (
-      SELECT layer, key, rank, decade::INTEGER AS decade, res::INTEGER AS res, variable,
+      SELECT layer, key, rank, decade::INTEGER AS decade, year::INTEGER AS year,
+             res::INTEGER AS res, variable,
              min, p02, p50, p98, max, n_cells::BIGINT AS n_cells
       FROM export_stats
-      ORDER BY layer, key, rank, decade, res, variable
+      ORDER BY layer, key, rank, decade, year, res, variable
     ) TO '{q(f_stats)}' (FORMAT PARQUET, COMPRESSION {compression});"))
   duckdb::duckdb_unregister(con, "export_stats")
 
@@ -594,6 +783,7 @@ obis_h3_export_parquet <- function(
   manifest$layer <- "meta"  # stats.parquet, taxon_groups.parquet
   for (l in names(layers))
     manifest$layer[startsWith(manifest$path, paste0(layers[[l]]$path, "/"))] <- l
+  manifest$layer[manifest$path == "species/species.parquet"] <- "species_lookup"
   f_files <- file.path(out, "files.parquet")
   duckdb::duckdb_register(con, "export_files", manifest)
   on.exit(duckdb::duckdb_unregister(con, "export_files"), add = TRUE)
@@ -606,10 +796,18 @@ obis_h3_export_parquet <- function(
   store <- tryCatch(DBI::dbGetInfo(con)$dbname, error = function(e) NA_character_)
   snap  <- .obis_snapshot(release)
   for (l in names(layers)) {
-    lf <- manifest[startsWith(manifest$path, paste0(layers[[l]]$path, "/")), ]
+    lf <- manifest[manifest$layer == l, ]
     layers[[l]]$rows  <- sum(lf$rows)
     layers[[l]]$files <- nrow(lf)
     layers[[l]]$bytes <- sum(lf$bytes)
+  }
+  if (!is.null(layers$species)) {
+    # rows, files and bytes per resolution of the species table, and the lookup's size
+    layers$species$by_res <- do.call(rbind, lapply(res_species, function(r) {
+      lf <- manifest[startsWith(manifest$path, paste0("species/res=", r, "/")), ]
+      data.frame(res = r, rows = sum(lf$rows), files = nrow(lf), bytes = sum(lf$bytes))
+    }))
+    layers$species$lookup_bytes <- manifest$bytes[manifest$layer == "species_lookup"]
   }
   info <- list(
     release                = release,
@@ -626,14 +824,20 @@ obis_h3_export_parquet <- function(
     res                    = sort(DBI::dbGetQuery(con, "SELECT DISTINCT res FROM idx_h3")$res),
     res_decade             = I(res_decade),
     decades                = if (is.null(decades)) "all" else I(as.integer(decades)),
+    res_year               = I(res_year),
+    # the years with files (every year present from min(date_year) to max, or those requested)
+    years                  = I(yrs_out),
+    year_range             = if (is.na(yr_rng$lo)) I(integer(0)) else I(c(yr_rng$lo, yr_rng$hi)),
+    res_species            = I(res_species),
+    species_decades        = species_decades,
     compression            = compression,
     layers                 = layers,
     columns                = EXPORT_COLUMNS,
     stats = list(
       file    = "stats.parquet",
-      columns = c("layer", "key", "rank", "decade", "res", "variable",
+      columns = c("layer", "key", "rank", "decade", "year", "res", "variable",
                   "min", "p02", "p50", "p98", "max", "n_cells"),
-      note    = "one row per layer x key x decade x res x variable; n_cells counts cells with a non-NULL value (0 when all are NULL, e.g. es where every n < 50)"),
+      note    = "one row per indicator layer x key x decade x year x res x variable; n_cells counts cells with a non-NULL value (0 when all are NULL, e.g. es where every n < 50)"),
     taxon_groups = list(
       file    = "taxon_groups.parquet",
       columns = c("kind", "rank", "taxon", "label", "n", "n_cells_res1", "path", "url_path")),
@@ -644,6 +848,11 @@ obis_h3_export_parquet <- function(
     decade_note = paste(
       "decade = floor(date_year / 10) * 10; records with no year are excluded;",
       "indicators computed with the same SQL as idx_h3 / idx_h3_eov."),
+    year_note = paste(
+      "year = date_year; records with no year are excluded; one partition per year",
+      "present between min(date_year) and max(date_year) (or the requested years),",
+      "listed in `years`; indicators computed with the same SQL as idx_h3 / idx_h3_eov",
+      "and the decade layers; never split by parent cell."),
     files = list(
       file    = "files.parquet",
       columns = c("layer", "path", "url_path", "rows", "bytes", "parent"),
@@ -664,6 +873,9 @@ obis_h3_export_parquet <- function(
   f_json <- file.path(out, "release.json")
   jsonlite::write_json(info, f_json, auto_unbox = TRUE, pretty = TRUE,
                        digits = NA, dataframe = "rows")
+  f_stac  <- obis_h3_stac_collection(out)
+  f_heads <- file.path(out, "species", "heads.json")
+  f_heads <- f_heads[file.exists(f_heads)]
 
   # summary ----
   if (verbose) {
@@ -674,10 +886,16 @@ obis_h3_export_parquet <- function(
       message(sprintf("  %-11s %12s rows %6d files %10s", l,
                       format(layers[[l]]$rows, big.mark = ","),
                       layers[[l]]$files, mb(layers[[l]]$bytes)))
-    message(sprintf("  total       %6d files %10s", nrow(manifest) + 2L,
-                    mb(sum(manifest$bytes) + file.size(f_json) + file.size(f_files))))
+    if (!is.null(layers$species)) {
+      message("  species by res (rows, files, bytes); heads to add: ", n_heads)
+      for (i in seq_len(nrow(layers$species$by_res)))
+        with(layers$species$by_res[i, ], message(sprintf(
+          "    res %d %12s rows %6d files %10s", res, format(rows, big.mark = ","), files, mb(bytes))))
+    }
+    message(sprintf("  total       %6d files %10s", nrow(manifest) + 3L + length(f_heads),
+                    mb(sum(manifest$bytes) + sum(file.size(c(f_json, f_files, f_stac, f_heads))))))
   }
-  invisible(c(f_json, f_files, file.path(out, manifest$path)))
+  invisible(c(f_json, f_files, f_stac, f_heads, file.path(out, manifest$path)))
 }
 
 # release.json's obis_snapshot: the OBIS data date when known (the newest object of
@@ -702,4 +920,200 @@ obis_h3_export_parquet <- function(
     if (identical(unname(d[1, "Package"]), "obisindicators")) return(unname(d[1, "Version"]))
   }
   tryCatch(as.character(utils::packageVersion("obisindicators")), error = function(e) NA_character_)
+}
+
+#' SQL for the per-year indicator layers
+#'
+#' The indicators of one resolution per year (and per EOV), computed from
+#' `occ_h3` with the store's indicator SQL (the same `.h3t_indicators_sql()`
+#' that builds `idx_h3`, `idx_h3_eov` and the decade layers): `n` = records,
+#' `sp` = distinct species names, Shannon, Simpson and ES(`esn`), grouped by
+#' cell and `year = CAST(date_year AS INTEGER)`. Records without a year are left
+#' out. The cells come from the coarsest `occ_h3` tier at least as fine as
+#' `res` (res 4 is rolled up from the res-5 tier). EOV membership is the
+#' store's `eov` table (`occ_h3.aphiaid = eov.taxonID`).
+#'
+#' @param res H3 resolution, 1 to 7.
+#' @param eov per EOV as well (needs the `eov` table; default FALSE).
+#' @param years years to keep (default NULL: every year present).
+#' @param esn expected sample size for ES(n) (default 50).
+#' @param from the species-level table (default `"occ_h3"`).
+#' @return a SQL string with columns `[eov,] year, res, h3, cell_id, n, sp,
+#'   shannon, simpson, es`.
+#' @concept store
+#' @export
+#' @examples
+#' cat(obis_h3_year_sql(4))
+obis_h3_year_sql <- function(res, eov = FALSE, years = NULL, esn = 50L, from = "occ_h3") {
+  .obis_h3_period_sql(res, "year", eov = eov, periods = years, esn = esn, from = from)
+}
+
+# the per-period (decade or year) indicator SQL of the export's decade and year layers
+.obis_h3_period_sql <- function(res, period = c("decade", "year"), eov = FALSE, periods = NULL,
+                                esn = 50L, from = "occ_h3") {
+  period <- match.arg(period)
+  res    <- as.integer(res)
+  stopifnot(length(res) == 1L, res %in% H3T_RES_IDX, is.logical(eov), length(eov) == 1L)
+  tier <- .obis_tier(res)  # coarsest occ_h3 tier at least as fine as res
+  p    <- if (eov) "o." else ""
+  pexp <- switch(period,
+    decade = glue::glue("CAST(floor({p}date_year / 10) * 10 AS INTEGER)"),
+    year   = glue::glue("CAST({p}date_year AS INTEGER)"))
+  filt <- if (is.null(periods)) "" else glue::glue(
+    " AND {pexp} IN ({paste(as.integer(periods), collapse = ', ')})")
+  cols <- "lower(printf('%x', cell_id)) AS h3, cell_id, n, sp, shannon, simpson, es"
+  if (!eov) {
+    src <- glue::glue("
+      SELECT {pexp} AS {period},
+             CAST(h3_cell_to_parent(cell_id, {res}) AS BIGINT) AS cell_id,
+             species, SUM(records) AS ni
+      FROM {from}
+      WHERE res = {tier} AND date_year IS NOT NULL{filt}
+      GROUP BY 1, 2, 3")
+    keys <- period
+  } else {
+    src <- glue::glue("
+      SELECT e.eov, {pexp} AS {period},
+             CAST(h3_cell_to_parent(o.cell_id, {res}) AS BIGINT) AS cell_id,
+             o.species, SUM(o.records) AS ni
+      FROM {from} o
+      JOIN eov e ON o.aphiaid = e.taxonID
+      WHERE o.res = {tier} AND o.date_year IS NOT NULL{filt}
+      GROUP BY 1, 2, 3, 4")
+    keys <- c("eov", period)
+  }
+  ind <- .h3t_indicators_sql(src, keys = keys, esn = as.integer(esn))
+  glue::glue("SELECT {paste(keys, collapse = ', ')}, {res}::UTINYINT AS res, {cols} FROM ({ind}) _d")
+}
+
+# the Parquet types of the indicator columns (the `all` layer's files)
+EXPORT_COLUMN_TYPES <- c(h3 = "VARCHAR", cell_id = "BIGINT", n = "BIGINT", sp = "BIGINT",
+                         shannon = "DOUBLE", simpson = "DOUBLE", es = "DOUBLE")
+
+# the URI of the Ocean Metrics h3 STAC profile (its $id)
+OM_H3_PROFILE <- "https://oceanmetrics.io/schemas/h3/v1.0.0/schema.json"
+
+#' Write the STAC Collection of an obis-h3 release
+#'
+#' Reads a release's `release.json` (from [obis_h3_export_parquet()]) and
+#' writes `collection.json`, a STAC Collection for the Ocean Metrics `h3`
+#' profile (`platform/packages/catalog/schemas/h3.schema.json`): the
+#' resolutions, the `all` layer's path template with its parent splits
+#' (`h3:layout`), the indicator columns (`table:columns`) and, when the release
+#' has one, the species table (`h3:species_table`: its template, resolutions,
+#' class partitions, sort, columns and lookup). The profile's fields describe
+#' the `all` layer; the other layers (EOV, taxon, decade, year) and the heads
+#' list are in pass-through keys, `obis:layers` (each with a `{key}` template,
+#' and `h3:periods` for the decade and year layers) and `obis:species`
+#' (`name_key`, `null_class`, `heads`), which the profile allows.
+#'
+#' @param release_dir the release directory (holding `release.json`).
+#' @param file output file (default `collection.json` in `release_dir`).
+#' @param id the collection id (default `"obis-h3"`).
+#' @return invisibly, the path written.
+#' @concept store
+#' @export
+obis_h3_stac_collection <- function(release_dir, file = file.path(release_dir, "collection.json"),
+                                    id = "obis-h3") {
+  stopifnot(requireNamespace("jsonlite", quietly = TRUE))
+  js <- jsonlite::read_json(file.path(release_dir, "release.json"))
+  tpl <- function(x) gsub("<([A-Za-z_]+)>", "{\\1}", x)  # release.json <key> -> STAC {key}
+  ints <- function(x) as.integer(unlist(x))
+
+  all <- js$layers$all
+  layout <- list(template = tpl(all$template))
+  if (length(all$parent_res)) {
+    layout$parent_template <- tpl(all$template_parent)
+    layout$parent_res      <- lapply(all$parent_res, as.integer)
+  }
+
+  # every layer, as a template with {key} placeholders
+  obis_layers <- lapply(names(js$layers), function(l) {
+    x <- js$layers[[l]]
+    o <- list(template = tpl(x$template), keys = I(unlist(x$partitions)),
+              rows = x$rows, files = x$files, bytes = x$bytes)
+    if (length(x$parent_res)) {
+      o$parent_template <- tpl(x$template_parent)
+      o$parent_res      <- lapply(x$parent_res, as.integer)
+    }
+    if (l %in% c("decade_all", "decade_eov") && is.list(js$decades))
+      o$`h3:periods` <- list(grain = "decade", values = I(as.character(ints(js$decades))),
+                             placeholder = "decade")
+    if (l %in% c("year_all", "year_eov") && length(js$years))
+      o$`h3:periods` <- list(grain = "year", values = I(as.character(ints(js$years))),
+                             placeholder = "year")
+    o
+  })
+  names(obis_layers) <- names(js$layers)
+
+  yr <- ints(js$year_range)
+  t0 <- if (length(yr) == 2L) sprintf("%04d-01-01T00:00:00Z", yr[1]) else NULL
+  snap <- if (is.null(js$obis_snapshot)) "" else js$obis_snapshot
+  t1 <- if (grepl("^\\d{4}-\\d{2}-\\d{2}$", snap))
+    paste0(js$obis_snapshot, "T00:00:00Z") else NULL
+
+  col <- list(
+    type            = "Collection",
+    stac_version    = "1.1.0",
+    stac_extensions = I(c(OM_H3_PROFILE, "https://stac-extensions.github.io/table/v1.2.0/schema.json")),
+    id              = id,
+    title           = "OBIS biodiversity indicators on H3",
+    description     = paste(
+      "Records, species richness, Shannon, Simpson and ES(50) per H3 cell from the",
+      "Ocean Biodiversity Information System (OBIS) snapshot", snap,
+      paste0("(release ", js$release, "),"), "for all taxa, Essential Ocean Variables, taxa",
+      "(phylum to family), decades and years, with the species x hex x count table."),
+    license         = "other",
+    extent          = list(
+      spatial  = list(bbox = list(c(-180, -90, 180, 90))),
+      temporal = list(interval = list(list(t0, t1)))),
+    links = list(
+      list(rel = "self",    href = "./collection.json", type = "application/json"),
+      list(rel = "related", href = "./release.json",    type = "application/json",
+           title = "release metadata: layers, row counts, columns, notes")),
+    `h3:resolutions` = I(ints(js$res)),
+    `h3:cell_column` = "h3",
+    `h3:cell_type`   = "string",
+    `h3:layout`      = layout,
+    `table:columns`  = lapply(names(EXPORT_COLUMN_TYPES), function(k) list(
+      name = k, type = unname(EXPORT_COLUMN_TYPES[k]), description = js$columns[[k]])),
+    `obis:release`   = js$release,
+    `obis:layers`    = obis_layers,
+    assets = list(
+      release = list(href = "./release.json", type = "application/json",
+                     title = "release metadata", roles = I("metadata")),
+      files   = list(href = "./files.parquet", type = "application/vnd.apache.parquet",
+                     title = "file manifest", roles = I("metadata")),
+      stats   = list(href = "./stats.parquet", type = "application/vnd.apache.parquet",
+                     title = "value ranges per layer, key, period, res and variable",
+                     roles = I("metadata")),
+      taxon_groups = list(href = "./taxon_groups.parquet", type = "application/vnd.apache.parquet",
+                          title = "taxa and EOVs with totals and paths", roles = I("metadata"))))
+  if (is.null(t0) && is.null(t1))
+    col$extent$temporal$interval <- list(list(NULL, NULL))
+
+  sp <- js$layers$species
+  if (!is.null(sp)) {
+    col$`h3:species_table` <- list(
+      href_template = sp$href_template,
+      resolutions   = I(ints(sp$resolutions)),
+      partition_by  = I(unlist(sp$partition_by)),
+      sorted_by     = I(unlist(sp$sorted_by)),
+      columns       = sp$columns,
+      lookup        = sp$lookup)
+    col$`obis:species` <- list(
+      name_key   = sp$name_key,
+      null_class = sp$null_class,
+      heads      = sp$heads,
+      columns    = sp$table_columns,
+      lookup_columns = sp$lookup_columns)
+    col$assets$species_lookup <- list(
+      href = paste0("./", sp$lookup$href), type = "application/vnd.apache.parquet",
+      title = "species lookup: names, name_key, lineage", roles = I("metadata"))
+    col$assets$species_heads <- list(
+      href = paste0("./", sp$heads$href), type = "application/json",
+      title = "pre-aggregated heads still to build", roles = I("metadata"))
+  }
+  jsonlite::write_json(col, file, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
+  invisible(file)
 }
