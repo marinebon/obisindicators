@@ -17,6 +17,20 @@ R.
   : The paper's default benchmark query set
 - [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
   : Export an obis_h3 store to hive-partitioned Parquet
+- [`obis_h3_species_heads()`](https://marinebon.org/obisindicators/reference/obis_h3_species_heads.md)
+  : The pre-aggregated heads the species table still needs
+- [`obis_h3_species_lookup_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_lookup_sql.md)
+  : SQL for the species lookup of the species x hex x count table
+- [`obis_h3_species_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_sql.md)
+  : SQL for the species x hex x count table at one resolution
+- [`obis_h3_species_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_subtree_sql.md)
+  : SQL for a WoRMS subtree's indicators from the exported species table
+- [`obis_h3_stac_collection()`](https://marinebon.org/obisindicators/reference/obis_h3_stac_collection.md)
+  : Write the STAC Collection of an obis-h3 release
+- [`obis_h3_write_partitions()`](https://marinebon.org/obisindicators/reference/obis_h3_write_partitions.md)
+  : Write a query to one Parquet file per partition, sorted
+- [`obis_h3_year_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_year_sql.md)
+  : SQL for the per-year indicator layers
 - [`obis_h3t_query()`](https://marinebon.org/obisindicators/reference/obis_h3t_query.md)
   : Run a tile SQL at a fixed H3 resolution
 - [`obis_store_connect()`](https://marinebon.org/obisindicators/reference/obis_store_connect.md)

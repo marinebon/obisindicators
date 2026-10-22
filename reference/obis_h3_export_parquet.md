@@ -14,6 +14,10 @@ obis_h3_export_parquet(
   dir_out,
   release,
   res_decade = 1:5,
+  res_year = 1:5,
+  years = NULL,
+  res_species = c(3L, 4L, 5L),
+  species_decades = FALSE,
   parent_res = c(`6` = 2L, `7` = 3L),
   parent_res_taxon = c(`6` = 0L, `7` = 0L),
   parent_min_rows = 50000,
@@ -56,6 +60,25 @@ obis_h3_export_parquet(
 - res_decade:
 
   H3 resolutions for the decade layers (default 1-5).
+
+- res_year:
+
+  H3 resolutions for the year layers (default 1-5); `integer(0)` skips
+  them.
+
+- years:
+
+  years to export in the year layers; default NULL, every year present.
+
+- res_species:
+
+  H3 resolutions of the species table (default 3, 4, 5); `integer(0)`
+  skips it.
+
+- species_decades:
+
+  also write the per-decade species table `species_decade/` (default
+  FALSE).
 
 - parent_res:
 
@@ -153,10 +176,17 @@ invisibly, a character vector of the files written (absolute paths).
       taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family)
       decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
       decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
+      year/all/year=<yyyy>/res=<r>/             per year, all taxa    (res in res_year)
+      year/eov/eov=<eov>/year=<yyyy>/res=<r>/   per year and EOV      (res in res_year)
+      species/res=<r>/class=<class>/data_0.parquet  species x hex x count (res in res_species)
+      species/species.parquet                   the species lookup: names, name_key, lineage
+      species/heads.json                        the pre-aggregated heads still to build
+      species_decade/res=<r>/decade=<d>/class=<class>/  per decade (species_decades = TRUE)
       place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
       place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
                                                 exact point-in-polygon indicators (only with place_exact)
-      stats.parquet                             value ranges per layer x key x res x variable
+      collection.json                           STAC Collection (h3 profile), obis_h3_stac_collection()
+      stats.parquet                             value ranges per layer x key x period x res x variable
       taxon_groups.parquet                      the taxa and EOVs available, with totals and paths
       files.parquet                             manifest: layer, path, url_path, rows, bytes per file
 
@@ -225,12 +255,49 @@ are listed in `files.parquet` (layer `place_exact`) and `release.json`
 (`layers$place_exact`, with each collection's places and record totals);
 `stats.parquet` does not cover them.
 
-`stats.parquet` has one row per (`layer`, `key`, `decade`, `res`,
-`variable`) with `min`, `p02`, `p50`, `p98`, `max` and `n_cells` (cells
-with a non-NULL value; a variable NULL everywhere in a partition gets a
-row with NULL ranges and `n_cells` 0), for colour ramps. `key` is the
-EOV or taxon name (” for the all-taxa layers), `rank` the taxon rank (”
-otherwise), `decade` NA outside the decade layers.
+**Year layers.** `year/all` and `year/eov` are the decade layers per
+year: the same SQL
+([`obis_h3_year_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_year_sql.md))
+grouped by `year = date_year`, one partition per year present from
+`min(date_year)` to `max(date_year)` (or the `years` asked for), at the
+resolutions `res_year` (default 1-5, never split by parent).
+`release.json` lists the years written (`years`).
+
+**The species table** (`species/`, spike 2 of the Ocean Metrics
+restructure): one row per (cell, aphiaid) with `n` = records, at the
+resolutions `res_species` (default 3, 4, 5; res 4 rolled up from the
+res-5 tier), so a browser answers a WoRMS subtree or "which species are
+in this cell" from static files. Columns
+`h3, cell_id, name_key, aphiaid, n`
+([`obis_h3_species_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_sql.md));
+one `data_0.parquet` per (res, class) written by
+[`obis_h3_write_partitions()`](https://marinebon.org/obisindicators/reference/obis_h3_write_partitions.md),
+sorted by `cell_id, aphiaid` in row groups of 100k; a NULL class is
+`class=_none`. `species/species.parquet`
+([`obis_h3_species_lookup_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_lookup_sql.md))
+has one row per aphiaid with its names, a `name_key` per distinct name
+(richness counts names) and its `lineage` (self, then ancestors up the
+store's `taxon` table); a subtree is `list_contains(lineage, <aphiaid>)`
+([`obis_h3_species_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_subtree_sql.md)).
+`species/heads.json` lists the taxa that need a pre-aggregated head
+([`obis_h3_species_heads()`](https://marinebon.org/obisindicators/reference/obis_h3_species_heads.md):
+Animalia and every taxon spanning two or more named classes); they are
+not built in this version. The per-decade variant `species_decade/` is
+written only with `species_decades = TRUE`. Rows with no aphiaid are
+left out; a store without one (e.g. the demo store built from
+`occ_SAtlantic`) gets no species layer.
+
+`collection.json` is a STAC Collection of the release for the Ocean
+Metrics `h3` profile
+([`obis_h3_stac_collection()`](https://marinebon.org/obisindicators/reference/obis_h3_stac_collection.md)).
+
+`stats.parquet` has one row per indicator layer and (`key`, `decade`,
+`year`, `res`, `variable`) with `min`, `p02`, `p50`, `p98`, `max` and
+`n_cells` (cells with a non-NULL value; a variable NULL everywhere in a
+partition gets a row with NULL ranges and `n_cells` 0), for colour
+ramps. `key` is the EOV or taxon name (” for the all-taxa layers),
+`rank` the taxon rank (” otherwise), `decade` NA outside the decade
+layers, `year` NA outside the year layers.
 
 ## Examples
 

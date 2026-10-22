@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -50,6 +50,21 @@
       <small>Source: <a href="https://github.com/marinebon/obisindicators/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.0" id="obisindicators-0100">obisindicators 0.10.0<a class="anchor" aria-label="anchor" href="#obisindicators-0100"></a></h2>
+<ul><li>
+<strong>Year layers.</strong> <code><a href="../reference/obis_h3_export_parquet.html">obis_h3_export_parquet()</a></code> writes <code>year/all/year=&lt;yyyy&gt;/res=&lt;r&gt;/data_0.parquet</code> and <code>year/eov/eov=&lt;eov&gt;/year=&lt;yyyy&gt;/res=&lt;r&gt;/data_0.parquet</code>: the decade layers per year, one partition per year present from <code>min(date_year)</code> to <code>max(date_year)</code>. New arguments <code>res_year</code> (default 1-5; <code>integer(0)</code> skips them) and <code>years</code> (default NULL, every year). The SQL is the new exported <code><a href="../reference/obis_h3_year_sql.html">obis_h3_year_sql()</a></code>, built on the same indicator SQL as <code>idx_h3</code> and the decade layers (which now share its builder). <code>release.json</code> gains <code>layers.year_all</code>, <code>layers.year_eov</code>, <code>res_year</code>, <code>years</code> (the years written), <code>year_range</code> and <code>year_note</code>; <code>files.parquet</code> and <code>stats.parquet</code> cover them.</li>
+<li>
+<strong><code>stats.parquet</code> has a <code>year</code> column</strong> (NA outside the year layers), so its rows are one per layer x key x decade x year x res x variable.</li>
+<li>
+<strong>The species x hex x count table</strong> (layer <code>species</code>, sized and checked against h3t in spike 2 of the Ocean Metrics restructure), so a browser answers a WoRMS subtree or a cell’s species list from static files: <code>species/res=&lt;r&gt;/class=&lt;class&gt;/data_0.parquet</code> with columns <code>h3, cell_id, name_key, aphiaid, n</code> (<code>n</code> = records) at the resolutions <code>res_species</code> (default 3, 4, 5; res 4 rolled up from the res-5 tier), one file per (res, class), sorted by <code>cell_id, aphiaid</code> in row groups of 100k (ZSTD); a NULL class is written <code>class=_none</code>, since DuckDB-WASM reads <code>__HIVE_DEFAULT_PARTITION__</code> as a string. <code>species/species.parquet</code> is the lookup, one row per aphiaid with <code>name_key</code> (a dense integer per species name: richness counts names, as h3t does), the OBIS ranks, <code>lineage</code> (the aphiaid then its ancestors up the store’s <code>taxon</code> table, walked from the occurrence’s own aphiaid, so a synonym keeps its own parent) and <code>records</code>. <code>species/heads.json</code> lists the taxa that still need a pre-aggregated head (Animalia and every taxon spanning two or more named classes: 125 in the v20261012 global store); the heads themselves are not built in this version. <code>species_decades = TRUE</code> also writes <code>species_decade/res=&lt;r&gt;/decade=&lt;d&gt;/class=&lt;class&gt;/data_0.parquet</code> (default off). A store without aphiaids (the demo store built from <code>occ_SAtlantic</code>) gets no species layer.</li>
+<li>New exported functions for the table, each tested on a synthetic store: <code><a href="../reference/obis_h3_species_sql.html">obis_h3_species_sql()</a></code>, <code><a href="../reference/obis_h3_species_lookup_sql.html">obis_h3_species_lookup_sql()</a></code>, <code><a href="../reference/obis_h3_species_heads.html">obis_h3_species_heads()</a></code>, <code><a href="../reference/obis_h3_write_partitions.html">obis_h3_write_partitions()</a></code> (the explicit per-partition writer: DuckDB’s <code>PARTITION_BY</code> wrote thousands of files per resolution and lost the sort) and <code><a href="../reference/obis_h3_species_subtree_sql.html">obis_h3_species_subtree_sql()</a></code> (a subtree’s indicators from the exported files, which reproduce the h3t subtree SQL cell for cell: <code>n</code> and <code>sp</code> exactly, Shannon, Simpson and ES to 1e-9).</li>
+<li>
+<strong><code>collection.json</code></strong>: the export writes a STAC Collection of the release for the Ocean Metrics <code>h3</code> profile, <code><a href="../reference/obis_h3_stac_collection.html">obis_h3_stac_collection()</a></code>, with <code>h3:species_table</code> for the species layer and the other layers under <code>obis:layers</code>. It validates against <code>h3.schema.json</code> (tested with jsonvalidate and with <code>om-catalog validate h3</code> when the platform checkout is present).</li>
+<li>
+<code>release.json</code>’s <code>layers.species</code> carries the <code>h3:species_table</code> fields (<code>href_template</code>, <code>resolutions</code>, <code>partition_by</code>, <code>sorted_by</code>, <code>columns</code>, <code>lookup</code>) plus <code>name_key</code>, <code>null_class</code>, <code>heads</code>, the column types and the rows, files and bytes per resolution (<code>by_res</code>).</li>
+<li>The <code>place</code> and <code>place_exact</code> layers of 0.8.0 and 0.9.0 are unchanged: they stay out of <code>stats.parquet</code>, and <code>collection.json</code> lists them under <code>obis:layers</code>.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.9.0" id="obisindicators-090">obisindicators 0.9.0<a class="anchor" aria-label="anchor" href="#obisindicators-090"></a></h2>
 <ul><li>

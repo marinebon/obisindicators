@@ -293,6 +293,17 @@ Rscript data-raw/migrate_add_spatial_cluster.R <in.duckdb> <out.duckdb>
 - `R/taxon_gapfill.R` — WoRMS REST supplement closing the `taxon`
   coverage gap.
 - `R/eov.R` — Essential Ocean Variables as multi-seed AphiaID subtrees.
+- `R/export.R` —
+  [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
+  (the obis-h3 release: indicator, decade and year layers, stats,
+  manifest, `release.json`),
+  [`obis_h3_year_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_year_sql.md),
+  [`obis_h3_stac_collection()`](https://marinebon.org/obisindicators/reference/obis_h3_stac_collection.md)
+  (the `h3` STAC profile).
+- `R/species.R` — the release’s species x hex x count table: the SQL
+  builders, the lookup with `name_key` and `lineage`, the heads list,
+  the explicit per-partition writer, and the subtree query that must
+  match h3t’s (`test-species-table.R`).
 - `R/visualize.R` —
   [`gmap_indicator()`](https://marinebon.org/obisindicators/reference/gmap_indicator.md)
   static ggplot maps, plus

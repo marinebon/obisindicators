@@ -49,6 +49,13 @@
 <url><loc>https://marinebon.org/obisindicators/reference/obis_eov_seeds.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/obis_eov_sql.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_h3_species_heads.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_h3_species_lookup_sql.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_h3_species_sql.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_h3_species_subtree_sql.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_h3_stac_collection.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_h3_write_partitions.html</loc></url>
+<url><loc>https://marinebon.org/obisindicators/reference/obis_h3_year_sql.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/obis_h3t_query.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/obis_h3t_sql.html</loc></url>
 <url><loc>https://marinebon.org/obisindicators/reference/obis_h3t_url.html</loc></url>

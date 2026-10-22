@@ -1,5 +1,71 @@
 # Changelog
 
+## obisindicators 0.10.0
+
+- **Year layers.**
+  [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
+  writes `year/all/year=<yyyy>/res=<r>/data_0.parquet` and
+  `year/eov/eov=<eov>/year=<yyyy>/res=<r>/data_0.parquet`: the decade
+  layers per year, one partition per year present from `min(date_year)`
+  to `max(date_year)`. New arguments `res_year` (default 1-5;
+  `integer(0)` skips them) and `years` (default NULL, every year). The
+  SQL is the new exported
+  [`obis_h3_year_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_year_sql.md),
+  built on the same indicator SQL as `idx_h3` and the decade layers
+  (which now share its builder). `release.json` gains `layers.year_all`,
+  `layers.year_eov`, `res_year`, `years` (the years written),
+  `year_range` and `year_note`; `files.parquet` and `stats.parquet`
+  cover them.
+- **`stats.parquet` has a `year` column** (NA outside the year layers),
+  so its rows are one per layer x key x decade x year x res x variable.
+- **The species x hex x count table** (layer `species`, sized and
+  checked against h3t in spike 2 of the Ocean Metrics restructure), so a
+  browser answers a WoRMS subtree or a cell’s species list from static
+  files: `species/res=<r>/class=<class>/data_0.parquet` with columns
+  `h3, cell_id, name_key, aphiaid, n` (`n` = records) at the resolutions
+  `res_species` (default 3, 4, 5; res 4 rolled up from the res-5 tier),
+  one file per (res, class), sorted by `cell_id, aphiaid` in row groups
+  of 100k (ZSTD); a NULL class is written `class=_none`, since
+  DuckDB-WASM reads `__HIVE_DEFAULT_PARTITION__` as a string.
+  `species/species.parquet` is the lookup, one row per aphiaid with
+  `name_key` (a dense integer per species name: richness counts names,
+  as h3t does), the OBIS ranks, `lineage` (the aphiaid then its
+  ancestors up the store’s `taxon` table, walked from the occurrence’s
+  own aphiaid, so a synonym keeps its own parent) and `records`.
+  `species/heads.json` lists the taxa that still need a pre-aggregated
+  head (Animalia and every taxon spanning two or more named classes: 125
+  in the v20261012 global store); the heads themselves are not built in
+  this version. `species_decades = TRUE` also writes
+  `species_decade/res=<r>/decade=<d>/class=<class>/data_0.parquet`
+  (default off). A store without aphiaids (the demo store built from
+  `occ_SAtlantic`) gets no species layer.
+- New exported functions for the table, each tested on a synthetic
+  store:
+  [`obis_h3_species_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_sql.md),
+  [`obis_h3_species_lookup_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_lookup_sql.md),
+  [`obis_h3_species_heads()`](https://marinebon.org/obisindicators/reference/obis_h3_species_heads.md),
+  [`obis_h3_write_partitions()`](https://marinebon.org/obisindicators/reference/obis_h3_write_partitions.md)
+  (the explicit per-partition writer: DuckDB’s `PARTITION_BY` wrote
+  thousands of files per resolution and lost the sort) and
+  [`obis_h3_species_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_subtree_sql.md)
+  (a subtree’s indicators from the exported files, which reproduce the
+  h3t subtree SQL cell for cell: `n` and `sp` exactly, Shannon, Simpson
+  and ES to 1e-9).
+- **`collection.json`**: the export writes a STAC Collection of the
+  release for the Ocean Metrics `h3` profile,
+  [`obis_h3_stac_collection()`](https://marinebon.org/obisindicators/reference/obis_h3_stac_collection.md),
+  with `h3:species_table` for the species layer and the other layers
+  under `obis:layers`. It validates against `h3.schema.json` (tested
+  with jsonvalidate and with `om-catalog validate h3` when the platform
+  checkout is present).
+- `release.json`’s `layers.species` carries the `h3:species_table`
+  fields (`href_template`, `resolutions`, `partition_by`, `sorted_by`,
+  `columns`, `lookup`) plus `name_key`, `null_class`, `heads`, the
+  column types and the rows, files and bytes per resolution (`by_res`).
+- The `place` and `place_exact` layers of 0.8.0 and 0.9.0 are unchanged:
+  they stay out of `stats.parquet`, and `collection.json` lists them
+  under `obis:layers`.
+
 ## obisindicators 0.9.0
 
 - **New

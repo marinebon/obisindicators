@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -183,6 +183,10 @@
 <code>R/taxon_gapfill.R</code> — WoRMS REST supplement closing the <code>taxon</code> coverage gap.</li>
 <li>
 <code>R/eov.R</code> — Essential Ocean Variables as multi-seed AphiaID subtrees.</li>
+<li>
+<code>R/export.R</code> — <code><a href="reference/obis_h3_export_parquet.html">obis_h3_export_parquet()</a></code> (the obis-h3 release: indicator, decade and year layers, stats, manifest, <code>release.json</code>), <code><a href="reference/obis_h3_year_sql.html">obis_h3_year_sql()</a></code>, <code><a href="reference/obis_h3_stac_collection.html">obis_h3_stac_collection()</a></code> (the <code>h3</code> STAC profile).</li>
+<li>
+<code>R/species.R</code> — the release’s species x hex x count table: the SQL builders, the lookup with <code>name_key</code> and <code>lineage</code>, the heads list, the explicit per-partition writer, and the subtree query that must match h3t’s (<code>test-species-table.R</code>).</li>
 <li>
 <code>R/visualize.R</code> — <code><a href="reference/gmap_indicator.html">gmap_indicator()</a></code> static ggplot maps, plus <code><a href="reference/hex_sf.html">hex_sf()</a></code>, <code><a href="reference/gmap_cells.html">gmap_cells()</a></code>, <code><a href="reference/plot_scale_curves.html">plot_scale_curves()</a></code>, <code><a href="reference/plot_spue_sdm.html">plot_spue_sdm()</a></code>.</li>
 <li>

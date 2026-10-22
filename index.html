@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -104,12 +104,39 @@
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://marinebon.org/obisindicators">obisindicators</a></span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
+<h2 id="data-layout">Data layout<a class="anchor" aria-label="anchor" href="#data-layout"></a>
+</h2>
+<p><code><a href="reference/obis_h3_export_parquet.html">obis_h3_export_parquet()</a></code> writes an obis_h3 store to the <code>obis-h3</code> release, a folder of hive-partitioned Parquet that a static web app reads with DuckDB-WASM. Every indicator file has the columns <code>h3</code> (hex string), <code>cell_id</code>, <code>n</code>, <code>sp</code>, <code>shannon</code>, <code>simpson</code>, <code>es</code>; the partition keys are in the path, and each partition is exactly one <code>data_0.parquet</code>.</p>
+<pre><code>&lt;release&gt;/
+  release.json                                     layers, row counts, columns, notes
+  collection.json                                  STAC Collection (Ocean Metrics h3 profile)
+  files.parquet                                    manifest: layer, path, url_path, rows, bytes, parent
+  stats.parquet                                    value ranges per layer x key x decade x year x res x variable
+  taxon_groups.parquet                             the taxa and EOVs on offer, with totals and paths
+  all/res=&lt;1..5&gt;/data_0.parquet                    all taxa, all years
+  all/res=&lt;6,7&gt;/p=&lt;parent&gt;/data_0.parquet          res 6 and 7 split by res-2 / res-3 parent cell
+  eov/eov=&lt;eov&gt;/res=&lt;r&gt;/                           per Essential Ocean Variable
+  taxon/rank=&lt;rank&gt;/taxon=&lt;taxon&gt;/res=&lt;r&gt;/         per phylum, class, order, family
+  decade/all/decade=&lt;yyy0&gt;/res=&lt;r&gt;/                per decade (res 1-5)
+  decade/eov/eov=&lt;eov&gt;/decade=&lt;yyy0&gt;/res=&lt;r&gt;/      per decade and EOV
+  year/all/year=&lt;yyyy&gt;/res=&lt;r&gt;/                    per year, every year present (res 1-5)
+  year/eov/eov=&lt;eov&gt;/year=&lt;yyyy&gt;/res=&lt;r&gt;/          per year and EOV
+  species/res=&lt;3,4,5&gt;/class=&lt;class&gt;/data_0.parquet species x hex x count: h3, cell_id, name_key, aphiaid, n
+  species/species.parquet                          one row per aphiaid: name_key, names, ranks, lineage, records
+  species/heads.json                               taxa that still need a pre-aggregated head
+  species_decade/res=&lt;r&gt;/decade=&lt;d&gt;/class=&lt;class&gt;/ per decade (species_decades = TRUE only)
+  place/coll=&lt;slug&gt;/data_0.parquet                 per-place pooled indicators (place_collections only)
+  place_exact/coll=&lt;slug&gt;/indicators.parquet       exact point-in-polygon indicators, plus years.parquet
+                                                   and meta.json (place_exact only)</code></pre>
+<p>The species table answers a WoRMS subtree, or the species of a cell, in the browser: its files are sorted by <code>cell_id, aphiaid</code>, so a cell reads one row group, and a NULL class is written <code>class=_none</code>. A subtree is the aphiaids whose <code>lineage</code> contains the taxon; <code><a href="reference/obis_h3_species_subtree_sql.html">obis_h3_species_subtree_sql()</a></code> writes that query, and it matches the store’s own subtree SQL cell for cell. Richness counts species names (<code>name_key</code>), not aphiaids. Taxa spanning several classes (Animalia, and the 125 taxa listed in <code>heads.json</code> for the 2026-10 global store) read many class files, so they are to get pre-aggregated heads in the next version.</p>
+</div>
+<div class="section level2">
 <h2 id="developer-stuff">Developer Stuff<a class="anchor" aria-label="anchor" href="#developer-stuff"></a>
 </h2>
 <div class="section level3">
 <h3 id="setup">Setup<a class="anchor" aria-label="anchor" href="#setup"></a>
 </h3>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_local</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="fu">testthat</span><span class="fu">::</span><span class="fu"><a href="https://testthat.r-lib.org/reference/test_package.html" class="external-link">test_local</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>When editing locally, you will need to reload the <code>obisindicators</code> from your local copy of the files. To do this use <code>devtools::load_all()</code>. Additionally, you will need to run <code>document()</code> to update things from roxygen docstrings. All of this is summarized in the cheatsheet in RStudio under <code>Help &gt; Cheat Sheets &gt; Package Dev w/ Devtools</code>. You must use the workflow outlined in <a href="https://www.rstudio.org/links/package_development_cheat_sheet" class="external-link">that pdf</a> or you are gonna have a bad time.</p>
