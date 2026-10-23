@@ -29,7 +29,8 @@ obis_place_exact_write(result, dir, coll)
 
 ## Value
 
-invisibly, the paths of the three files written.
+invisibly, the paths of the files written (indicators, years, species
+when present, meta.json).
 
 ## Details
 
@@ -37,6 +38,8 @@ invisibly, the paths of the three files written.
                                                        simpson, es, hill_1, hill_2, bp, density
     <dir>/place_exact/coll=<coll>/years.parquet        place_id, eov, year, n, sp, shannon,
                                                        simpson, es, hill_1, hill_2, bp, density
+    <dir>/place_exact/coll=<coll>/species.parquet      place_id, aphiaid, name_key, n, year_min,
+                                                       year_max (when the result has species)
     <dir>/place_exact/coll=<coll>/meta.json            coll, places, rows, records_in/out/total,
                                                        overlaps, created, obisindicators_version
 

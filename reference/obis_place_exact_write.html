@@ -82,7 +82,8 @@ tables of the <code>obis-h3</code> release: values only, no geometry.</p>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>invisibly, the paths of the three files written.</p>
+    <p>invisibly, the paths of the files written (indicators, years,
+species when present, meta.json).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -90,8 +91,10 @@ tables of the <code>obis-h3</code> release: values only, no geometry.</p>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>                                                   simpson, es, hill_1, hill_2, bp, density</span>
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="sc">&lt;</span>dir<span class="sc">&gt;</span><span class="er">/</span>place_exact<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>coll<span class="sc">&gt;</span><span class="er">/</span>years.parquet        place_id, eov, year, n, sp, shannon,</span>
 <span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>                                                   simpson, es, hill_1, hill_2, bp, density</span>
-<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="sc">&lt;</span>dir<span class="sc">&gt;</span><span class="er">/</span>place_exact<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>coll<span class="sc">&gt;</span><span class="er">/</span>meta.json            coll, places, rows, records_in<span class="sc">/</span>out<span class="sc">/</span>total,</span>
-<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>                                                   overlaps, created, obisindicators_version</span></code></pre><p></p></div>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="sc">&lt;</span>dir<span class="sc">&gt;</span><span class="er">/</span>place_exact<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>coll<span class="sc">&gt;</span><span class="er">/</span>species.parquet      place_id, aphiaid, name_key, n, year_min,</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>                                                   <span class="fu">year_max</span> (when the result has species)</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="sc">&lt;</span>dir<span class="sc">&gt;</span><span class="er">/</span>place_exact<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>coll<span class="sc">&gt;</span><span class="er">/</span>meta.json            coll, places, rows, records_in<span class="sc">/</span>out<span class="sc">/</span>total,</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>                                                   overlaps, created, obisindicators_version</span></code></pre><p></p></div>
 <p>The Parquet files are ZSTD compressed (DuckDB <code>COPY</code>), ordered by place.</p>
     </div>
 

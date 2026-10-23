@@ -17,6 +17,8 @@ obis_place_indicators_exact(
   decades = TRUE,
   years = TRUE,
   esn = 50L,
+  species = TRUE,
+  lookup = NULL,
   max_vertices = 256L,
   con = NULL,
   memory_limit = NULL,
@@ -70,6 +72,22 @@ obis_place_indicators_exact(
 
   expected sample size for ES(n); default 50.
 
+- species:
+
+  also return the species of each place (default TRUE): one row per
+  place x aphiaid x name with its records and first and last year, from
+  the same point-in-polygon pass, so the Place page lists exact species
+  rather than those of the H3 cells it overlaps.
+
+- lookup:
+
+  optional species lookup giving `name_key` (the release's
+  `species/species.parquet`, as a path, or a data frame with `species`
+  and `name_key`): a place's species name gets the lookup's `name_key`,
+  so the rows join the release lookup; a name the lookup lacks gets a
+  key above its largest. Without it, `name_key` is a dense rank of the
+  names in the result.
+
 - max_vertices:
 
   the most vertices a polygon piece may have before it is cut into
@@ -115,6 +133,13 @@ a list with
   and `density` (`n / area_km2`, records per km2).
 
 - `years`: the same per place x `eov` x `year`.
+
+- `species` (with `species = TRUE`): one row per place x `aphiaid` x
+  `name_key` with records: `place_id`, `aphiaid`, `name_key` (one per
+  species name: a place's distinct `name_key` count is its `sp`), `n`
+  (records; they sum to the place's all-taxa `n`), `year_min`,
+  `year_max` (NA when no record has a year), ordered by place and
+  records, most first.
 
 - `diagnostics`: `records_in` (records summed over the places, all taxa
   and years), `records_out` (filtered records outside every place),

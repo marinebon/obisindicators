@@ -17,7 +17,9 @@ obis_h3_export_parquet(
   res_year = 1:5,
   years = NULL,
   res_species = c(3L, 4L, 5L),
-  species_decades = FALSE,
+  species_decades = TRUE,
+  res_species_decade = c(3L, 4L),
+  res_species_flat = 3L,
   heads = TRUE,
   res_heads = 1:7,
   parent_res = c(`6` = 2L, `7` = 3L),
@@ -81,7 +83,18 @@ obis_h3_export_parquet(
 - species_decades:
 
   also write the per-decade species table `species_decade/` (default
-  FALSE).
+  TRUE, 0.11.0), at `res_species_decade`.
+
+- res_species_decade:
+
+  the resolutions of the per-decade species table (default 3 and 4: the
+  decade filter on a WoRMS subtree).
+
+- res_species_flat:
+
+  the resolutions of the unpartitioned species table
+  `species_flat/res=<r>.parquet` (default 3: the cell query);
+  `integer(0)` skips it.
 
 - heads:
 
@@ -201,7 +214,8 @@ invisibly, a character vector of the files written (absolute paths).
       species/res=<r>/class=<class>/data_0.parquet  species x hex x count (res in res_species)
       species/species.parquet                   the species lookup: names, name_key, lineage
       species/heads.json                        the pre-aggregated heads and the layer serving each
-      species_decade/res=<r>/decade=<d>/class=<class>/  per decade (species_decades = TRUE)
+      species_decade/res=<r>/decade=<d>/class=<class>/  per decade (res in res_species_decade)
+      species_flat/res=<r>.parquet              one cell-sorted file, every class (res_species_flat)
       place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
       place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
                                                 exact point-in-polygon indicators (only with place_exact)
@@ -308,7 +322,14 @@ store's `taxon` table); a subtree is `list_contains(lineage, <aphiaid>)`
 `species/heads.json` lists the taxa that need a pre-aggregated head
 ([`obis_h3_species_heads()`](https://marinebon.org/obisindicators/reference/obis_h3_species_heads.md):
 Animalia and every taxon spanning two or more named classes) and the
-layer that serves each.
+layer that serves each. Each species row also carries `year_min` and
+`year_max`, the first and last year the aphiaid was recorded in the cell
+(within the decade in `species_decade/`), for the Cell pane.
+`species_flat/res=<r>.parquet` (default res 3) is the same table in one
+file for every class, sorted by `cell_id, aphiaid` in row groups of
+`row_group_rows`, so the species of one cell are a range read of one
+file (spike 2: 0.53 MB for a res-1 cell) instead of one row group per
+class file.
 
 **The heads** (`heads = TRUE`) are written as ordinary taxon layers,
 `taxon/rank=<rank>/taxon=<name>/res=<r>/` at `res_heads`

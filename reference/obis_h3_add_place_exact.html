@@ -7,7 +7,8 @@ layer's rows, files and bytes over every collection on disk), and,
 with manifest = TRUE, files.parquet has its place_exact rows replaced by
 one row per file on disk and files$n_files in release.json is updated.
 The layer's template, columns and note are kept when release.json already has
-them. Nothing else in the release is touched (stats.parquet, the other layers'
+them, except that a collection with species.parquet adds the species template and
+columns to an entry written before 0.11.0. Nothing else in the release is touched (stats.parquet, the other layers'
 rows, collection.json), and running it again for the same coll gives the
 same entries."><meta property="og:description" content="obis_place_exact_write() puts place_exact/coll=&amp;lt;coll&amp;gt;/ into a release
 directory; this registers it the way obis_h3_export_parquet() does for a
@@ -17,7 +18,8 @@ layer's rows, files and bytes over every collection on disk), and,
 with manifest = TRUE, files.parquet has its place_exact rows replaced by
 one row per file on disk and files$n_files in release.json is updated.
 The layer's template, columns and note are kept when release.json already has
-them. Nothing else in the release is touched (stats.parquet, the other layers'
+them, except that a collection with species.parquet adds the species template and
+columns to an entry written before 0.11.0. Nothing else in the release is touched (stats.parquet, the other layers'
 rows, collection.json), and running it again for the same coll gives the
 same entries."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -80,7 +82,8 @@ layer's <code>rows</code>, <code>files</code> and <code>bytes</code> over every 
 with <code>manifest = TRUE</code>, <code>files.parquet</code> has its <code>place_exact</code> rows replaced by
 one row per file on disk and <code>files$n_files</code> in <code>release.json</code> is updated.
 The layer's <code>template</code>, <code>columns</code> and <code>note</code> are kept when <code>release.json</code> already has
-them. Nothing else in the release is touched (<code>stats.parquet</code>, the other layers'
+them, except that a collection with <code>species.parquet</code> adds the species template and
+columns to an entry written before 0.11.0. Nothing else in the release is touched (<code>stats.parquet</code>, the other layers'
 rows, <code>collection.json</code>), and running it again for the same <code>coll</code> gives the
 same entries.</p>
     </div>

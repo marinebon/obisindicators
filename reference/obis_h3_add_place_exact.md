@@ -10,10 +10,12 @@ its `meta.json`, plus the layer's `rows`, `files` and `bytes` over every
 collection on disk), and, with `manifest = TRUE`, `files.parquet` has
 its `place_exact` rows replaced by one row per file on disk and
 `files$n_files` in `release.json` is updated. The layer's `template`,
-`columns` and `note` are kept when `release.json` already has them.
-Nothing else in the release is touched (`stats.parquet`, the other
-layers' rows, `collection.json`), and running it again for the same
-`coll` gives the same entries.
+`columns` and `note` are kept when `release.json` already has them,
+except that a collection with `species.parquet` adds the species
+template and columns to an entry written before 0.11.0. Nothing else in
+the release is touched (`stats.parquet`, the other layers' rows,
+`collection.json`), and running it again for the same `coll` gives the
+same entries.
 
 ## Usage
 

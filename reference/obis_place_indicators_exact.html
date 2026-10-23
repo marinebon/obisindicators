@@ -76,6 +76,8 @@ extension, with no H3 approximation. This complements
 <span>  decades <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  years <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  esn <span class="op">=</span> <span class="fl">50L</span>,</span>
+<span>  species <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  lookup <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  max_vertices <span class="op">=</span> <span class="fl">256L</span>,</span>
 <span>  con <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  memory_limit <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -130,6 +132,21 @@ integer vector.</p></dd>
 <dd><p>expected sample size for ES(n); default 50.</p></dd>
 
 
+<dt id="arg-species">species<a class="anchor" aria-label="anchor" href="#arg-species"></a></dt>
+<dd><p>also return the species of each place (default TRUE): one row
+per place x aphiaid x name with its records and first and last year, from
+the same point-in-polygon pass, so the Place page lists exact species
+rather than those of the H3 cells it overlaps.</p></dd>
+
+
+<dt id="arg-lookup">lookup<a class="anchor" aria-label="anchor" href="#arg-lookup"></a></dt>
+<dd><p>optional species lookup giving <code>name_key</code> (the release's
+<code>species/species.parquet</code>, as a path, or a data frame with <code>species</code> and
+<code>name_key</code>): a place's species name gets the lookup's <code>name_key</code>, so the
+rows join the release lookup; a name the lookup lacks gets a key above its
+largest. Without it, <code>name_key</code> is a dense rank of the names in the result.</p></dd>
+
+
 <dt id="arg-max-vertices">max_vertices<a class="anchor" aria-label="anchor" href="#arg-max-vertices"></a></dt>
 <dd><p>the most vertices a polygon piece may have before it is
 cut into quadrants (default 256, at least 8). It only affects speed and
@@ -171,6 +188,11 @@ where <code>n &lt; esn</code>), <code>hill_1</code> (<code>exp(shannon)</code>),
 <code>bp</code> (Berger-Parker, <code>max(ni) / n</code>, the <code>maxp</code> of <code><a href="calc_indicators.html">calc_indicators()</a></code>)
 and <code>density</code> (<code>n / area_km2</code>, records per km2).</p></li>
 <li><p><code>years</code>: the same per place x <code>eov</code> x <code>year</code>.</p></li>
+<li><p><code>species</code> (with <code>species = TRUE</code>): one row per place x <code>aphiaid</code> x
+<code>name_key</code> with records: <code>place_id</code>, <code>aphiaid</code>, <code>name_key</code> (one per
+species name: a place's distinct <code>name_key</code> count is its <code>sp</code>), <code>n</code>
+(records; they sum to the place's all-taxa <code>n</code>), <code>year_min</code>, <code>year_max</code>
+(NA when no record has a year), ordered by place and records, most first.</p></li>
 <li><p><code>diagnostics</code>: <code>records_in</code> (records summed over the places, all taxa and
 years), <code>records_out</code> (filtered records outside every place),
 <code>records_total</code> (filtered records), <code>records_in_unique</code> (<code>records_total - records_out</code>, <code>records_in</code> without double counting overlaps), <code>overlaps</code>

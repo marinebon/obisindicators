@@ -44,6 +44,44 @@
   `rank_layer`, `homonym`) and `layer`; `release.json` gets
   `layers.taxon.heads` and `layers.species.heads.n_built`. New arguments
   `heads` (default TRUE) and `res_heads`.
+- **The species table carries the first and last year.**
+  [`obis_h3_species_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_sql.md)
+  and every species file gain `year_min` and `year_max` (SMALLINT; the
+  first and last year the aphiaid was recorded in the cell, NULL when no
+  record has a year; within the decade in the decade variant), for the
+  Cell pane.
+- **The decade species table is on by default**, at res 3 and 4:
+  `species_decades` now defaults to TRUE and the new
+  `res_species_decade` (default `c(3, 4)`) sets its resolutions (it
+  followed `res_species` before), for the decade filter on a WoRMS
+  subtree. `layers.species_decade` in `release.json` lists its
+  `resolutions`, `decades` and `columns` (with `period = "decade"`).
+- **`species_flat/res=<r>.parquet`**: the species table in one file per
+  resolution for every class, sorted by `cell_id, aphiaid` in row groups
+  of `row_group_rows`, so the species of a cell are a range read of one
+  file (spike 2: 0.53 MB read for a res-1 cell against 5.3 MB from the
+  class files). New argument `res_species_flat` (default 3);
+  `release.json` gets `layers.species_flat`.
+- **Exact species per place.**
+  [`obis_place_indicators_exact()`](https://marinebon.org/obisindicators/reference/obis_place_indicators_exact.md)
+  returns `species` (new argument `species = TRUE`): one row per place x
+  `aphiaid` x `name_key` with `n` records and `year_min`, `year_max`,
+  from the same point-in-polygon pass as the indicators, so the Place
+  page’s species list is the record and not the H3 cells’ (the species’
+  `n` sum to the place’s `n`, and its distinct `name_key` count is its
+  `sp`). New argument `lookup` (the release’s `species/species.parquet`,
+  a path or a data frame) gives the release’s `name_key` by name, so the
+  rows join the lookup; a name it lacks gets a key above its largest.
+  [`obis_place_exact_write()`](https://marinebon.org/obisindicators/reference/obis_place_exact_write.md)
+  writes `place_exact/coll=<coll>/species.parquet`
+  (`place_id, aphiaid, name_key, n, year_min, year_max`, most records
+  first) and counts it in `meta.json`;
+  [`obis_h3_add_place_exact()`](https://marinebon.org/obisindicators/reference/obis_h3_add_place_exact.md)
+  lists it in `files.parquet` and adds its template and columns to a
+  `release.json` entry written before 0.11.0. The export passes the
+  store’s lookup; `data-raw/run_place_exact.R` reads
+  `<out dir>/species/species.parquet` (or `OBIS_SPECIES_LOOKUP`) and
+  fails when the species do not sum to the indicators.
 - Fix: `taxon_groups.parquet` no longer fails for a taxon layer without
   res 1.
 
