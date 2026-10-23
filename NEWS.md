@@ -1,3 +1,17 @@
+# obisindicators 0.12.1
+
+* **The monthly obis-h3 upload writes both stores** (Ocean Metrics build week 6). New
+  `data-raw/publish_obis_h3.sh` uploads a staged release on the host through
+  oceanmetrics/platform `scripts/om-publish.sh`: the release folder, a count check on S3 and R2, then
+  `latest.json`, then the stable `collection.json`, to R2 `oceanmetrics-io-public-enam` (served by
+  `storage.oceanmetrics.io`) and S3 `oceanmetrics.io-public`, never deleting, the replaced R2 copies of the
+  two pointers kept under `obis-h3/_history/<date>/`. `refresh_obis_h3.sh` gains `OBIS_UPLOAD=host` (stage
+  only; `aws`, the S3-only upload, stays the default when it runs alone) and `run_refresh_docker.sh` sets it
+  and runs the host upload after the container, so the R2 keys never enter the image.
+* `refresh_obis_h3.sh`'s `PUBLIC_BASE` (the root of the hrefs in `latest.json` and `collection.json`, and
+  where the previous release is read) defaults to `https://storage.oceanmetrics.io/obis-h3`, so the next
+  release keeps the storage-host hrefs the published files carry since the cutover of 2026-10-23.
+
 # obisindicators 0.12.0
 
 * **`species_flat` per resolution.** `obis_h3_export_parquet()` writes

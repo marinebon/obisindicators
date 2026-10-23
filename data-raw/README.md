@@ -9,6 +9,7 @@ msens`). Not on a laptop. Excluded from the built package (`.Rbuildignore`).
 | `build_taxon_parquet.R` | WoRMS `taxon.parquet` from a DwC `taxon.txt`; run by the monthly refresh when ChecklistBank's WoRMS version changes (step 2) |
 | `build_obis_h3_duckdb.R` | builds `/share/data/obis/obis_h3_global_vYYYYMMDD.duckdb` from the local OBIS parquet snapshot (in the obis-h3 image, or msens's `plumber` container) |
 | `deploy_obis_h3.sh` | swaps the store the `h3t` tile service serves (needs sudo), restarts h3t, verifies |
+| `publish_obis_h3.sh` | the upload of a staged release on the host, through oceanmetrics/platform `scripts/om-publish.sh` (both stores, R2 then S3, never a delete): the folder, a count check on each store, `latest.json`, `collection.json`; `--dry-run` |
 | `refresh_obis_h3.sh` | the monthly `obis-h3` release for the obis-hex app: sync, build, export, validate, upload, `latest.json` |
 | `run_place_exact.R` | the exact point-in-polygon place indicators (`obis_place_indicators_exact()`) for one polygon collection, standalone, from the local OBIS snapshot; the Mac mini runs it in tmux (below) |
 | `run_refresh_docker.sh` | runs `refresh_obis_h3.sh` in the `docker/Dockerfile` image on the Mac mini (Colima), data on the external drive; copies the new store to msens for h3t |
@@ -87,12 +88,24 @@ the checkout's `DESCRIPTION`.
 - **Budgets** (mini, 48 GB): build 16GB / 6 threads / 200GB spill, export 12GB / 6 threads (env-overridable).
 - **One run at a time**: the container's name (`obis-h3-refresh`; exit 3 if it exists).
 - **AWS**: `~/.aws` mounted read-only; `AWS_PROFILE` is passed on.
+- **The upload runs on the host** (since 2026-10-23): the container runs with `OBIS_UPLOAD=host`, so steps f, g and g2
+  only stage (`latest.json` and the stable `collection.json` are written and validated, nothing is uploaded), and the
+  wrapper then runs `publish_obis_h3.sh`, which writes the release folder, then `latest.json`, then `collection.json`
+  through `om-publish.sh` to **both stores**: R2 `oceanmetrics-io-public-enam` (what `storage.oceanmetrics.io`
+  serves) and S3 `oceanmetrics.io-public`, additively, content types by extension, the R2 copies of the two pointers
+  they replace kept under `obis-h3/_history/<date>/` (R2 has no object versions). The R2 keys stay on the host (the
+  rclone wrapper `~/.config/oceanmetrics/rclone-r2.sh`); they never enter the image. `OM_PUBLISH` names the script
+  (obis-h3.yml checks platform out; by hand, `~/Github/oceanmetrics/platform`). `OBIS_UPLOAD=aws` is the old S3-only
+  upload from the container. `PUBLIC_BASE`, the root of the hrefs in `latest.json` and `collection.json`, is the
+  storage host (`https://storage.oceanmetrics.io/obis-h3`), as the published files have been since the cutover.
+  Tested with fakes in `tests/testthat/test-publish-obis-h3.R`.
 - **After a published release** the new store is rsynced to msens `/share/data/obis/` for h3t (a failure only
   warns); then on msens, by hand: `deploy_obis_h3.sh` (below). `--no-msens` skips the copy.
 - **Done marker** `obis/log/refresh_YYYYMMDD.done` on the drive, next to the log.
 
 ```bash
-data-raw/run_refresh_docker.sh --dry-run                # VM + image + the script's dry run
+data-raw/run_refresh_docker.sh --dry-run                # VM + image + the script's dry run (+ --release vX: the upload's om-publish dry run)
+data-raw/publish_obis_h3.sh --dry-run /Volumes/msens_big/_big/obis/obis-h3/v20261012 v20261012 latest.json collection.json   # the upload alone
 data-raw/run_refresh_docker.sh                          # the monthly run
 data-raw/run_refresh_docker.sh --keep-vm --skip-sync --skip-build --skip-upload --release v20260728   # test an export
 ```

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Monthly refresh of the obis-h3 release that the obis-hex app reads:
 #   sync OBIS open data -> build the H3 store -> export hive-partitioned Parquet
-#   -> validate -> upload to S3 -> publish latest.json.
+#   -> validate -> upload to S3 -> publish latest.json (OBIS_UPLOAD=host: staged here, uploaded to both stores
+#   on the host by data-raw/publish_obis_h3.sh through om-publish.sh; run_refresh_docker.sh does that).
 # Runs either on a Linux host that has the `plumber` container (msens: R through
 # `docker exec plumber`), or inside the obis-h3 image (data-raw/docker/Dockerfile) with
 # BUILD_CONTAINER="" so R runs directly; data-raw/run_refresh_docker.sh does the latter on the
@@ -54,7 +55,12 @@
 #   EXPORT_MEMORY=6GB EXPORT_THREADS=2 (export)  STORE=<.duckdb> (with --skip-build)
 #   WORMS_DIR=$(dirname $TAXON_PARQUET)/worms  CLB_DATASET=2011 (ChecklistBank key of WoRMS)
 #   S3_BUCKET=oceanmetrics.io-public  S3_PREFIX=obis-h3
-#   PUBLIC_BASE=https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3
+#   PUBLIC_BASE=https://storage.oceanmetrics.io/obis-h3 (the storage host since 2026-10-23; the hrefs of latest.json and
+#     collection.json are written from it, and the previous release is read from it)
+#   OBIS_UPLOAD=aws (f, g, g2 upload with aws s3, S3 only) or host (they only stage: latest.json and collection.json are
+#     written and validated, the folders and files are written to $GITHUB_OUTPUT as publish_dir=, latest=, stable=,
+#     and data-raw/publish_obis_h3.sh uploads them on the host through om-publish.sh to both stores;
+#     run_refresh_docker.sh sets host)
 #   PREV_RELEASE=<tag to compare with>  ALLOW_NO_PREV=1 (skip the comparison if none can be read)
 #   EXPORT_OVERWRITE=1 (replace a COMPLETE existing $DIR_OUT/<release>)
 #   OBIS_PLACE_COLLECTIONS="<slug> [<slug> ...]" (default empty = off): add the per-place layer,
@@ -91,7 +97,9 @@ CLB_DATASET="${CLB_DATASET:-2011}"
 CLB_API="https://api.checklistbank.org/dataset/$CLB_DATASET"
 S3_BUCKET="${S3_BUCKET:-oceanmetrics.io-public}"
 S3_PREFIX="${S3_PREFIX:-obis-h3}"
-PUBLIC_BASE="${PUBLIC_BASE:-https://s3.us-east-1.amazonaws.com/$S3_BUCKET/$S3_PREFIX}"
+PUBLIC_BASE="${PUBLIC_BASE:-https://storage.oceanmetrics.io/$S3_PREFIX}"
+OBIS_UPLOAD="${OBIS_UPLOAD:-aws}"
+case "$OBIS_UPLOAD" in aws|host) ;; *) echo "OBIS_UPLOAD must be aws or host, got '$OBIS_UPLOAD'" >&2; exit 1 ;; esac
 LOCK_FILE="${LOCK_FILE:-$OBIS_DIR/refresh_obis_h3.lock}"
 SYNC_MARKER="$OBIS_DIR/occurrence.synced_at"
 
@@ -204,7 +212,7 @@ $(du -sh "$DIR_OUT"/v* 2>/dev/null | sed 's/^/    /' || true)
 else
   echo "sync and build both skipped: disk check not needed"
 fi
-if [ "$SKIP_UPLOAD" -eq 0 ] && [ "$DRY" -eq 0 ]; then
+if [ "$SKIP_UPLOAD" -eq 0 ] && [ "$DRY" -eq 0 ] && [ "$OBIS_UPLOAD" = aws ]; then
   # fail now, not after hours of build, if S3 credentials are missing
   aws sts get-caller-identity >/dev/null || die "no usable AWS credentials for the upload"
 fi
@@ -436,13 +444,19 @@ fi
 # ---- (f) upload -----------------------------------------------------------------
 DEST="s3://$S3_BUCKET/$S3_PREFIX/$RELEASE/"
 if [ "$SKIP_UPLOAD" -eq 0 ]; then
-  step "f. upload -> $DEST (no --delete)"
-  run aws s3 sync "$OUT/" "$DEST" --only-show-errors
-  if [ "$DRY" -eq 0 ]; then
-    n_local=$(find "$OUT" -type f | wc -l)
-    n_remote=$(aws s3 ls "$DEST" --recursive | wc -l)
-    echo "files: local $n_local, on S3 $n_remote"
-    [ "$n_remote" -ge "$n_local" ] || die "S3 holds fewer files ($n_remote) than the export ($n_local): latest.json NOT written"
+  if [ "$OBIS_UPLOAD" = host ]; then
+    # the folder, latest.json and collection.json are uploaded on the host, in this order, by publish_obis_h3.sh
+    step "f. upload of $OUT deferred to the host (OBIS_UPLOAD=host: data-raw/publish_obis_h3.sh, both stores)"
+    [ -z "${GITHUB_OUTPUT:-}" ] || [ "$DRY" -eq 1 ] || echo "publish_dir=$OUT" >> "$GITHUB_OUTPUT"
+  else
+    step "f. upload -> $DEST (no --delete)"
+    run aws s3 sync "$OUT/" "$DEST" --only-show-errors
+    if [ "$DRY" -eq 0 ]; then
+      n_local=$(find "$OUT" -type f | wc -l)
+      n_remote=$(aws s3 ls "$DEST" --recursive | wc -l)
+      echo "files: local $n_local, on S3 $n_remote"
+      [ "$n_remote" -ge "$n_local" ] || die "S3 holds fewer files ($n_remote) than the export ($n_local): latest.json NOT written"
+    fi
   fi
 
   # ---- (g) latest.json, only after everything above succeeded -------------------
@@ -462,8 +476,12 @@ PY
   else
     latest="$DIR_OUT/latest.json"
   fi
-  run aws s3 cp "$latest" "s3://$S3_BUCKET/$S3_PREFIX/latest.json" \
-    --content-type application/json --cache-control max-age=300
+  if [ "$OBIS_UPLOAD" = aws ]; then
+    run aws s3 cp "$latest" "s3://$S3_BUCKET/$S3_PREFIX/latest.json" \
+      --content-type application/json --cache-control max-age=300
+  else
+    [ -z "${GITHUB_OUTPUT:-}" ] || [ "$DRY" -eq 1 ] || echo "latest=$latest" >> "$GITHUB_OUTPUT"
+  fi
 
   # ---- (g2) the stable collection.json, after latest.json -----------------------
   # the release's collection.json with absolute hrefs into $RELEASE/, at a url the atlas links once
@@ -478,8 +496,12 @@ PY
   if [ "$DRY" -eq 0 ]; then
     $OM_CATALOG validate h3 "$stable" || die "collection.json fails om-catalog validate h3: not uploaded" 5
   fi
-  run aws s3 cp "$stable" "s3://$S3_BUCKET/$S3_PREFIX/collection.json" \
-    --content-type application/json --cache-control max-age=300
+  if [ "$OBIS_UPLOAD" = aws ]; then
+    run aws s3 cp "$stable" "s3://$S3_BUCKET/$S3_PREFIX/collection.json" \
+      --content-type application/json --cache-control max-age=300
+  else
+    [ -z "${GITHUB_OUTPUT:-}" ] || [ "$DRY" -eq 1 ] || echo "stable=$stable" >> "$GITHUB_OUTPUT"
+  fi
 else
   step "f/g. upload and latest.json SKIPPED"
 fi
@@ -495,6 +517,7 @@ latest:    $PUBLIC_BASE/latest.json
 stac:      $PUBLIC_BASE/collection.json
 dry-run:   $DRY
 next (manual, needs sudo): data-raw/deploy_obis_h3.sh --skip-sync --skip-build --store ${STORE:-<store>} --yes
-rollback:  re-publish an older latest.json (older releases stay on S3):
-           aws s3 cp <(echo '{"release":"vOLD","base":"$PUBLIC_BASE/vOLD/","obis_snapshot":"YYYY-MM-DD","built_at":"..."}') s3://$S3_BUCKET/$S3_PREFIX/latest.json --content-type application/json --cache-control max-age=300
+rollback:  re-publish an older latest.json (older releases stay on both stores), on the host:
+           om-publish.sh --really --keep-history --cache-control max-age=300 <older latest.json> $S3_PREFIX --as latest.json
+           (the one before each overwrite is on R2 under $S3_PREFIX/_history/<date>/latest.json)
 EOS

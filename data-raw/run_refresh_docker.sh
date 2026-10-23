@@ -18,13 +18,18 @@
 #   this checkout   -> /share/github/marinebon/obisindicators   (read-only; the R code is sourced)
 #   $AWS_DIR        -> /root/.aws                               (read-only)
 #   $PLACES_INTERNAL -> /share/places-internal                  (read-only; only when set, for the exact place layer)
-# -> after a published release, rsync the new store to msens (h3t reads it; the swap stays manual:
-# deploy_obis_h3.sh there) -> write $DATA_ROOT/obis/log/refresh_YYYYMMDD.done -> stop the VM.
+# -> on the host, publish the staged release through data-raw/publish_obis_h3.sh (oceanmetrics/platform om-publish.sh:
+# both stores, R2 then S3, never a delete; the folder, then latest.json, then collection.json; the container runs with
+# OBIS_UPLOAD=host, so the R2 keys never enter the image) -> after a published release, rsync the new store to msens
+# (h3t reads it; the swap stays manual: deploy_obis_h3.sh there) -> write $DATA_ROOT/obis/log/refresh_YYYYMMDD.done
+# -> stop the VM.
 #
 # Exit codes: those of refresh_obis_h3.sh (0 ok, 1 failed, 2 disk, 3 another run, 4 validation),
 # and 5 when the drive or Docker is not available. A failed copy to msens only warns.
 #
 # Env (defaults): DATA_ROOT=/Volumes/msens_big/_big/obis  AWS_DIR=~/.aws  AWS_PROFILE (passed on)
+#   OBIS_UPLOAD=host (aws: the container uploads to S3 only, as before 2026-10-23)  OM_PUBLISH (om-publish.sh; default
+#   ~/Github/oceanmetrics/platform/scripts/om-publish.sh; obis-h3.yml checks platform out and sets it)
 #   COLIMA_PROFILE=obis-h3 COLIMA_CPU=8 COLIMA_MEMORY=24 (GiB) COLIMA_DISK=60 (GiB, the VM's own disk)
 #   IMAGE=obis-h3-refresh  MSENS_HOST=msens  MSENS_OBIS_DIR=/share/data/obis
 #   passed into the container when set: OBIS_MEMORY (16GB) OBIS_THREADS (6) OBIS_MAX_TEMP (200GB)
@@ -49,6 +54,7 @@ IMAGE="${IMAGE:-obis-h3-refresh}"
 MSENS_HOST="${MSENS_HOST:-msens}"
 MSENS_OBIS_DIR="${MSENS_OBIS_DIR:-/share/data/obis}"
 CTR_NAME=obis-h3-refresh
+OBIS_UPLOAD="${OBIS_UPLOAD:-host}"
 
 KEEP_VM=0; NO_MSENS=0; DRY=0; SKIP_UPLOAD=0
 args=()
@@ -118,7 +124,7 @@ envs=(-e BUILD_CONTAINER= -e LOCK_FILE=/tmp/refresh_obis_h3.lock
       -e "OBIS_MEMORY=${OBIS_MEMORY:-16GB}" -e "OBIS_THREADS=${OBIS_THREADS:-6}"
       -e "OBIS_MAX_TEMP=${OBIS_MAX_TEMP:-200GB}"
       -e "EXPORT_MEMORY=${EXPORT_MEMORY:-12GB}" -e "EXPORT_THREADS=${EXPORT_THREADS:-6}"
-      -e AWS_PROFILE -e "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}")
+      -e AWS_PROFILE -e "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}" -e "OBIS_UPLOAD=$OBIS_UPLOAD")
 for v in MIN_FREE_GB MIN_PCT PREV_RELEASE ALLOW_NO_PREV EXPORT_OVERWRITE STORE OBIS_PLACE_COLLECTIONS GAZETTEER_BASE \
          OBIS_PLACE_EXACT_COLLECTIONS; do
   [ -z "${!v:-}" ] || envs+=(-e "$v=${!v}")
@@ -151,6 +157,28 @@ if [ -s "$out" ]; then
 fi
 get() { [ -s "$out.host" ] && sed -n "s/^$1=//p" "$out.host" | tail -1; }
 [ "$rc" -eq 0 ] || die "refresh_obis_h3.sh exited $rc (log: $(get log || true))" "$rc"
+
+# ---- the upload, on the host (OBIS_UPLOAD=host): the folder, latest.json, collection.json, both stores ------------
+if [ "$OBIS_UPLOAD" = host ] && [ "$SKIP_UPLOAD" -eq 0 ]; then
+  if [ "$DRY" -eq 1 ]; then
+    rel=""; prev=""
+    for a in ${args[@]+"${args[@]}"}; do [ "$prev" = --release ] && rel="$a"; prev="$a"; done
+    if [ -n "$rel" ]; then
+      say "publish_obis_h3.sh --dry-run $rel"
+      "$PKG_ROOT/data-raw/publish_obis_h3.sh" --dry-run "$DATA_ROOT/obis-h3/$rel" "$rel" \
+        "$DATA_ROOT/obis-h3/latest.json" "$DATA_ROOT/obis-h3/collection.json"
+    else
+      say "dry run: publish_obis_h3.sh would upload the release on the host (pass --release for its om-publish dry run)"
+    fi
+  else
+    pdir=$(get publish_dir || true); latest=$(get latest || true); stable=$(get stable || true)
+    [ -n "$pdir" ] && [ -n "$latest" ] && [ -n "$stable" ] \
+      || die "refresh_obis_h3.sh staged no publish_dir=, latest= or stable= (OBIS_UPLOAD=host): nothing published"
+    say "publish_obis_h3.sh $(get release)"
+    "$PKG_ROOT/data-raw/publish_obis_h3.sh" "$pdir" "$(get release)" "$latest" "$stable" \
+      || die "publish_obis_h3.sh failed: the release is not (completely) published; the store is not copied to msens" 1
+  fi
+fi
 [ "$DRY" -eq 0 ] || { say "dry run done"; exit 0; }
 
 # ---- the store to msens, for h3t (only after a published release) -------------------------
