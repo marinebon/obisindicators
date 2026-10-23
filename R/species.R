@@ -318,3 +318,58 @@ obis_h3_species_subtree_sql <- function(release_dir, aphiaid, res, esn = 50L, cl
     FROM ({.h3t_indicators_sql(src, esn = as.integer(esn))}) _i
     ORDER BY cell_id")
 }
+
+# the rank key of a head in the taxon layout: WoRMS taxonRank lowercased, without a botanical
+# alias in parentheses ("Phylum (Division)" -> "phylum"), so it meets the rank layers' keys
+.obis_head_rank <- function(rank) {
+  r <- tolower(trimws(sub("\\s*\\(.*\\)\\s*$", "", as.character(rank))))
+  r[is.na(rank) | !nzchar(r)] <- NA_character_
+  r
+}
+
+#' SQL for the pre-aggregated heads at one resolution
+#'
+#' The indicators of every head (a taxon spanning several classes, listed by
+#' [obis_h3_species_heads()]) at one resolution, from `occ_h3` and the species
+#' lookup: an aphiaid belongs to a head when the head's aphiaid is in its
+#' `lineage`, species are counted by `name_key`, and the cells come from the
+#' coarsest `occ_h3` tier at least as fine as `res` (res 4 from the res-5 tier).
+#' This is the subtree [obis_h3_species_subtree_sql()] computes from the
+#' exported species files, done once for the release, so a reader draws a head
+#' as an ordinary taxon layer (`taxon/rank=<rank>/taxon=<name>/res=<r>/`) and
+#' never reads the class files.
+#'
+#' @param res H3 resolution, 1 to 7.
+#' @param heads the table (or a parenthesised SELECT) of heads, with columns
+#'   `aphiaid`, `rank` and `taxon` (the layout keys).
+#' @param lookup the table of [obis_h3_species_lookup_sql()]'s rows.
+#' @param from the species-level table (default `"occ_h3"`).
+#' @param esn expected sample size for ES(n) (default 50).
+#' @return a SQL string with columns `rank, taxon, res, h3, cell_id, n, sp,
+#'   shannon, simpson, es`.
+#' @concept store
+#' @export
+#' @examples
+#' cat(obis_h3_heads_sql(4, "heads", "species_lookup"))
+obis_h3_heads_sql <- function(res, heads, lookup = "species_lookup", from = "occ_h3", esn = 50L) {
+  res <- as.integer(res)
+  stopifnot(length(res) == 1L, res %in% H3T_RES_IDX,
+            is.character(heads), length(heads) == 1L,
+            is.character(lookup), length(lookup) == 1L,
+            is.character(from), length(from) == 1L)
+  tier <- .obis_tier(res)
+  src <- glue::glue("
+      SELECT m.rank, m.taxon, CAST(h3_cell_to_parent(o.cell_id, {res}) AS BIGINT) AS cell_id,
+             m.name_key AS species, SUM(o.records) AS ni
+      FROM {from} o
+      JOIN (SELECT h.rank, h.taxon, l.aphiaid, l.name_key
+            FROM {lookup} l, unnest(l.lineage) AS u(node)
+            JOIN {heads} h ON h.aphiaid = u.node) m ON o.aphiaid = m.aphiaid
+      WHERE o.res = {tier}
+      GROUP BY 1, 2, 3, 4")
+  ind <- .h3t_indicators_sql(src, keys = c("rank", "taxon"), esn = as.integer(esn))
+  glue::glue("
+    SELECT rank, taxon, {res}::UTINYINT AS res, lower(printf('%x', cell_id)) AS h3, cell_id,
+           n::BIGINT AS n, sp::BIGINT AS sp, shannon, simpson, es
+    FROM ({ind}) _h")
+}

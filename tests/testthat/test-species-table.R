@@ -274,9 +274,11 @@ test_that("export: year and species layers, release.json, and the Animalia subtr
   expect_equal(nrow(lk), 7L)
   expect_equal(names(lk), vapply(SPECIES_LOOKUP_COLUMNS, `[[`, "", "name"))
   hj <- jsonlite::read_json(file.path(out, "species/heads.json"))
-  expect_false(hj$built)
+  expect_true(hj$built)
   expect_equal(hj$n, 3L)
+  expect_equal(hj$n_built, 2L)
   expect_equal(vapply(hj$heads, function(h) h$aphiaid, 0), c(1, 2, 10))
+  expect_equal(vapply(hj$heads, function(h) h$served_by, ""), c("all", "head", "head"))
 
   # files.parquet: rows per year and species file; the lookup is its own layer
   mf <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/files.parquet')"))
@@ -434,4 +436,99 @@ test_that("obis_h3_stac_collection() passes om-catalog validate h3 (node CLI)", 
                                   stdout = TRUE, stderr = TRUE))
   expect_null(attr(res, "status"), info = paste(res, collapse = "\n"))
   expect_true(any(grepl("^ok ", res)), info = paste(res, collapse = "\n"))
+})
+
+test_that("heads: Animalia and Chordata are taxon layers equal to the subtree SQL; Biota is all", {
+  skip_species()
+  con <- make_species_fixture()
+  dir <- tempfile("export_")
+  on.exit({ DBI::dbDisconnect(con, shutdown = TRUE); unlink(dir, recursive = TRUE) }, add = TRUE)
+  obis_h3_export_parquet(con, dir, "v20261023", res_decade = 1L, res_year = integer(0),
+                         res_species = 3:5, res_heads = 1:7, verbose = FALSE)
+  out <- file.path(dir, "v20261023")
+  hj  <- jsonlite::read_json(file.path(out, "species/heads.json"))
+  sb  <- setNames(vapply(hj$heads, function(h) h$served_by, ""),
+                  vapply(hj$heads, function(h) h$name, ""))
+  expect_equal(sb, c(Biota = "all", Animalia = "head", Chordata = "head"))
+  expect_equal(vapply(hj$heads, function(h) if (is.null(h$layer)) NA_character_ else h$layer, ""),
+               c("all", "taxon/rank=kingdom/taxon=Animalia", "taxon/rank=phylum/taxon=Chordata"))
+  expect_false(dir.exists(file.path(out, "taxon/rank=superdomain")))
+  expect_setequal(list.files(file.path(out, "taxon/rank=kingdom/taxon=Animalia")), paste0("res=", 1:7))
+
+  rd <- function(r, rank, taxon) DBI::dbGetQuery(con, glue::glue("
+    SELECT h3, n::DOUBLE AS n, sp::DOUBLE AS sp, shannon, simpson, es
+    FROM read_parquet('{out}/taxon/rank={rank}/taxon={taxon}/res={r}/**/*.parquet') ORDER BY h3"))
+  same <- function(got, ref) {
+    expect_identical(got$h3, ref$h3)
+    expect_identical(got$n, ref$n)
+    expect_identical(got$sp, ref$sp)
+    for (v in c("shannon", "simpson", "es")) {
+      expect_identical(is.na(got[[v]]), is.na(ref[[v]]))
+      expect_lt(max(abs(got[[v]] - ref[[v]]), 0, na.rm = TRUE), 1e-9)
+    }
+  }
+  # the head equals the subtree query over the exported species files, cell for cell
+  for (r in 3:5) for (a in list(c(2, "kingdom", "Animalia"), c(10, "phylum", "Chordata"))) {
+    ref <- DBI::dbGetQuery(con, glue::glue("
+      SELECT h3, n::DOUBLE AS n, sp::DOUBLE AS sp, shannon, simpson, es
+      FROM ({obis_h3_species_subtree_sql(out, as.numeric(a[1]), r)}) _s ORDER BY h3"))
+    expect_gt(nrow(ref), 0L)
+    same(rd(r, a[2], a[3]), ref)
+  }
+  # and h3t's recursive-CTE subtree at every res, including those without a species table
+  for (r in 1:7) {
+    ref_src <- glue::glue("
+      SELECT CAST(h3_cell_to_parent(cell_id, {r}) AS BIGINT) AS cell_id, species, SUM(records) AS ni
+      FROM occ_h3 WHERE res = {.obis_tier(r)} AND aphiaid IN (SELECT taxonID FROM taxon_tree)
+      GROUP BY 1, 2")
+    ref <- DBI::dbGetQuery(con, glue::glue("
+      WITH RECURSIVE {.h3t_taxon_tree_cte(2)}
+      SELECT lower(printf('%x', cell_id)) AS h3, n::DOUBLE AS n, sp::DOUBLE AS sp, shannon, simpson, es
+      FROM ({.h3t_indicators_sql(ref_src)}) _r ORDER BY h3"))
+    same(rd(r, "kingdom", "Animalia"), ref)
+  }
+  # Animalia at res 4: Corallina leaves R (90 -> 20 records); the two Tursiops aphiaids are one name
+  a4 <- rd(4, "kingdom", "Animalia")
+  expect_equal(setNames(a4$n, cell_name(a4$h3))[c("PQ4", "R4", "S4")], c(PQ4 = 185, R4 = 20, S4 = 97))
+  expect_equal(setNames(a4$sp, cell_name(a4$h3))[c("PQ4", "R4", "S4")], c(PQ4 = 5, R4 = 2, S4 = 2))
+
+  # one reader: the heads are in taxon_groups, stats and files.parquet as any taxon
+  tg <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/taxon_groups.parquet')"))
+  expect_equal(tg$n[tg$rank == "kingdom" & tg$taxon == "Animalia"], 185 + 20 + 97)
+  expect_equal(tg$path[tg$taxon == "Animalia"], "taxon/rank=kingdom/taxon=Animalia")
+  st <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/stats.parquet')"))
+  expect_equal(sum(st$layer == "taxon" & st$key == "Animalia"), 7L * 5L)
+  mf <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/files.parquet')"))
+  expect_true(all(mf$layer[grepl("^taxon/rank=kingdom/", mf$path)] == "taxon"))
+  js <- jsonlite::read_json(file.path(out, "release.json"))
+  expect_equal(js$layers$taxon$heads$n, 2L)
+  expect_equal(js$layers$species$heads$n_built, 2L)
+})
+
+test_that("heads: a rank layer of the same rank and name keeps its file; heads = FALSE writes none", {
+  skip_species()
+  con <- make_species_fixture()
+  dir <- tempfile("export_")
+  on.exit({ DBI::dbDisconnect(con, shutdown = TRUE); unlink(dir, recursive = TRUE) }, add = TRUE)
+  # a phylum layer for Chordata (OBIS rank column), with values the subtree would not give
+  DBI::dbExecute(con, "CREATE TABLE idx_h3_taxon AS SELECT 'phylum' AS rank, 'Chordata' AS taxon, res,
+                       cell_id, 1::BIGINT AS n, 1::BIGINT AS sp, 0.0 AS shannon, 1.0 AS simpson,
+                       NULL::DOUBLE AS es FROM idx_h3")
+  obis_h3_export_parquet(con, dir, "a", res_decade = 1L, res_year = integer(0), res_species = 3:4,
+                         res_heads = 1:3, verbose = FALSE)
+  hj <- jsonlite::read_json(file.path(dir, "a", "species/heads.json"))
+  sb <- setNames(vapply(hj$heads, function(h) h$served_by, ""), vapply(hj$heads, function(h) h$name, ""))
+  expect_equal(sb[["Chordata"]], "rank_layer")
+  expect_equal(hj$heads[[3]]$layer, "taxon/rank=phylum/taxon=Chordata")
+  ch <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT DISTINCT n::DOUBLE AS n FROM read_parquet('{dir}/a/taxon/rank=phylum/taxon=Chordata/**/*.parquet')"))
+  expect_equal(ch$n, 1)  # the rank layer's own values, not overwritten by the head
+  expect_setequal(list.files(file.path(dir, "a", "taxon/rank=kingdom/taxon=Animalia")), paste0("res=", 1:3))
+
+  obis_h3_export_parquet(con, dir, "b", res_decade = 1L, res_year = integer(0), res_species = 3L,
+                         heads = FALSE, verbose = FALSE)
+  expect_false(dir.exists(file.path(dir, "b", "taxon/rank=kingdom")))
+  hb <- jsonlite::read_json(file.path(dir, "b", "species/heads.json"))
+  expect_false(hb$built)
+  expect_equal(hb$n_built, 0L)
 })

@@ -30,14 +30,15 @@ EXPORT_MAX_OPEN <- 100L
 #'   all/res=<1..5>/data_0.parquet             idx_h3 (all taxa, all years)
 #'   all/res=<6,7>/p=<parent>/data_0.parquet   the fine res, one file per parent cell
 #'   eov/eov=<eov>/res=<r>/data_0.parquet      idx_h3_eov
-#'   taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family)
+#'   taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family),
+#'                                             plus the heads (kingdom, subphylum, superclass ...)
 #'   decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
 #'   decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
 #'   year/all/year=<yyyy>/res=<r>/             per year, all taxa    (res in res_year)
 #'   year/eov/eov=<eov>/year=<yyyy>/res=<r>/   per year and EOV      (res in res_year)
 #'   species/res=<r>/class=<class>/data_0.parquet  species x hex x count (res in res_species)
 #'   species/species.parquet                   the species lookup: names, name_key, lineage
-#'   species/heads.json                        the pre-aggregated heads still to build
+#'   species/heads.json                        the pre-aggregated heads and the layer serving each
 #'   species_decade/res=<r>/decade=<d>/class=<class>/  per decade (species_decades = TRUE)
 #'   place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
 #'   place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
@@ -129,7 +130,22 @@ EXPORT_MAX_OPEN <- 100L
 #' `list_contains(lineage, <aphiaid>)` ([obis_h3_species_subtree_sql()]).
 #' `species/heads.json` lists the taxa that need a pre-aggregated head
 #' ([obis_h3_species_heads()]: Animalia and every taxon spanning two or more
-#' named classes); they are not built in this version. The per-decade variant
+#' named classes) and the layer that serves each.
+#'
+#' **The heads** (`heads = TRUE`) are written as ordinary taxon layers,
+#' `taxon/rank=<rank>/taxon=<name>/res=<r>/` at `res_heads`
+#' ([obis_h3_heads_sql()]: the WoRMS subtree from the lineage, species counted by
+#' `name_key`, so a head equals [obis_h3_species_subtree_sql()] cell for cell),
+#' where `rank` is the WoRMS rank lowercased without a botanical alias
+#' ("Phylum (Division)" is `phylum`). They then appear in `stats.parquet`,
+#' `taxon_groups.parquet` and `files.parquet` as any taxon. A head is not
+#' written when a layer already serves it: one whose subtree holds every
+#' aphiaid (and the store has no record without one) is the `all` layer; one
+#' whose rank and name are a rank layer of `idx_h3_taxon` keeps that layer
+#' (built from the OBIS rank column, not the WoRMS subtree, so it may differ in
+#' a few cells). `heads.json` gives each head's `served_by` (`head`, `all`,
+#' `rank_layer`, or `homonym` for a second taxon with the same rank and name)
+#' and its `layer`. The per-decade variant
 #' `species_decade/` is written only with `species_decades = TRUE`. Rows with
 #' no aphiaid are left out; a store without one (e.g. the demo store built from
 #' `occ_SAtlantic`) gets no species layer.
@@ -161,6 +177,10 @@ EXPORT_MAX_OPEN <- 100L
 #'   `integer(0)` skips it.
 #' @param species_decades also write the per-decade species table
 #'   `species_decade/` (default FALSE).
+#' @param heads write the pre-aggregated heads as taxon layers (default TRUE;
+#'   needs the species table and the store's `taxon` table).
+#' @param res_heads the resolutions of the heads (default 1-7; res 6 and 7 are
+#'   split by `parent_res_taxon` like the rank layers).
 #' @param parent_res named integer vector, fine resolution -> parent
 #'   resolution, for the `all` and `eov` layers: those resolutions are written
 #'   one file per parent cell (`res=<r>/p=<parent>/`). Default
@@ -217,6 +237,8 @@ obis_h3_export_parquet <- function(
   years            = NULL,
   res_species      = c(3L, 4L, 5L),
   species_decades  = FALSE,
+  heads            = TRUE,
+  res_heads        = 1:7,
   parent_res       = c("6" = 2L, "7" = 3L),
   parent_res_taxon = c("6" = 0L, "7" = 0L),
   parent_min_rows  = 50000,
@@ -245,6 +267,8 @@ obis_h3_export_parquet <- function(
     all(as.integer(res_decade) %in% H3T_RES_IDX),
     all(as.integer(res_year) %in% H3T_RES_IDX),
     all(as.integer(res_species) %in% H3T_RES_IDX),
+    all(as.integer(res_heads) %in% H3T_RES_IDX),
+    is.logical(heads), length(heads) == 1L,
     is.null(years) || is.numeric(years),
     is.logical(species_decades), length(species_decades) == 1L,
     is.numeric(parent_min_rows), length(parent_min_rows) == 1L,
@@ -265,6 +289,7 @@ obis_h3_export_parquet <- function(
   res_decade  <- sort(unique(as.integer(res_decade)))
   res_year    <- sort(unique(as.integer(res_year)))
   res_species <- sort(unique(as.integer(res_species)))
+  res_heads   <- sort(unique(as.integer(res_heads)))
   esn        <- as.integer(esn)
 
   out <- normalizePath(file.path(path.expand(dir_out), release), mustWork = FALSE)
@@ -330,7 +355,7 @@ obis_h3_export_parquet <- function(
   # (keys, res), except the res in `pr` with more than parent_min_rows rows,
   # which go one file per parent cell (res=<r>/p=<parent>/); written in slices of
   # its first key (each EOV, each taxon rank), so each sorted temp table stays small ----
-  write_layer <- function(name, sub, from, keys, pr) {
+  write_layer <- function(name, sub, from, keys, pr, register = TRUE) {
     parts <- c(keys, "res")
     kc    <- paste0(keys, ", ", collapse = "")
     if (!length(keys)) kc <- ""
@@ -368,7 +393,8 @@ obis_h3_export_parquet <- function(
       }
     }
     if (n_par) say("  ", n_par, " parent partitions for res ", paste(names(pr_used), collapse = ", "))
-    add_layer(name, sub, parts, rows, pr_used)
+    if (register) add_layer(name, sub, parts, rows, pr_used)
+    invisible(list(rows = rows, pr_used = pr_used))
   }
 
   say("all: idx_h3 ...")
@@ -580,25 +606,92 @@ obis_h3_export_parquet <- function(
           "species_decade/res={res}/decade={decade}/class={class}/data_0.parquet"
       }
 
-      # the heads: Animalia and every taxon spanning two or more named classes
+      # the heads: Animalia and every taxon spanning two or more named classes, written
+      # as taxon layers (taxon/rank=<rank>/taxon=<name>/res=<r>/) unless a layer serves them
       say("species heads ...")
-      heads <- obis_h3_species_heads(con, lk, taxon_tbl)
-      heads$existing_layer <- rep(NA_character_, nrow(heads))
-      if (has("idx_h3_taxon") && nrow(heads)) {
-        tx <- DBI::dbGetQuery(con, "SELECT DISTINCT rank, taxon FROM idx_h3_taxon")
-        hit <- match(paste(tolower(heads$rank), heads$name), paste(tx$rank, tx$taxon))
-        heads$existing_layer[!is.na(hit)] <- paste0(
-          "taxon/rank=", tx$rank[hit[!is.na(hit)]], "/taxon=", tx$taxon[hit[!is.na(hit)]])
+      hd <- obis_h3_species_heads(con, lk, taxon_tbl)
+      hd$layer_rank <- .obis_head_rank(hd$rank)
+      hd$served_by  <- rep(NA_character_, nrow(hd))
+      hd$layer      <- rep(NA_character_, nrow(hd))
+      no_null <- DBI::dbGetQuery(con,
+        "SELECT COUNT(*)::DOUBLE AS n FROM occ_h3 WHERE aphiaid IS NULL")$n == 0
+      every <- hd$n_species == n_lookup & no_null
+      hd$served_by[every] <- "all"
+      hd$layer[every]     <- "all"
+      if (has("idx_h3_taxon") && nrow(hd)) {
+        tx  <- DBI::dbGetQuery(con, "SELECT DISTINCT rank, taxon FROM idx_h3_taxon")
+        hit <- match(paste(hd$layer_rank, hd$name), paste(tx$rank, tx$taxon))
+        use <- !is.na(hit) & is.na(hd$served_by)
+        hd$served_by[use] <- "rank_layer"
+        hd$layer[use] <- paste0("taxon/rank=", tx$rank[hit[use]], "/taxon=",
+                                .obis_hive_value(tx$taxon[hit[use]]))
       }
-      n_heads <- nrow(heads)
+      todo <- is.na(hd$served_by) & !is.na(hd$layer_rank) & !is.na(hd$name)
+      homo <- todo & duplicated(paste(hd$layer_rank, hd$name))
+      hd$served_by[homo] <- "homonym"
+      todo <- todo & !homo
+      n_built <- 0L
+      if (heads && any(todo) && length(res_heads)) {
+        hv <- "_export_heads_src"
+        ht <- "_export_heads"
+        hl <- "_export_heads_list"
+        on.exit(DBI::dbExecute(con, glue::glue(
+          "DROP TABLE IF EXISTS {ht}; DROP TABLE IF EXISTS {hl};")), add = TRUE)
+        duckdb::duckdb_register(con, hv, data.frame(
+          aphiaid = hd$aphiaid[todo], rank = hd$layer_rank[todo], taxon = hd$name[todo],
+          stringsAsFactors = FALSE))
+        DBI::dbExecute(con, glue::glue(
+          "CREATE OR REPLACE TEMP TABLE {hl} AS
+           SELECT aphiaid::BIGINT AS aphiaid, rank::VARCHAR AS rank, taxon::VARCHAR AS taxon FROM {hv}"))
+        duckdb::duckdb_unregister(con, hv)
+        for (i in seq_along(res_heads)) {
+          say("heads res ", res_heads[i], " (", sum(todo), " taxa) ...")
+          sql <- obis_h3_heads_sql(res_heads[i], hl, lk, esn = esn)
+          DBI::dbExecute(con, if (i == 1L)
+            glue::glue("CREATE OR REPLACE TEMP TABLE {ht} AS {sql}") else
+            glue::glue("INSERT INTO {ht} {sql}"))
+        }
+        wl <- write_layer("taxon", "taxon", ht, c("rank", "taxon"), parent_res_taxon,
+                          register = FALSE)
+        if (is.null(layers$taxon)) {
+          add_layer("taxon", "taxon", c("rank", "taxon", "res"), wl$rows, wl$pr_used)
+        } else {
+          layers$taxon$rows <- layers$taxon$rows + wl$rows
+          if (length(wl$pr_used) && !length(layers$taxon$parent_res)) {
+            layers$taxon$parent_res      <- as.list(wl$pr_used)
+            layers$taxon$template_parent <- sub("/data_0.parquet$", "/p=<parent>/data_0.parquet",
+                                                layers$taxon$template)
+          } else if (length(wl$pr_used))
+            layers$taxon$parent_res <- utils::modifyList(layers$taxon$parent_res, as.list(wl$pr_used))
+        }
+        got <- DBI::dbGetQuery(con, glue::glue("SELECT DISTINCT rank, taxon FROM {ht}"))
+        ok  <- todo & paste(hd$layer_rank, hd$name) %in% paste(got$rank, got$taxon)
+        hd$served_by[ok] <- "head"
+        hd$layer[ok]     <- paste0("taxon/rank=", hd$layer_rank[ok], "/taxon=",
+                                   .obis_hive_value(hd$name[ok]))
+        n_built <- sum(ok)
+        layers$taxon$heads <- list(
+          n = n_built, res = I(res_heads), href = "species/heads.json",
+          rows = wl$rows,
+          note = paste(
+            "the pre-aggregated heads (Animalia and the taxa spanning several classes) are",
+            "taxon layers like the rank layers: rank is the WoRMS rank (kingdom, subphylum,",
+            "superclass ...), values are the WoRMS subtree over the species lookup's lineage",
+            "(obis_h3_heads_sql()); species/heads.json lists them"))
+        DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {ht}; DROP TABLE IF EXISTS {hl};"))
+      }
+      n_heads <- nrow(hd)
       jsonlite::write_json(list(
-        built    = FALSE,
+        built    = n_built > 0,
         rule     = paste(
           "Animalia (aphiaid 2) and every taxon whose subtree spans two or more named",
           "classes (the lookup's OBIS class; NULL not counted). A subtree inside one",
           "class reads one class file plus class=_none; these taxa read many, so each",
-          "gets a pre-aggregated indicator layer (like `all`). Not built yet: listed",
-          "for the next release."),
+          "is served by a pre-aggregated indicator layer: served_by 'head' is a taxon",
+          "layer written from the WoRMS subtree (layer = its path), 'all' the all-taxa",
+          "layer (the subtree holds every aphiaid), 'rank_layer' an existing rank layer",
+          "built from the OBIS rank column (it may differ from the subtree in a few",
+          "cells), 'homonym' a second taxon of the same rank and name (not written)."),
         existing = list(
           list(head = "all",    layer = "all"),
           list(head = "eov",    layer = "eov"),
@@ -606,9 +699,12 @@ obis_h3_export_parquet <- function(
           list(head = "class",  layer = "taxon/rank=class"),
           list(head = "order",  layer = "taxon/rank=order"),
           list(head = "family", layer = "taxon/rank=family")),
+        layer    = "taxon",
+        res      = if (n_built > 0) I(res_heads) else I(integer(0)),
         n        = n_heads,
-        columns  = c(names(heads)),
-        heads    = heads),
+        n_built  = n_built,
+        columns  = c(names(hd)),
+        heads    = hd),
         file.path(out, "species", "heads.json"),
         auto_unbox = TRUE, pretty = TRUE, digits = NA, dataframe = "rows", na = "null")
 
@@ -633,7 +729,8 @@ obis_h3_export_parquet <- function(
             "DISTINCT name_key (in the files and the lookup), not aphiaid; some",
             "names carry several aphiaids.")),
         null_class    = "_none",
-        heads         = list(href = "species/heads.json", n = n_heads, built = FALSE),
+        heads         = list(href = "species/heads.json", n = n_heads, built = n_built > 0,
+                             n_built = n_built, layer = "taxon"),
         lookup_rows   = n_lookup,
         table_columns = SPECIES_COLUMNS,
         lookup_columns = SPECIES_LOOKUP_COLUMNS,
@@ -895,7 +992,8 @@ obis_h3_export_parquet <- function(
                       format(layers[[l]]$rows, big.mark = ","),
                       layers[[l]]$files, mb(layers[[l]]$bytes)))
     if (!is.null(layers$species)) {
-      message("  species by res (rows, files, bytes); heads to add: ", n_heads)
+      message("  species by res (rows, files, bytes); heads: ", layers$species$heads$n_built,
+              " of ", n_heads, " written as taxon layers")
       for (i in seq_len(nrow(layers$species$by_res)))
         with(layers$species$by_res[i, ], message(sprintf(
           "    res %d %12s rows %6d files %10s", res, format(rows, big.mark = ","), files, mb(bytes))))
