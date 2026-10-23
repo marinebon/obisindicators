@@ -18,6 +18,8 @@ obis_h3_export_parquet(
   years = NULL,
   res_species = c(3L, 4L, 5L),
   species_decades = FALSE,
+  heads = TRUE,
+  res_heads = 1:7,
   parent_res = c(`6` = 2L, `7` = 3L),
   parent_res_taxon = c(`6` = 0L, `7` = 0L),
   parent_min_rows = 50000,
@@ -80,6 +82,16 @@ obis_h3_export_parquet(
 
   also write the per-decade species table `species_decade/` (default
   FALSE).
+
+- heads:
+
+  write the pre-aggregated heads as taxon layers (default TRUE; needs
+  the species table and the store's `taxon` table).
+
+- res_heads:
+
+  the resolutions of the heads (default 1-7; res 6 and 7 are split by
+  `parent_res_taxon` like the rank layers).
 
 - parent_res:
 
@@ -180,14 +192,15 @@ invisibly, a character vector of the files written (absolute paths).
       all/res=<1..5>/data_0.parquet             idx_h3 (all taxa, all years)
       all/res=<6,7>/p=<parent>/data_0.parquet   the fine res, one file per parent cell
       eov/eov=<eov>/res=<r>/data_0.parquet      idx_h3_eov
-      taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family)
+      taxon/rank=<rank>/taxon=<taxon>/res=<r>/  idx_h3_taxon (phylum / class / order / family),
+                                                plus the heads (kingdom, subphylum, superclass ...)
       decade/all/decade=<yyy0>/res=<r>/         per decade, all taxa  (res in res_decade)
       decade/eov/eov=<eov>/decade=<yyy0>/res=<r>/  per decade and EOV (res in res_decade)
       year/all/year=<yyyy>/res=<r>/             per year, all taxa    (res in res_year)
       year/eov/eov=<eov>/year=<yyyy>/res=<r>/   per year and EOV      (res in res_year)
       species/res=<r>/class=<class>/data_0.parquet  species x hex x count (res in res_species)
       species/species.parquet                   the species lookup: names, name_key, lineage
-      species/heads.json                        the pre-aggregated heads still to build
+      species/heads.json                        the pre-aggregated heads and the layer serving each
       species_decade/res=<r>/decade=<d>/class=<class>/  per decade (species_decades = TRUE)
       place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
       place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
@@ -294,11 +307,29 @@ store's `taxon` table); a subtree is `list_contains(lineage, <aphiaid>)`
 ([`obis_h3_species_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_subtree_sql.md)).
 `species/heads.json` lists the taxa that need a pre-aggregated head
 ([`obis_h3_species_heads()`](https://marinebon.org/obisindicators/reference/obis_h3_species_heads.md):
-Animalia and every taxon spanning two or more named classes); they are
-not built in this version. The per-decade variant `species_decade/` is
-written only with `species_decades = TRUE`. Rows with no aphiaid are
-left out; a store without one (e.g. the demo store built from
-`occ_SAtlantic`) gets no species layer.
+Animalia and every taxon spanning two or more named classes) and the
+layer that serves each.
+
+**The heads** (`heads = TRUE`) are written as ordinary taxon layers,
+`taxon/rank=<rank>/taxon=<name>/res=<r>/` at `res_heads`
+([`obis_h3_heads_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_heads_sql.md):
+the WoRMS subtree from the lineage, species counted by `name_key`, so a
+head equals
+[`obis_h3_species_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_subtree_sql.md)
+cell for cell), where `rank` is the WoRMS rank lowercased without a
+botanical alias ("Phylum (Division)" is `phylum`). They then appear in
+`stats.parquet`, `taxon_groups.parquet` and `files.parquet` as any
+taxon. A head is not written when a layer already serves it: one whose
+subtree holds every aphiaid (and the store has no record without one) is
+the `all` layer; one whose rank and name are a rank layer of
+`idx_h3_taxon` keeps that layer (built from the OBIS rank column, not
+the WoRMS subtree, so it may differ in a few cells). `heads.json` gives
+each head's `served_by` (`head`, `all`, `rank_layer`, or `homonym` for a
+second taxon with the same rank and name) and its `layer`. The
+per-decade variant `species_decade/` is written only with
+`species_decades = TRUE`. Rows with no aphiaid are left out; a store
+without one (e.g. the demo store built from `occ_SAtlantic`) gets no
+species layer.
 
 `collection.json` is a STAC Collection of the release for the Ocean
 Metrics `h3` profile

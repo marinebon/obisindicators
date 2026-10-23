@@ -72,6 +72,8 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):</p>
 <span>  years <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  res_species <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3L</span>, <span class="fl">4L</span>, <span class="fl">5L</span><span class="op">)</span>,</span>
 <span>  species_decades <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  heads <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  res_heads <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">7</span>,</span>
 <span>  parent_res <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>`6` <span class="op">=</span> <span class="fl">2L</span>, `7` <span class="op">=</span> <span class="fl">3L</span><span class="op">)</span>,</span>
 <span>  parent_res_taxon <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>`6` <span class="op">=</span> <span class="fl">0L</span>, `7` <span class="op">=</span> <span class="fl">0L</span><span class="op">)</span>,</span>
 <span>  parent_min_rows <span class="op">=</span> <span class="fl">50000</span>,</span>
@@ -134,6 +136,16 @@ present.</p></dd>
 <dt id="arg-species-decades">species_decades<a class="anchor" aria-label="anchor" href="#arg-species-decades"></a></dt>
 <dd><p>also write the per-decade species table
 <code>species_decade/</code> (default FALSE).</p></dd>
+
+
+<dt id="arg-heads">heads<a class="anchor" aria-label="anchor" href="#arg-heads"></a></dt>
+<dd><p>write the pre-aggregated heads as taxon layers (default TRUE;
+needs the species table and the store's <code>taxon</code> table).</p></dd>
+
+
+<dt id="arg-res-heads">res_heads<a class="anchor" aria-label="anchor" href="#arg-res-heads"></a></dt>
+<dd><p>the resolutions of the heads (default 1-7; res 6 and 7 are
+split by <code>parent_res_taxon</code> like the rank layers).</p></dd>
 
 
 <dt id="arg-parent-res">parent_res<a class="anchor" aria-label="anchor" href="#arg-parent-res"></a></dt>
@@ -233,22 +245,23 @@ place computation (it runs in its own DuckDB instance with this
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>  all<span class="sc">/</span>res<span class="ot">=</span><span class="er">&lt;</span><span class="dv">1</span>..<span class="dv">5</span><span class="sc">&gt;</span><span class="er">/</span>data_0.parquet             <span class="fu">idx_h3</span> (all taxa, all years)</span>
 <span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>  all<span class="sc">/</span>res<span class="ot">=</span><span class="er">&lt;</span><span class="dv">6</span>,<span class="dv">7</span><span class="sc">&gt;</span><span class="er">/</span>p<span class="ot">=</span><span class="er">&lt;</span>parent<span class="sc">&gt;</span><span class="er">/</span>data_0.parquet   the fine res, one file per parent cell</span>
 <span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>  eov<span class="sc">/</span>eov<span class="ot">=</span><span class="er">&lt;</span>eov<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>data_0.parquet      idx_h3_eov</span>
-<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  taxon<span class="sc">/</span>rank<span class="ot">=</span><span class="er">&lt;</span>rank<span class="sc">&gt;</span><span class="er">/</span>taxon<span class="ot">=</span><span class="er">&lt;</span>taxon<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>  <span class="fu">idx_h3_taxon</span> (phylum <span class="sc">/</span> class <span class="sc">/</span> order <span class="sc">/</span> family)</span>
-<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>  decade<span class="sc">/</span>all<span class="sc">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>yyy0<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>         per decade, all <span class="fu">taxa</span>  (res <span class="cf">in</span> res_decade)</span>
-<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  decade<span class="sc">/</span>eov<span class="sc">/</span>eov<span class="ot">=</span><span class="er">&lt;</span>eov<span class="sc">&gt;</span><span class="er">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>yyy0<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>  per decade and <span class="fu">EOV</span> (res <span class="cf">in</span> res_decade)</span>
-<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  year<span class="sc">/</span>all<span class="sc">/</span>year<span class="ot">=</span><span class="er">&lt;</span>yyyy<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>             per year, all <span class="fu">taxa</span>    (res <span class="cf">in</span> res_year)</span>
-<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  year<span class="sc">/</span>eov<span class="sc">/</span>eov<span class="ot">=</span><span class="er">&lt;</span>eov<span class="sc">&gt;</span><span class="er">/</span>year<span class="ot">=</span><span class="er">&lt;</span>yyyy<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>   per year and <span class="fu">EOV</span>      (res <span class="cf">in</span> res_year)</span>
-<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>  species<span class="sc">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>class<span class="ot">=</span><span class="er">&lt;</span>class<span class="sc">&gt;</span><span class="er">/</span>data_0.parquet  species x hex x <span class="fu">count</span> (res <span class="cf">in</span> res_species)</span>
-<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>  species<span class="sc">/</span>species.parquet                   the species lookup<span class="sc">:</span> names, name_key, lineage</span>
-<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>  species<span class="sc">/</span>heads.json                        the pre<span class="sc">-</span>aggregated heads still to build</span>
-<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>  species_decade<span class="sc">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>d<span class="sc">&gt;</span><span class="er">/</span>class<span class="ot">=</span><span class="er">&lt;</span>class<span class="sc">&gt;</span><span class="er">/</span>  per <span class="fu">decade</span> (<span class="at">species_decades =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>  place<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>slug<span class="sc">&gt;</span><span class="er">/</span>data_0.parquet          per<span class="sc">-</span>place pooled <span class="fu">indicators</span> (only with place_collections)</span>
-<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a>  place_exact<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>slug<span class="sc">&gt;</span><span class="er">/</span>indicators.parquet, years.parquet, meta.json</span>
-<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a>                                            exact point<span class="sc">-</span><span class="cf">in</span><span class="sc">-</span>polygon <span class="fu">indicators</span> (only with place_exact)</span>
-<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>  collection.json                           STAC <span class="fu">Collection</span> (h3 profile), <span class="fu">obis_h3_stac_collection</span>()</span>
-<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a>  stats.parquet                             value ranges per layer x key x period x res x variable</span>
-<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a>  taxon_groups.parquet                      the taxa and EOVs available, with totals and paths</span>
-<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a>  files.parquet                             manifest<span class="sc">:</span> layer, path, url_path, rows, bytes per file</span></code></pre><p></p></div>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  taxon<span class="sc">/</span>rank<span class="ot">=</span><span class="er">&lt;</span>rank<span class="sc">&gt;</span><span class="er">/</span>taxon<span class="ot">=</span><span class="er">&lt;</span>taxon<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>  <span class="fu">idx_h3_taxon</span> (phylum <span class="sc">/</span> class <span class="sc">/</span> order <span class="sc">/</span> family),</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>                                            plus the <span class="fu">heads</span> (kingdom, subphylum, superclass ...)</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  decade<span class="sc">/</span>all<span class="sc">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>yyy0<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>         per decade, all <span class="fu">taxa</span>  (res <span class="cf">in</span> res_decade)</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  decade<span class="sc">/</span>eov<span class="sc">/</span>eov<span class="ot">=</span><span class="er">&lt;</span>eov<span class="sc">&gt;</span><span class="er">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>yyy0<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>  per decade and <span class="fu">EOV</span> (res <span class="cf">in</span> res_decade)</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  year<span class="sc">/</span>all<span class="sc">/</span>year<span class="ot">=</span><span class="er">&lt;</span>yyyy<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>             per year, all <span class="fu">taxa</span>    (res <span class="cf">in</span> res_year)</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>  year<span class="sc">/</span>eov<span class="sc">/</span>eov<span class="ot">=</span><span class="er">&lt;</span>eov<span class="sc">&gt;</span><span class="er">/</span>year<span class="ot">=</span><span class="er">&lt;</span>yyyy<span class="sc">&gt;</span><span class="er">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>   per year and <span class="fu">EOV</span>      (res <span class="cf">in</span> res_year)</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>  species<span class="sc">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>class<span class="ot">=</span><span class="er">&lt;</span>class<span class="sc">&gt;</span><span class="er">/</span>data_0.parquet  species x hex x <span class="fu">count</span> (res <span class="cf">in</span> res_species)</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>  species<span class="sc">/</span>species.parquet                   the species lookup<span class="sc">:</span> names, name_key, lineage</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>  species<span class="sc">/</span>heads.json                        the pre<span class="sc">-</span>aggregated heads and the layer serving each</span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>  species_decade<span class="sc">/</span>res<span class="ot">=</span><span class="er">&lt;</span>r<span class="sc">&gt;</span><span class="er">/</span>decade<span class="ot">=</span><span class="er">&lt;</span>d<span class="sc">&gt;</span><span class="er">/</span>class<span class="ot">=</span><span class="er">&lt;</span>class<span class="sc">&gt;</span><span class="er">/</span>  per <span class="fu">decade</span> (<span class="at">species_decades =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a>  place<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>slug<span class="sc">&gt;</span><span class="er">/</span>data_0.parquet          per<span class="sc">-</span>place pooled <span class="fu">indicators</span> (only with place_collections)</span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a>  place_exact<span class="sc">/</span>coll<span class="ot">=</span><span class="er">&lt;</span>slug<span class="sc">&gt;</span><span class="er">/</span>indicators.parquet, years.parquet, meta.json</span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>                                            exact point<span class="sc">-</span><span class="cf">in</span><span class="sc">-</span>polygon <span class="fu">indicators</span> (only with place_exact)</span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a>  collection.json                           STAC <span class="fu">Collection</span> (h3 profile), <span class="fu">obis_h3_stac_collection</span>()</span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a>  stats.parquet                             value ranges per layer x key x period x res x variable</span>
+<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a>  taxon_groups.parquet                      the taxa and EOVs available, with totals and paths</span>
+<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a>  files.parquet                             manifest<span class="sc">:</span> layer, path, url_path, rows, bytes per file</span></code></pre><p></p></div>
 <p>Every indicator file has the columns <code>h3</code> (lowercase hex string), <code>cell_id</code>,
 <code>n</code>, <code>sp</code>, <code>shannon</code>, <code>simpson</code>, <code>es</code>; the partition keys live in the path
 (read with <code>hive_partitioning = true</code>). Its rows are sorted by <code>cell_id</code> in
@@ -323,7 +336,21 @@ cell" from static files. Columns <code>h3, cell_id, name_key, aphiaid, n</code>
 <code>list_contains(lineage, &lt;aphiaid&gt;)</code> (<code><a href="obis_h3_species_subtree_sql.html">obis_h3_species_subtree_sql()</a></code>).
 <code>species/heads.json</code> lists the taxa that need a pre-aggregated head
 (<code><a href="obis_h3_species_heads.html">obis_h3_species_heads()</a></code>: Animalia and every taxon spanning two or more
-named classes); they are not built in this version. The per-decade variant
+named classes) and the layer that serves each.</p>
+<p><strong>The heads</strong> (<code>heads = TRUE</code>) are written as ordinary taxon layers,
+<code>taxon/rank=&lt;rank&gt;/taxon=&lt;name&gt;/res=&lt;r&gt;/</code> at <code>res_heads</code>
+(<code><a href="obis_h3_heads_sql.html">obis_h3_heads_sql()</a></code>: the WoRMS subtree from the lineage, species counted by
+<code>name_key</code>, so a head equals <code><a href="obis_h3_species_subtree_sql.html">obis_h3_species_subtree_sql()</a></code> cell for cell),
+where <code>rank</code> is the WoRMS rank lowercased without a botanical alias
+("Phylum (Division)" is <code>phylum</code>). They then appear in <code>stats.parquet</code>,
+<code>taxon_groups.parquet</code> and <code>files.parquet</code> as any taxon. A head is not
+written when a layer already serves it: one whose subtree holds every
+aphiaid (and the store has no record without one) is the <code>all</code> layer; one
+whose rank and name are a rank layer of <code>idx_h3_taxon</code> keeps that layer
+(built from the OBIS rank column, not the WoRMS subtree, so it may differ in
+a few cells). <code>heads.json</code> gives each head's <code>served_by</code> (<code>head</code>, <code>all</code>,
+<code>rank_layer</code>, or <code>homonym</code> for a second taxon with the same rank and name)
+and its <code>layer</code>. The per-decade variant
 <code>species_decade/</code> is written only with <code>species_decades = TRUE</code>. Rows with
 no aphiaid are left out; a store without one (e.g. the demo store built from
 <code>occ_SAtlantic</code>) gets no species layer.</p>

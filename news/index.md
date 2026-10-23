@@ -18,6 +18,32 @@
   v20261012 taxon paths compare equal). `release.json` records
   `sorted_by`, `row_group_rows` and `row_group_rows_max` (the largest
   group written). `max_open` is no longer used.
+- **The heads are built, as taxon layers.**
+  [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
+  writes the taxa of `species/heads.json` (Animalia and every taxon
+  spanning two or more named classes) under the existing
+  `taxon/rank=<rank>/taxon=<name>/res=<r>/` layout at `res_heads`
+  (default 1-7, res 6 and 7 split by `parent_res_taxon`), so a reader
+  draws a head as any taxon layer and never reads the class files; they
+  are in `stats.parquet`, `taxon_groups.parquet` and `files.parquet`
+  like the rank layers. `rank` is the WoRMS rank lowercased without a
+  botanical alias (`kingdom`, `subphylum`, `superclass`; “Phylum
+  (Division)” is `phylum`). New exported
+  [`obis_h3_heads_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_heads_sql.md):
+  the WoRMS subtree over the lookup’s `lineage`, species counted by
+  `name_key`, so a head equals
+  [`obis_h3_species_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_subtree_sql.md)
+  cell for cell (tested at res 3-5, and against h3t’s recursive-CTE
+  subtree at res 1-7). A head is not written when a layer already serves
+  it: a subtree holding every aphiaid is the `all` layer (Biota: equal
+  to `all` cell for cell at res 4 on v20261012), and a head whose rank
+  and name are a rank layer keeps that layer, which is built from the
+  OBIS rank column (the 40 phyla among the v20261012 heads; Chordata’s
+  phylum layer differs from its WoRMS subtree in 1,967 of 173,824 res-4
+  cells). `heads.json` gives each head’s `served_by` (`head`, `all`,
+  `rank_layer`, `homonym`) and `layer`; `release.json` gets
+  `layers.taxon.heads` and `layers.species.heads.n_built`. New arguments
+  `heads` (default TRUE) and `res_heads`.
 - Fix: `taxon_groups.parquet` no longer fails for a taxon layer without
   res 1.
 

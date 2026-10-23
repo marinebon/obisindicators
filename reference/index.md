@@ -17,6 +17,8 @@ R.
   : The paper's default benchmark query set
 - [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
   : Export an obis_h3 store to hive-partitioned Parquet
+- [`obis_h3_heads_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_heads_sql.md)
+  : SQL for the pre-aggregated heads at one resolution
 - [`obis_h3_species_heads()`](https://marinebon.org/obisindicators/reference/obis_h3_species_heads.md)
   : The pre-aggregated heads the species table still needs
 - [`obis_h3_species_lookup_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_lookup_sql.md)
