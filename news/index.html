@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.11.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -50,6 +50,12 @@
       <small>Source: <a href="https://github.com/marinebon/obisindicators/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.11.0" id="obisindicators-0110">obisindicators 0.11.0<a class="anchor" aria-label="anchor" href="#obisindicators-0110"></a></h2>
+<ul><li>
+<strong>Every indicator layer file is sorted by <code>cell_id</code> in small row groups.</strong> <code><a href="../reference/obis_h3_export_parquet.html">obis_h3_export_parquet()</a></code> gains <code>row_group_rows</code> (default 10000; DuckDB rounds up, so a group holds at most 10,240 rows) and writes each file of the <code>all</code>, <code>eov</code>, <code>taxon</code>, decade and year layers with its own sorted <code>COPY</code> (<code><a href="../reference/obis_h3_write_partitions.html">obis_h3_write_partitions()</a></code>, <code>order_by = "cell_id"</code>), so the <code>cell_id</code> statistics of consecutive row groups are disjoint and a reader that knows the cells under a tile range-reads only those groups. DuckDB’s <code>PARTITION_BY</code> wrote the groups out of order (the v20261012 <code>all/res=5</code> file had 6 groups of up to 122,880 rows, not in <code>cell_id</code> order). The paths are unchanged (the explicit writer encodes partition values as DuckDB did: all 7,370 v20261012 taxon paths compare equal). <code>release.json</code> records <code>sorted_by</code>, <code>row_group_rows</code> and <code>row_group_rows_max</code> (the largest group written). <code>max_open</code> is no longer used.</li>
+<li>Fix: <code>taxon_groups.parquet</code> no longer fails for a taxon layer without res 1.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.10.1" id="obisindicators-0101">obisindicators 0.10.1<a class="anchor" aria-label="anchor" href="#obisindicators-0101"></a></h2>
 <ul><li>

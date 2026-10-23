@@ -23,6 +23,7 @@ obis_h3_export_parquet(
   parent_min_rows = 50000,
   max_open = EXPORT_MAX_OPEN,
   compression = "zstd",
+  row_group_rows = 10000L,
   overwrite = FALSE,
   decades = seq(1960L, 2020L, by = 10L),
   esn = 50L,
@@ -99,13 +100,19 @@ obis_h3_export_parquet(
 
 - max_open:
 
-  max partitions written by one COPY (default 100); each open partition
-  holds a file open, so keep it under the process limit (`ulimit -n`,
-  256 on macOS by default).
+  no longer used (0.11.0): every file is written by its own `COPY`, so
+  no more than one is open at a time. Kept so old calls still run.
 
 - compression:
 
   Parquet compression codec (default `"zstd"`).
+
+- row_group_rows:
+
+  rows per Parquet row group of the indicator layer files (default
+  10000; DuckDB rounds up to a multiple of 2048, so a group holds at
+  most 10,240). Recorded in `release.json` (`row_group_rows`, and the
+  largest group written as `row_group_rows_max`).
 
 - overwrite:
 
@@ -192,9 +199,15 @@ invisibly, a character vector of the files written (absolute paths).
 
 Every indicator file has the columns `h3` (lowercase hex string),
 `cell_id`, `n`, `sp`, `shannon`, `simpson`, `es`; the partition keys
-live in the path (read with `hive_partitioning = true`). The decade
-layers are computed from `occ_h3` with the same SQL builder as `idx_h3`
-/ `idx_h3_eov` (so the math is identical to the store): `n` = records,
+live in the path (read with `hive_partitioning = true`). Its rows are
+sorted by `cell_id` in row groups of `row_group_rows` (about 10k), so a
+reader that knows the cells under a tile reads only the row groups whose
+`cell_id` statistics overlap them (a range read) instead of the whole
+file. Each file is written by its own `COPY`
+([`obis_h3_write_partitions()`](https://marinebon.org/obisindicators/reference/obis_h3_write_partitions.md)),
+since DuckDB's `PARTITION_BY` does not keep the order. The decade layers
+are computed from `occ_h3` with the same SQL builder as `idx_h3` /
+`idx_h3_eov` (so the math is identical to the store): `n` = records,
 `sp` = distinct species, Shannon, Simpson and ES(`esn`), grouped by cell
 and `decade = floor(date_year / 10) * 10`; records without a year are
 left out of the decade layers. EOV membership is the store's `eov` table
