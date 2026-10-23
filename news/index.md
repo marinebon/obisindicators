@@ -5,9 +5,10 @@
 - **Every indicator layer file is sorted by `cell_id` in small row
   groups.**
   [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
-  gains `row_group_rows` (default 10000; DuckDB rounds up, so a group
-  holds at most 10,240 rows) and writes each file of the `all`, `eov`,
-  `taxon`, decade and year layers with its own sorted `COPY`
+  gains `row_group_rows` (default 10000; DuckDB row groups are at most 2
+  x `row_group_rows`; DuckDB rounds to 2,048-row vectors: 12,045 rows at
+  most in v20261012) and writes each file of the `all`, `eov`, `taxon`,
+  decade and year layers with its own sorted `COPY`
   ([`obis_h3_write_partitions()`](https://marinebon.org/obisindicators/reference/obis_h3_write_partitions.md),
   `order_by = "cell_id"`), so the `cell_id` statistics of consecutive
   row groups are disjoint and a reader that knows the cells under a tile
@@ -17,7 +18,10 @@
   explicit writer encodes partition values as DuckDB did: all 7,370
   v20261012 taxon paths compare equal). `release.json` records
   `sorted_by`, `row_group_rows` and `row_group_rows_max` (the largest
-  group written). `max_open` is no longer used.
+  group written). `max_open` is no longer used. `stats.parquet` is
+  written in row groups of `row_group_rows` too (sorted by `layer, key`,
+  so a legend reads only its layer’s groups; the v20261012 file’s first
+  122,880-row group held `all`, `eov` and half the taxa).
 - **The heads are built, as taxon layers.**
   [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
   writes the taxa of `species/heads.json` (Animalia and every taxon
@@ -82,6 +86,30 @@
   store’s lookup; `data-raw/run_place_exact.R` reads
   `<out dir>/species/species.parquet` (or `OBIS_SPECIES_LOOKUP`) and
   fails when the species do not sum to the indicators.
+- **`collection.json` for the `h3` profile 1.1, with the atlas hooks.**
+  [`obis_h3_stac_collection()`](https://marinebon.org/obisindicators/reference/obis_h3_stac_collection.md)
+  now writes the collection with id `obis_h3` (was `obis-h3`; the atlas
+  names it `?c=obis_h3`) for profile
+  `https://oceanmetrics.io/schemas/h3/v1.1.0/schema.json`: `h3:periods`
+  as two period sets (decades at `res_decade`, years at `res_year`, each
+  with its template), `h3:layout.row_group_rows`,
+  `h3:species_table.columns` with `name_key`, `year_min`, `year_max` and
+  the decade variant’s `period`, `h3:heads` (`{layer: "taxon"}`),
+  `cube:dimensions` (`layer`: all and the EOVs; `indicator`; `period`:
+  all, decades as `<yyy0>s`, years; `res`), `atlas:metric` (`es`),
+  `item_assets`, and one STAC Item per map layer
+  (`items/<all|eov>.json`, with `data`, `decade` and `year` assets: a
+  folder and the path template under it). `stats.parquet` is the asset
+  with role `legend`, `taxon_groups.parquet` the one with role `search`.
+  New argument `items`.
+- **New `obis_h3_stac_stable(release_dir, base_url)`** writes the copy
+  for a stable url, `obis-h3/collection.json`, with every href and
+  template absolute under the release folder;
+  `data-raw/refresh_obis_h3.sh` writes it after `latest.json` (step g2),
+  validated with `om-catalog validate h3` (exit 5 when it fails). Both
+  validate against the 1.1 schema (jsonvalidate and the node CLI), with
+  counter-fixtures (a period set without `placeholder`, `year_min`
+  without `year_max`) failing.
 - Fix: `taxon_groups.parquet` no longer fails for a taxon layer without
   res 1.
 

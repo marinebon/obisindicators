@@ -189,9 +189,11 @@ written whole even when its res is in <code>parent_res</code> (default 50000).</
 
 <dt id="arg-row-group-rows">row_group_rows<a class="anchor" aria-label="anchor" href="#arg-row-group-rows"></a></dt>
 <dd><p>rows per Parquet row group of the indicator layer
-files (default 10000; DuckDB rounds up to a multiple of 2048, so a group
-holds at most 10,240). Recorded in <code>release.json</code> (<code>row_group_rows</code>, and
-the largest group written as <code>row_group_rows_max</code>).</p></dd>
+files (default 10000). A group holds at most 2 x <code>row_group_rows</code>: DuckDB
+rounds to 2,048-row vectors and may go past the target (v20261012: 12,045
+at most). What a reader may rely on is the order and the disjoint
+<code>cell_id</code> statistics. Recorded in <code>release.json</code> (<code>row_group_rows</code>, and the
+largest group written as <code>row_group_rows_max</code>).</p></dd>
 
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
@@ -376,7 +378,8 @@ no aphiaid are left out; a store without one (e.g. the demo store built from
 <code>occ_SAtlantic</code>) gets no species layer.</p>
 <p><code>collection.json</code> is a STAC Collection of the release for the Ocean Metrics
 <code>h3</code> profile (<code><a href="obis_h3_stac_collection.html">obis_h3_stac_collection()</a></code>).</p>
-<p><code>stats.parquet</code> has one row per indicator layer and (<code>key</code>, <code>decade</code>,
+<p><code>stats.parquet</code> (sorted by <code>layer, key</code>, in row groups of <code>row_group_rows</code>,
+so a legend reads only the groups of its layer) has one row per indicator layer and (<code>key</code>, <code>decade</code>,
 <code>year</code>, <code>res</code>, <code>variable</code>) with <code>min</code>, <code>p02</code>, <code>p50</code>, <code>p98</code>, <code>max</code> and
 <code>n_cells</code> (cells with a non-NULL value; a variable NULL everywhere in a
 partition gets a row with NULL ranges and <code>n_cells</code> 0), for colour ramps.

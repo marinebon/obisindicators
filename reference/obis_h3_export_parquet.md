@@ -135,9 +135,11 @@ obis_h3_export_parquet(
 - row_group_rows:
 
   rows per Parquet row group of the indicator layer files (default
-  10000; DuckDB rounds up to a multiple of 2048, so a group holds at
-  most 10,240). Recorded in `release.json` (`row_group_rows`, and the
-  largest group written as `row_group_rows_max`).
+  10000). A group holds at most 2 x `row_group_rows`: DuckDB rounds to
+  2,048-row vectors and may go past the target (v20261012: 12,045 at
+  most). What a reader may rely on is the order and the disjoint
+  `cell_id` statistics. Recorded in `release.json` (`row_group_rows`,
+  and the largest group written as `row_group_rows_max`).
 
 - overwrite:
 
@@ -356,13 +358,15 @@ species layer.
 Metrics `h3` profile
 ([`obis_h3_stac_collection()`](https://marinebon.org/obisindicators/reference/obis_h3_stac_collection.md)).
 
-`stats.parquet` has one row per indicator layer and (`key`, `decade`,
-`year`, `res`, `variable`) with `min`, `p02`, `p50`, `p98`, `max` and
-`n_cells` (cells with a non-NULL value; a variable NULL everywhere in a
-partition gets a row with NULL ranges and `n_cells` 0), for colour
-ramps. `key` is the EOV or taxon name (” for the all-taxa layers),
-`rank` the taxon rank (” otherwise), `decade` NA outside the decade
-layers, `year` NA outside the year layers.
+`stats.parquet` (sorted by `layer, key`, in row groups of
+`row_group_rows`, so a legend reads only the groups of its layer) has
+one row per indicator layer and (`key`, `decade`, `year`, `res`,
+`variable`) with `min`, `p02`, `p50`, `p98`, `max` and `n_cells` (cells
+with a non-NULL value; a variable NULL everywhere in a partition gets a
+row with NULL ranges and `n_cells` 0), for colour ramps. `key` is the
+EOV or taxon name (” for the all-taxa layers), `rank` the taxon rank (”
+otherwise), `decade` NA outside the decade layers, `year` NA outside the
+year layers.
 
 ## Examples
 

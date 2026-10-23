@@ -164,6 +164,8 @@ R.
   : SQL for a WoRMS subtree's indicators from the exported species table
 - [`obis_h3_stac_collection()`](https://marinebon.org/obisindicators/reference/obis_h3_stac_collection.md)
   : Write the STAC Collection of an obis-h3 release
+- [`obis_h3_stac_stable()`](https://marinebon.org/obisindicators/reference/obis_h3_stac_stable.md)
+  : Write the stable-url copy of an obis-h3 release's STAC Collection
 - [`obis_h3_write_partitions()`](https://marinebon.org/obisindicators/reference/obis_h3_write_partitions.md)
   : Write a query to one Parquet file per partition, sorted
 - [`obis_h3_year_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_year_sql.md)
