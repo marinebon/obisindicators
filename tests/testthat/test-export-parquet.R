@@ -774,6 +774,15 @@ test_that("every indicator file is sorted by cell_id in row groups of row_group_
             FROM parquet_metadata({lst}) WHERE path_in_schema = 'cell_id'))
     WHERE prev_mx IS NOT NULL AND mn <= prev_mx"))
   expect_equal(overlap$n, 0)
+  # stats.parquet: sorted by layer, key in row groups of row_group_rows (the legend reads its own groups)
+  fs <- file.path(out, "stats.parquet")
+  sm <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT MAX(row_group_num_rows)::DOUBLE AS m FROM parquet_metadata('{fs}')"))$m
+  expect_lte(sm, 2048)
+  so <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT layer, key FROM read_parquet('{fs}', file_row_number = true) ORDER BY file_row_number"))
+  expect_identical(so, so[order(so$layer, so$key, method = "radix"), , drop = FALSE], ignore_attr = TRUE)
+  expect_true(all(so$key[so$layer == "all"] == ""))
   js <- jsonlite::read_json(file.path(out, "release.json"))
   expect_equal(js$sorted_by, "cell_id")
   expect_equal(js$row_group_rows, 2048L)

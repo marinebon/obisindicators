@@ -12,7 +12,10 @@
   are unchanged (the explicit writer encodes partition values as DuckDB did:
   all 7,370 v20261012 taxon paths compare equal). `release.json` records
   `sorted_by`, `row_group_rows` and `row_group_rows_max` (the largest group
-  written). `max_open` is no longer used.
+  written). `max_open` is no longer used. `stats.parquet` is written in row
+  groups of `row_group_rows` too (sorted by `layer, key`, so a legend reads only
+  its layer's groups; the v20261012 file's first 122,880-row group held `all`,
+  `eov` and half the taxa).
 * **The heads are built, as taxon layers.** `obis_h3_export_parquet()` writes
   the taxa of `species/heads.json` (Animalia and every taxon spanning two or
   more named classes) under the existing `taxon/rank=<rank>/taxon=<name>/res=<r>/`

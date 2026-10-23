@@ -160,7 +160,8 @@ EXPORT_MAX_OPEN <- 100L
 #' `collection.json` is a STAC Collection of the release for the Ocean Metrics
 #' `h3` profile ([obis_h3_stac_collection()]).
 #'
-#' `stats.parquet` has one row per indicator layer and (`key`, `decade`,
+#' `stats.parquet` (sorted by `layer, key`, in row groups of `row_group_rows`,
+#' so a legend reads only the groups of its layer) has one row per indicator layer and (`key`, `decade`,
 #' `year`, `res`, `variable`) with `min`, `p02`, `p50`, `p98`, `max` and
 #' `n_cells` (cells with a non-NULL value; a variable NULL everywhere in a
 #' partition gets a row with NULL ranges and `n_cells` 0), for colour ramps.
@@ -870,7 +871,7 @@ obis_h3_export_parquet <- function(
              min, p02, p50, p98, max, n_cells::BIGINT AS n_cells
       FROM export_stats
       ORDER BY layer, key, rank, decade, year, res, variable
-    ) TO '{q(f_stats)}' (FORMAT PARQUET, COMPRESSION {compression});"))
+    ) TO '{q(f_stats)}' (FORMAT PARQUET, COMPRESSION {compression}, ROW_GROUP_SIZE {row_group_rows});"))
   duckdb::duckdb_unregister(con, "export_stats")
 
   # taxon_groups.parquet: what the app can offer, with paths ----

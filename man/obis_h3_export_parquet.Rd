@@ -271,7 +271,8 @@ no aphiaid are left out; a store without one (e.g. the demo store built from
 \code{collection.json} is a STAC Collection of the release for the Ocean Metrics
 \code{h3} profile (\code{\link[=obis_h3_stac_collection]{obis_h3_stac_collection()}}).
 
-\code{stats.parquet} has one row per indicator layer and (\code{key}, \code{decade},
+\code{stats.parquet} (sorted by \verb{layer, key}, in row groups of \code{row_group_rows},
+so a legend reads only the groups of its layer) has one row per indicator layer and (\code{key}, \code{decade},
 \code{year}, \code{res}, \code{variable}) with \code{min}, \code{p02}, \code{p50}, \code{p98}, \code{max} and
 \code{n_cells} (cells with a non-NULL value; a variable NULL everywhere in a
 partition gets a row with NULL ranges and \code{n_cells} 0), for colour ramps.
