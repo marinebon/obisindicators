@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.12.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.12.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -50,6 +50,13 @@
       <small>Source: <a href="https://github.com/marinebon/obisindicators/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.12.1" id="obisindicators-0121">obisindicators 0.12.1<a class="anchor" aria-label="anchor" href="#obisindicators-0121"></a></h2>
+<ul><li>
+<strong>The monthly obis-h3 upload writes both stores</strong> (Ocean Metrics build week 6). New <code>data-raw/publish_obis_h3.sh</code> uploads a staged release on the host through oceanmetrics/platform <code>scripts/om-publish.sh</code>: the release folder, a count check on S3 and R2, then <code>latest.json</code>, then the stable <code>collection.json</code>, to R2 <code>oceanmetrics-io-public-enam</code> (served by <code>storage.oceanmetrics.io</code>) and S3 <code>oceanmetrics.io-public</code>, never deleting, the replaced R2 copies of the two pointers kept under <code>obis-h3/_history/&lt;date&gt;/</code>. <code>refresh_obis_h3.sh</code> gains <code>OBIS_UPLOAD=host</code> (stage only; <code>aws</code>, the S3-only upload, stays the default when it runs alone) and <code>run_refresh_docker.sh</code> sets it and runs the host upload after the container, so the R2 keys never enter the image.</li>
+<li>
+<code>refresh_obis_h3.sh</code>’s <code>PUBLIC_BASE</code> (the root of the hrefs in <code>latest.json</code> and <code>collection.json</code>, and where the previous release is read) defaults to <code>https://storage.oceanmetrics.io/obis-h3</code>, so the next release keeps the storage-host hrefs the published files carry since the cutover of 2026-10-23.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.12.0" id="obisindicators-0120">obisindicators 0.12.0<a class="anchor" aria-label="anchor" href="#obisindicators-0120"></a></h2>
 <ul><li>
