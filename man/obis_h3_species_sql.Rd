@@ -29,7 +29,8 @@ a SQL string (a SELECT).
 }
 \description{
 One row per (cell, aphiaid) from the store's \code{occ_h3}, with \code{n} the number
-of records. A resolution that is an \code{occ_h3} tier (3, 5, 7) reads that tier;
+of records and \code{year_min}, \code{year_max} the first and last year recorded
+(the Cell pane's first and last year; NULL when no record has a year). A resolution that is an \code{occ_h3} tier (3, 5, 7) reads that tier;
 any other is rolled up from the next finer tier with \code{h3_cell_to_parent()}
 (res 4 from the res-5 tier, as in the decade layers). Rows with a NULL
 \code{aphiaid} are left out (no taxon filter can reach them).
@@ -37,8 +38,8 @@ any other is rolled up from the next finer tier with \code{h3_cell_to_parent()}
 \details{
 With \code{lookup}, the name of a table holding \code{\link[=obis_h3_species_lookup_sql]{obis_h3_species_lookup_sql()}}'s
 rows, the result has the columns of a species file plus the partition key:
-\verb{h3 VARCHAR, cell_id BIGINT, name_key INTEGER, aphiaid BIGINT, n BIGINT, class VARCHAR} (the lookup's class, so one aphiaid always lands in one
-partition). Without it, \verb{cell_id, aphiaid, n}.
+\verb{h3 VARCHAR, cell_id BIGINT, name_key INTEGER, aphiaid BIGINT, n BIGINT, year_min SMALLINT, year_max SMALLINT, class VARCHAR} (the lookup's class, so
+one aphiaid always lands in one partition). Without it, \verb{cell_id, aphiaid, n, year_min, year_max}. Per decade, the years are those within the decade.
 }
 \examples{
 cat(obis_h3_species_sql(4))

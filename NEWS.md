@@ -34,6 +34,22 @@
   `layer`; `release.json` gets `layers.taxon.heads` and
   `layers.species.heads.n_built`. New arguments `heads` (default TRUE) and
   `res_heads`.
+* **The species table carries the first and last year.** `obis_h3_species_sql()`
+  and every species file gain `year_min` and `year_max` (SMALLINT; the first and
+  last year the aphiaid was recorded in the cell, NULL when no record has a
+  year; within the decade in the decade variant), for the Cell pane.
+* **The decade species table is on by default**, at res 3 and 4:
+  `species_decades` now defaults to TRUE and the new `res_species_decade`
+  (default `c(3, 4)`) sets its resolutions (it followed `res_species` before),
+  for the decade filter on a WoRMS subtree. `layers.species_decade` in
+  `release.json` lists its `resolutions`, `decades` and `columns` (with
+  `period = "decade"`).
+* **`species_flat/res=<r>.parquet`**: the species table in one file per
+  resolution for every class, sorted by `cell_id, aphiaid` in row groups of
+  `row_group_rows`, so the species of a cell are a range read of one file
+  (spike 2: 0.53 MB read for a res-1 cell against 5.3 MB from the class files).
+  New argument `res_species_flat` (default 3); `release.json` gets
+  `layers.species_flat`.
 * Fix: `taxon_groups.parquet` no longer fails for a taxon layer without res 1.
 
 # obisindicators 0.10.1

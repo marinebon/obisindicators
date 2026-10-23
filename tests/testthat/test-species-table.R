@@ -87,6 +87,19 @@ test_that("obis_h3_species_sql(): cell x aphiaid x n per res, res 4 rolled up fr
                  "Mammalia", "Florideophyceae", NA, "Mammalia", "Aves"),
     stringsAsFactors = FALSE)
   expect_equal(get(4), want4)
+  # first and last year per (cell, aphiaid): Tursiops 16 in PQ4 has 2015 (P) and 2009 (Q);
+  # in S4 its 7 records have no year, so both are NULL
+  yr <- DBI::dbGetQuery(con, paste0(
+    "SELECT h3, aphiaid::INTEGER AS aphiaid, year_min::INTEGER AS y0, year_max::INTEGER AS y1 FROM (",
+    obis_h3_species_sql(4, lookup = "species_lookup"), ")"))
+  yr$cell <- cell_name(yr$h3)
+  expect_equal(unlist(yr[yr$cell == "PQ4" & yr$aphiaid == 16, c("y0", "y1")], use.names = FALSE), c(2009L, 2015L))
+  expect_equal(unlist(yr[yr$cell == "R4" & yr$aphiaid == 41, c("y0", "y1")], use.names = FALSE), c(2005L, 2005L))
+  expect_true(all(is.na(unlist(yr[yr$cell == "S4" & yr$aphiaid == 16, c("y0", "y1")]))))
+  expect_true(all(yr$y0 <= yr$y1, na.rm = TRUE))
+  expect_equal(names(DBI::dbGetQuery(con, paste0("SELECT * FROM (",
+    obis_h3_species_sql(4, lookup = "species_lookup"), ") LIMIT 0"))),
+    c(vapply(SPECIES_COLUMNS, `[[`, "", "name"), "class"))
   # res 3 reads the res-3 tier directly: the same rows on the res-3 parents
   w3 <- want4; w3$cell <- sub("4$", "3", w3$cell)
   expect_equal(get(3), w3)
@@ -104,6 +117,8 @@ test_that("obis_h3_species_sql(): cell x aphiaid x n per res, res 4 rolled up fr
     "SELECT * FROM (", obis_h3_species_sql(5, lookup = "species_lookup", decade = TRUE,
                                            decades = 2010), ")"))
   expect_equal(unique(d2010$decade), 2010L)
+  # per decade the years stay inside the decade: Tursiops 16 in Q5 (2009) is 2000s only
+  expect_true(all(d2010$year_min >= 2010 & d2010$year_max <= 2019))
 })
 
 test_that("obis_h3_year_sql(): indicators per year, all taxa and per EOV", {
@@ -269,7 +284,29 @@ test_that("export: year and species layers, release.json, and the Animalia subtr
                     paste0("class=", c("Aves", "Florideophyceae", "Mammalia", "_none")))
   expect_true(all(file.exists(file.path(out, "species/res=4", paste0(
     "class=", c("Aves", "Florideophyceae", "Mammalia", "_none")), "data_0.parquet"))))
-  expect_true(dir.exists(file.path(out, "species_decade/res=5/decade=2000/class=_none")))
+  # the decade variant at res_species_decade (default 3 and 4), with years inside each decade
+  expect_true(dir.exists(file.path(out, "species_decade/res=4/decade=2000/class=_none")))
+  expect_setequal(list.files(file.path(out, "species_decade")), c("res=3", "res=4"))
+  sd <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT decade, year_min, year_max FROM read_parquet('{out}/species_decade/res=4/*/*/*.parquet',
+       hive_partitioning = true, hive_types = {{'decade': 'INTEGER', 'class': 'VARCHAR'}})"))
+  expect_true(all(sd$year_min >= sd$decade & sd$year_max < sd$decade + 10))
+  # the species files carry the first and last year
+  s4 <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/species/res=4/class=Mammalia/data_0.parquet', hive_partitioning = false)"))
+  expect_equal(names(s4), vapply(SPECIES_COLUMNS, `[[`, "", "name"))
+  # species_flat: res 3 in one file, every class, sorted by cell_id then aphiaid
+  ff <- file.path(out, "species_flat/res=3.parquet")
+  expect_true(file.exists(ff))
+  sf <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT h3, aphiaid::DOUBLE AS aphiaid, n::DOUBLE AS n, year_min, year_max,
+            (cell_id < lag(cell_id) OVER w OR (cell_id = lag(cell_id) OVER w AND aphiaid <= lag(aphiaid) OVER w)) AS bad
+     FROM read_parquet('{ff}', file_row_number = true) WINDOW w AS (ORDER BY file_row_number)"))
+  expect_equal(nrow(sf), 11L)
+  expect_false(any(sf$bad, na.rm = TRUE))
+  s3 <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT h3, aphiaid::DOUBLE AS aphiaid, n::DOUBLE AS n, year_min, year_max
+     FROM read_parquet('{out}/species/res=3/*/*.parquet') ORDER BY h3, aphiaid"))
+  expect_equal(sf[, names(s3)], s3)
   lk <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/species/species.parquet')"))
   expect_equal(nrow(lk), 7L)
   expect_equal(names(lk), vapply(SPECIES_LOOKUP_COLUMNS, `[[`, "", "name"))
@@ -307,7 +344,12 @@ test_that("export: year and species layers, release.json, and the Animalia subtr
   expect_equal(unlist(sp$resolutions), 3:5)
   expect_equal(unlist(sp$partition_by), "class")
   expect_equal(unlist(sp$sorted_by), c("cell_id", "aphiaid"))
-  expect_equal(sp$columns, list(cell = "cell_id", species = "aphiaid", count = "n"))
+  expect_equal(sp$columns, list(cell = "cell_id", species = "aphiaid", count = "n",
+                                name_key = "name_key", year_min = "year_min", year_max = "year_max"))
+  expect_equal(js$layers$species_flat$href_template, "species_flat/res={res}.parquet")
+  expect_equal(js$layers$species_flat$rows, 11)
+  expect_equal(unlist(js$layers$species_decade$resolutions), 3:4)
+  expect_equal(js$layers$species_decade$columns$period, "decade")
   expect_equal(sp$lookup$href, "species/species.parquet")
   expect_equal(sp$lookup$lineage_column, "lineage")
   expect_equal(sp$heads$href, "species/heads.json")

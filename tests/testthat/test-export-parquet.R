@@ -334,7 +334,8 @@ test_that("export of the paper fixture: eov, taxon, decade_eov layers", {
   expect_equal(got, ref, ignore_attr = TRUE)
   js <- jsonlite::read_json(file.path(out, "release.json"))
   expect_setequal(names(js$layers), c("all", "eov", "taxon", "decade_all", "decade_eov",
-                                      "year_all", "year_eov", "species"))
+                                      "year_all", "year_eov", "species", "species_decade",
+                                      "species_flat"))
   expect_null(js$layers$taxon$parent_res)  # tiny fixture: below parent_min_rows
   # regression: no taxon spans two classes here (two separate roots), so heads.json lists none
   hj <- jsonlite::read_json(file.path(out, "species", "heads.json"))

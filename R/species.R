@@ -10,7 +10,9 @@ SPECIES_COLUMNS <- list(
   list(name = "cell_id",  type = "BIGINT",  description = "H3 cell index as BIGINT (same cell as h3); rows are sorted by cell_id, aphiaid"),
   list(name = "name_key", type = "INTEGER", description = "dense integer per distinct species name (the lookup's name_key); richness counts names, as h3t does"),
   list(name = "aphiaid",  type = "BIGINT",  description = "WoRMS AphiaID of the occurrences (as recorded, accepted or not)"),
-  list(name = "n",        type = "BIGINT",  description = "number of occurrence records of this aphiaid in this cell"))
+  list(name = "n",        type = "BIGINT",  description = "number of occurrence records of this aphiaid in this cell"),
+  list(name = "year_min", type = "SMALLINT", description = "the first year this aphiaid was recorded in this cell (NULL when no record has a year); per decade, the first year within the decade"),
+  list(name = "year_max", type = "SMALLINT", description = "the last year this aphiaid was recorded in this cell (NULL when no record has a year); per decade, the last year within the decade"))
 
 SPECIES_LOOKUP_COLUMNS <- list(
   list(name = "aphiaid",  type = "BIGINT",   description = "WoRMS AphiaID, one row each"),
@@ -38,7 +40,8 @@ SPECIES_LOOKUP_COLUMNS <- list(
 #' SQL for the species x hex x count table at one resolution
 #'
 #' One row per (cell, aphiaid) from the store's `occ_h3`, with `n` the number
-#' of records. A resolution that is an `occ_h3` tier (3, 5, 7) reads that tier;
+#' of records and `year_min`, `year_max` the first and last year recorded
+#' (the Cell pane's first and last year; NULL when no record has a year). A resolution that is an `occ_h3` tier (3, 5, 7) reads that tier;
 #' any other is rolled up from the next finer tier with `h3_cell_to_parent()`
 #' (res 4 from the res-5 tier, as in the decade layers). Rows with a NULL
 #' `aphiaid` are left out (no taxon filter can reach them).
@@ -46,8 +49,9 @@ SPECIES_LOOKUP_COLUMNS <- list(
 #' With `lookup`, the name of a table holding [obis_h3_species_lookup_sql()]'s
 #' rows, the result has the columns of a species file plus the partition key:
 #' `h3 VARCHAR, cell_id BIGINT, name_key INTEGER, aphiaid BIGINT, n BIGINT,
-#' class VARCHAR` (the lookup's class, so one aphiaid always lands in one
-#' partition). Without it, `cell_id, aphiaid, n`.
+#' year_min SMALLINT, year_max SMALLINT, class VARCHAR` (the lookup's class, so
+#' one aphiaid always lands in one partition). Without it, `cell_id, aphiaid,
+#' n, year_min, year_max`. Per decade, the years are those within the decade.
 #'
 #' @param res H3 resolution, 1 to 7.
 #' @param from the species-level table (default `"occ_h3"`).
@@ -74,14 +78,16 @@ obis_h3_species_sql <- function(res, from = "occ_h3", lookup = NULL, decade = FA
   if (decade && !is.null(decades))
     filt <- glue::glue("{filt} AND {dec} IN ({paste(as.integer(decades), collapse = ', ')})")
   agg <- glue::glue("
-    SELECT {key}{cell} AS cell_id, aphiaid::BIGINT AS aphiaid, SUM(records)::BIGINT AS n
+    SELECT {key}{cell} AS cell_id, aphiaid::BIGINT AS aphiaid, SUM(records)::BIGINT AS n,
+           MIN(date_year)::SMALLINT AS year_min, MAX(date_year)::SMALLINT AS year_max
     FROM {from}
     WHERE res = {tier} AND aphiaid IS NOT NULL{filt}
     GROUP BY ALL")
   if (is.null(lookup)) return(agg)
   dk <- if (decade) "s.decade, " else ""
   glue::glue("
-    SELECT {dk}lower(printf('%x', s.cell_id)) AS h3, s.cell_id, l.name_key, s.aphiaid, s.n, l.class
+    SELECT {dk}lower(printf('%x', s.cell_id)) AS h3, s.cell_id, l.name_key, s.aphiaid, s.n,
+           s.year_min, s.year_max, l.class
     FROM ({agg}) s
     JOIN {lookup} l USING (aphiaid)")
 }
