@@ -31,7 +31,7 @@ resolution must be \code{from_res} or one of \code{res}.}
 \item{row_group_rows}{rows per row group of the roll-ups (default 10000).}
 
 \item{split_row_group_rows}{rows per row group of the split files (default
-2048, one DuckDB vector).}
+2048, one DuckDB vector; a group holds at most twice that).}
 
 \item{compression}{Parquet codec (default \code{"zstd"}).}
 }
@@ -58,7 +58,9 @@ come with the first range read.
 Every file written has the columns \verb{cell_id, name_key, aphiaid, n, year_min, year_max} (no \code{h3}: \code{cell_id} gives it, and its string statistics
 are the largest part of a footer), sorted by \verb{cell_id, aphiaid}, in row
 groups of \code{row_group_rows} (the roll-ups) or \code{split_row_group_rows} (the
-split), so the \code{cell_id} statistics of consecutive groups do not overlap.
-\verb{res=<from_res>.parquet} is read, never rewritten.
+split), so the \code{cell_id} statistics of consecutive groups ascend (a cell's
+rows lie in one group or in adjacent ones). As for the layer files, DuckDB
+writes a group of at most 2 x the size asked (v20261012's split: 4,081 rows
+at most for 2,048). \verb{res=<from_res>.parquet} is read, never rewritten.
 }
 \concept{store}

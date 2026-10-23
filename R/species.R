@@ -446,8 +446,10 @@ obis_h3_species_rollup_sql <- function(from, res) {
 #' year_min, year_max` (no `h3`: `cell_id` gives it, and its string statistics
 #' are the largest part of a footer), sorted by `cell_id, aphiaid`, in row
 #' groups of `row_group_rows` (the roll-ups) or `split_row_group_rows` (the
-#' split), so the `cell_id` statistics of consecutive groups do not overlap.
-#' `res=<from_res>.parquet` is read, never rewritten.
+#' split), so the `cell_id` statistics of consecutive groups ascend (a cell's
+#' rows lie in one group or in adjacent ones). As for the layer files, DuckDB
+#' writes a group of at most 2 x the size asked (v20261012's split: 4,081 rows
+#' at most for 2,048). `res=<from_res>.parquet` is read, never rewritten.
 #'
 #' @param con a DBI connection to DuckDB with the `h3` extension loaded.
 #' @param flat_dir the release's `species_flat/` folder.
@@ -458,7 +460,7 @@ obis_h3_species_rollup_sql <- function(from, res) {
 #'   resolution must be `from_res` or one of `res`.
 #' @param row_group_rows rows per row group of the roll-ups (default 10000).
 #' @param split_row_group_rows rows per row group of the split files (default
-#'   2048, one DuckDB vector).
+#'   2048, one DuckDB vector; a group holds at most twice that).
 #' @param compression Parquet codec (default `"zstd"`).
 #' @return a data frame, one row per file written: `path` (relative to the
 #'   release, `species_flat/...`), `res`, `parent` (NA for a roll-up), `rows`,

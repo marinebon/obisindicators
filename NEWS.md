@@ -14,7 +14,8 @@
 * **The res-3 species table split by res-1 parent**:
   `species_flat/res=3/p=<res-1 parent>.parquet`, one file per parent with
   records, without the `h3` column, sorted by `cell_id, aphiaid` in row groups
-  of `split_row_group_rows` (default 2048) with `cell_id` statistics, so a
+  of `split_row_group_rows` (default 2048; at most 2 x, as DuckDB writes them:
+  4,081 rows in v20261012) with `cell_id` statistics, so a
   cell's file is small enough for its footer to come with the first range
   read. The files union to `res=3.parquet`, which is kept. New arguments
   `species_flat_split` (default `c("3" = 1L)`, resolution = parent resolution;
