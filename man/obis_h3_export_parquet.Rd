@@ -18,6 +18,7 @@ obis_h3_export_parquet(
   parent_min_rows = 50000,
   max_open = EXPORT_MAX_OPEN,
   compression = "zstd",
+  row_group_rows = 10000L,
   overwrite = FALSE,
   decades = seq(1960L, 2020L, by = 10L),
   esn = 50L,
@@ -67,11 +68,15 @@ one file per parent cell (\verb{res=<r>/p=<parent>/}). Default
 \item{parent_min_rows}{a (layer key, res) with at most this many rows is
 written whole even when its res is in \code{parent_res} (default 50000).}
 
-\item{max_open}{max partitions written by one COPY (default 100); each open
-partition holds a file open, so keep it under the process limit
-(\code{ulimit -n}, 256 on macOS by default).}
+\item{max_open}{no longer used (0.11.0): every file is written by its own
+\code{COPY}, so no more than one is open at a time. Kept so old calls still run.}
 
 \item{compression}{Parquet compression codec (default \code{"zstd"}).}
+
+\item{row_group_rows}{rows per Parquet row group of the indicator layer
+files (default 10000; DuckDB rounds up to a multiple of 2048, so a group
+holds at most 10,240). Recorded in \code{release.json} (\code{row_group_rows}, and
+the largest group written as \code{row_group_rows_max}).}
 
 \item{overwrite}{replace an existing \verb{dir_out/release/} (default FALSE: stop).}
 
@@ -140,7 +145,12 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):
 
 Every indicator file has the columns \code{h3} (lowercase hex string), \code{cell_id},
 \code{n}, \code{sp}, \code{shannon}, \code{simpson}, \code{es}; the partition keys live in the path
-(read with \code{hive_partitioning = true}). The decade layers are computed from
+(read with \code{hive_partitioning = true}). Its rows are sorted by \code{cell_id} in
+row groups of \code{row_group_rows} (about 10k), so a reader that knows the cells
+under a tile reads only the row groups whose \code{cell_id} statistics overlap
+them (a range read) instead of the whole file. Each file is written by its
+own \code{COPY} (\code{\link[=obis_h3_write_partitions]{obis_h3_write_partitions()}}), since DuckDB's \code{PARTITION_BY}
+does not keep the order. The decade layers are computed from
 \code{occ_h3} with the same SQL builder as \code{idx_h3} / \code{idx_h3_eov} (so the math is
 identical to the store): \code{n} = records, \code{sp} = distinct species, Shannon,
 Simpson and ES(\code{esn}), grouped by cell and \code{decade = floor(date_year / 10) * 10}; records without a year are left out of the decade layers. EOV membership

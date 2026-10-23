@@ -50,7 +50,12 @@ EXPORT_MAX_OPEN <- 100L
 #'
 #' Every indicator file has the columns `h3` (lowercase hex string), `cell_id`,
 #' `n`, `sp`, `shannon`, `simpson`, `es`; the partition keys live in the path
-#' (read with `hive_partitioning = true`). The decade layers are computed from
+#' (read with `hive_partitioning = true`). Its rows are sorted by `cell_id` in
+#' row groups of `row_group_rows` (about 10k), so a reader that knows the cells
+#' under a tile reads only the row groups whose `cell_id` statistics overlap
+#' them (a range read) instead of the whole file. Each file is written by its
+#' own `COPY` ([obis_h3_write_partitions()]), since DuckDB's `PARTITION_BY`
+#' does not keep the order. The decade layers are computed from
 #' `occ_h3` with the same SQL builder as `idx_h3` / `idx_h3_eov` (so the math is
 #' identical to the store): `n` = records, `sp` = distinct species, Shannon,
 #' Simpson and ES(`esn`), grouped by cell and `decade = floor(date_year / 10) *
@@ -164,10 +169,13 @@ EXPORT_MAX_OPEN <- 100L
 #'   `c("6" = 0L, "7" = 0L)`, the base cell).
 #' @param parent_min_rows a (layer key, res) with at most this many rows is
 #'   written whole even when its res is in `parent_res` (default 50000).
-#' @param max_open max partitions written by one COPY (default 100); each open
-#'   partition holds a file open, so keep it under the process limit
-#'   (`ulimit -n`, 256 on macOS by default).
+#' @param max_open no longer used (0.11.0): every file is written by its own
+#'   `COPY`, so no more than one is open at a time. Kept so old calls still run.
 #' @param compression Parquet compression codec (default `"zstd"`).
+#' @param row_group_rows rows per Parquet row group of the indicator layer
+#'   files (default 10000; DuckDB rounds up to a multiple of 2048, so a group
+#'   holds at most 10,240). Recorded in `release.json` (`row_group_rows`, and
+#'   the largest group written as `row_group_rows_max`).
 #' @param overwrite replace an existing `dir_out/release/` (default FALSE: stop).
 #' @param decades decades (first year) to export in the decade layers; default
 #'   1960-2020. NULL exports every decade present.
@@ -214,6 +222,7 @@ obis_h3_export_parquet <- function(
   parent_min_rows  = 50000,
   max_open         = EXPORT_MAX_OPEN,
   compression  = "zstd",
+  row_group_rows = 10000L,
   overwrite    = FALSE,
   decades      = seq(1960L, 2020L, by = 10L),
   esn          = 50L,
@@ -239,7 +248,8 @@ obis_h3_export_parquet <- function(
     is.null(years) || is.numeric(years),
     is.logical(species_decades), length(species_decades) == 1L,
     is.numeric(parent_min_rows), length(parent_min_rows) == 1L,
-    is.numeric(max_open), length(max_open) == 1L, max_open >= 1)
+    is.numeric(max_open), length(max_open) == 1L, max_open >= 1,
+    is.numeric(row_group_rows), length(row_group_rows) == 1L, row_group_rows >= 1)
   check_pr <- function(pr) {
     if (is.null(pr) || !length(pr)) return(integer(0))
     stopifnot(!is.null(names(pr)), !anyNA(suppressWarnings(as.integer(names(pr)))),
@@ -249,6 +259,7 @@ obis_h3_export_parquet <- function(
   parent_res       <- check_pr(parent_res)
   parent_res_taxon <- check_pr(parent_res_taxon)
   max_open         <- as.integer(max_open)
+  row_group_rows   <- as.integer(row_group_rows)
   t0  <- Sys.time()
   say <- function(...) if (verbose) message(...)
   res_decade  <- sort(unique(as.integer(res_decade)))
@@ -285,35 +296,20 @@ obis_h3_export_parquet <- function(
   q    <- function(x) gsub("'", "''", x)  # escape a path for a SQL literal
   cols <- "lower(printf('%x', cell_id)) AS h3, cell_id, n, sp, shannon, simpson, es"
 
-  # one COPY ... PARTITION_BY per layer (or per res for the decade layers) ----
-  copy <- function(sql, sub, parts) {
-    d <- file.path(out, sub)
-    dir.create(d, recursive = TRUE, showWarnings = FALSE)
-    DBI::dbExecute(con, glue::glue(
-      "COPY ({sql}) TO '{q(d)}' (FORMAT PARQUET, COMPRESSION {compression}, ",
-      "PARTITION_BY ({paste(parts, collapse = ', ')}), OVERWRITE_OR_IGNORE);"))
+  # one data_0.parquet per partition, its rows in cell_id order in row groups of
+  # row_group_rows, so a reader range-reads only the groups under its parent cells:
+  # one COPY per partition (obis_h3_write_partitions(); PARTITION_BY loses the order) ----
+  write_sorted <- function(sql, sub, parts) {
+    w <- obis_h3_write_partitions(con, sql, file.path(out, sub), partition_by = parts,
+                                  order_by = "cell_id", compression = compression,
+                                  row_group_size = row_group_rows)
+    sum(w$rows)
   }
-  # the same, in batches of at most max_open partitions per COPY so the open
-  # files stay under the OS limit: `groups` lists the partitions (one column
-  # per entry of `parts`), `sql` must select those columns
-  copy_batched <- function(sql, sub, parts, groups) {
-    if (!nrow(groups)) return(0)
-    lits  <- lapply(parts, function(p) {
-      v <- groups[[p]]
-      if (is.character(v)) .h3t_sql_quote(v) else as.character(as.integer(v))
-    })
-    tuple <- do.call(paste, c(lits, sep = ", "))
-    batch <- (seq_len(nrow(groups)) - 1L) %/% max_open
-    rows  <- 0
-    for (b in unique(batch)) {
-      keys <- paste0("(", tuple[batch == b], ")", collapse = ", ")
-      rows <- rows + copy(glue::glue(
-        "SELECT * FROM ({sql}) _s
-         SEMI JOIN (VALUES {keys}) _v({paste(parts, collapse = ', ')})
-         USING ({paste(parts, collapse = ', ')})"), sub, parts)
-    }
-    rows
-  }
+  lit <- function(v) if (is.character(v)) .h3t_sql_quote(v) else as.character(as.integer(v))
+  # a VALUES list of partition tuples (one column per entry of `parts`), for a SEMI or ANTI JOIN
+  tuples <- function(g, parts) paste0(
+    "(", do.call(paste, c(lapply(parts, function(p) lit(g[[p]])), sep = ", ")), ")",
+    collapse = ", ")
   layers <- list()
   add_layer <- function(name, sub, parts, rows, pr_used = integer(0)) {
     l <- list(
@@ -332,7 +328,8 @@ obis_h3_export_parquet <- function(
 
   # a precomputed layer (idx_h3, idx_h3_eov, idx_h3_taxon): whole files per
   # (keys, res), except the res in `pr` with more than parent_min_rows rows,
-  # which go one file per parent cell (res=<r>/p=<parent>/) ----
+  # which go one file per parent cell (res=<r>/p=<parent>/); written in slices of
+  # its first key (each EOV, each taxon rank), so each sorted temp table stays small ----
   write_layer <- function(name, sub, from, keys, pr) {
     parts <- c(keys, "res")
     kc    <- paste0(keys, ", ", collapse = "")
@@ -340,31 +337,37 @@ obis_h3_export_parquet <- function(
     grp <- DBI::dbGetQuery(con, glue::glue(
       "SELECT {kc}res::INTEGER AS res, COUNT(*)::DOUBLE AS n
        FROM {from} GROUP BY ALL ORDER BY ALL"))
-    fine <- grp$res %in% as.integer(names(pr)) & grp$n > parent_min_rows
-    rows <- copy_batched(glue::glue("SELECT {kc}res, {cols} FROM {from}"),
-                         sub, parts, grp[!fine, parts, drop = FALSE])
+    fine    <- grp$res %in% as.integer(names(pr)) & grp$n > parent_min_rows
     pr_used <- pr[as.character(sort(unique(grp$res[fine])))]
-    if (any(fine)) {
-      p_expr <- paste0("CASE res ", paste(sprintf(
-        "WHEN %d THEN lower(printf('%%x', h3_cell_to_parent(cell_id, %d)))",
-        as.integer(names(pr_used)), pr_used), collapse = " "), " END")
-      src <- glue::glue(
-        "SELECT {kc}res, {p_expr} AS p, {cols} FROM {from}
-         WHERE res IN ({paste(names(pr_used), collapse = ', ')})")
-      fg  <- grp[fine, parts, drop = FALSE]
-      fk  <- paste0("(", do.call(paste, c(lapply(parts, function(p) {
-        v <- fg[[p]]
-        if (is.character(v)) .h3t_sql_quote(v) else as.character(as.integer(v))
-      }), sep = ", ")), ")", collapse = ", ")
-      pg  <- DBI::dbGetQuery(con, glue::glue(
-        "SELECT DISTINCT {kc}res::INTEGER AS res, p FROM ({src}) _s
-         SEMI JOIN (VALUES {fk}) _v({paste(parts, collapse = ', ')})
-         USING ({paste(parts, collapse = ', ')})
-         ORDER BY ALL"))
-      say("  ", nrow(pg), " parent partitions for res ",
-          paste(names(pr_used), collapse = ", "))
-      rows <- rows + copy_batched(src, sub, c(parts, "p"), pg)
+    p_expr  <- if (any(fine)) paste0("CASE res ", paste(sprintf(
+      "WHEN %d THEN lower(printf('%%x', h3_cell_to_parent(cell_id, %d)))",
+      as.integer(names(pr_used)), pr_used), collapse = " "), " END")
+    pj      <- paste(parts, collapse = ", ")
+    slices  <- if (length(keys)) unique(grp[[keys[1]]]) else NA
+    rows    <- 0
+    n_par   <- 0
+    for (s in slices) {
+      in_s  <- if (length(keys)) grp[[keys[1]]] == s else rep(TRUE, nrow(grp))
+      where <- if (length(keys)) glue::glue("{keys[1]} = {lit(s)}") else "TRUE"
+      whole <- glue::glue("SELECT {kc}res, {cols} FROM {from} WHERE {where}")
+      if (any(fine & in_s))
+        whole <- glue::glue(
+          "SELECT * FROM ({whole}) _s ANTI JOIN (VALUES {tuples(grp[fine & in_s, ], parts)}) _v({pj}) USING ({pj})")
+      if (any(!fine & in_s)) rows <- rows + write_sorted(whole, sub, parts)
+      if (any(fine & in_s)) {
+        src <- glue::glue(
+          "SELECT {kc}res, {p_expr} AS p, {cols} FROM {from}
+           WHERE {where} AND res IN ({paste(names(pr_used), collapse = ', ')})")
+        src <- glue::glue(
+          "SELECT * FROM ({src}) _s SEMI JOIN (VALUES {tuples(grp[fine & in_s, ], parts)}) _v({pj}) USING ({pj})")
+        w <- obis_h3_write_partitions(con, src, file.path(out, sub), partition_by = c(parts, "p"),
+                                      order_by = "cell_id", compression = compression,
+                                      row_group_size = row_group_rows)
+        rows  <- rows + sum(w$rows)
+        n_par <- n_par + nrow(w)
+      }
     }
+    if (n_par) say("  ", n_par, " parent partitions for res ", paste(names(pr_used), collapse = ", "))
     add_layer(name, sub, parts, rows, pr_used)
   }
 
@@ -387,11 +390,11 @@ obis_h3_export_parquet <- function(
   rows_eov <- 0
   for (r in res_decade) {
     say("decade res ", r, " (occ_h3 tier ", .obis_tier(r), ") ...")
-    rows_all <- rows_all + copy(
+    rows_all <- rows_all + write_sorted(
       .obis_h3_period_sql(r, "decade", periods = decades, esn = esn),
       "decade/all", c("decade", "res"))
     if (has_eov)
-      rows_eov <- rows_eov + copy(
+      rows_eov <- rows_eov + write_sorted(
         .obis_h3_period_sql(r, "decade", eov = TRUE, periods = decades, esn = esn),
         "decade/eov", c("eov", "decade", "res"))
   }
@@ -497,9 +500,7 @@ obis_h3_export_parquet <- function(
   }
 
   # year layers: the same per year, from min(date_year) to max(date_year) ----
-  # (hundreds of years x EOVs is more partitions than files a process may hold
-  # open, so each res is computed once into a temp table and written in batches
-  # of max_open partitions)
+  # (each res is computed once into a temp table, then written one sorted file per partition)
   occ_cols  <- names(DBI::dbGetQuery(con, "SELECT * FROM occ_h3 LIMIT 0"))
   yr_rng    <- data.frame(lo = NA_integer_, hi = NA_integer_)
   if (length(res_year) && "date_year" %in% occ_cols)
@@ -518,8 +519,7 @@ obis_h3_export_parquet <- function(
       parts <- c(if (e) "eov", "year", "res")
       grp   <- DBI::dbGetQuery(con, glue::glue(
         "SELECT DISTINCT {paste(parts, collapse = ', ')} FROM _export_year ORDER BY ALL"))
-      n <- copy_batched("SELECT * FROM _export_year", if (e) "year/eov" else "year/all",
-                        parts, grp)
+      n <- write_sorted("SELECT * FROM _export_year", if (e) "year/eov" else "year/all", parts)
       if (e) rows_yeov <- rows_yeov + n else {
         rows_yall <- rows_yall + n
         yrs_out   <- sort(unique(c(yrs_out, as.integer(grp$year))))
@@ -726,7 +726,8 @@ obis_h3_export_parquet <- function(
     key  <- paste(sub("^rank=([^/]+)/.*", "\\1", dirs),
                   vapply(sub(".*/taxon=", "", dirs), utils::URLdecode, character(1)),
                   sep = "\r")
-    g$path <- paste0("taxon/", dirs[match(paste(g$rank, g$taxon, sep = "\r"), key)])
+    g$path <- if (nrow(g)) paste0("taxon/", dirs[match(paste(g$rank, g$taxon, sep = "\r"), key)]) else
+      character(0)
     grp$taxon <- g
   }
   if ("eov" %in% live) {
@@ -784,6 +785,18 @@ obis_h3_export_parquet <- function(
            FROM export_files ORDER BY path)
      TO '{q(f_files)}' (FORMAT PARQUET, COMPRESSION {compression});"))
 
+  # the largest row group of an indicator layer file (DuckDB rounds row_group_rows up)
+  ind_paths <- vapply(names(layers)[vapply(layers, function(l) is.null(l$kind), logical(1))],
+                      function(l) layers[[l]]$path, "")
+  ind_paths <- ind_paths[vapply(ind_paths, function(d)
+    length(list.files(file.path(out, d), "\\.parquet$", recursive = TRUE)) > 0, logical(1))]
+  ind_paths <- setdiff(ind_paths, c("place", "place_exact"))
+  rg_max <- if (length(ind_paths)) DBI::dbGetQuery(con, paste(vapply(ind_paths, function(d) glue::glue(
+    "SELECT MAX(row_group_num_rows)::DOUBLE AS m FROM parquet_metadata('{q(file.path(out, d))}/**/*.parquet')
+     WHERE path_in_schema = 'cell_id'"), ""), collapse = " UNION ALL ")) else data.frame(m = NA_real_)
+  rg_max <- suppressWarnings(max(rg_max$m, na.rm = TRUE))
+  if (!is.finite(rg_max)) rg_max <- NA_real_
+
   store <- tryCatch(DBI::dbGetInfo(con)$dbname, error = function(e) NA_character_)
   snap  <- .obis_snapshot(release)
   for (l in names(layers)) {
@@ -822,6 +835,10 @@ obis_h3_export_parquet <- function(
     res_species            = I(res_species),
     species_decades        = species_decades,
     compression            = compression,
+    # every indicator layer file is sorted by cell_id in row groups of at most row_group_rows_max rows
+    sorted_by              = "cell_id",
+    row_group_rows         = row_group_rows,
+    row_group_rows_max     = rg_max,
     layers                 = layers,
     columns                = EXPORT_COLUMNS,
     stats = list(

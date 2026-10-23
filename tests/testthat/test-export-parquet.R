@@ -677,3 +677,83 @@ test_that(".obisindicators_version() reads the checkout's DESCRIPTION, else the 
   expect_identical(.obisindicators_version(file.path(root, "missing")), installed)
 })
 
+
+test_that("every indicator file is sorted by cell_id in row groups of row_group_rows", {
+  # 0.11.0: a reader range-reads only the row groups under its parent cells, so each
+  # file must be in cell_id order with small groups whose cell_id statistics are disjoint
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("jsonlite")
+  skip_if_not(h3_ext_ok(), "duckdb h3 community extension unavailable")
+
+  con <- DBI::dbConnect(duckdb::duckdb())
+  dir <- tempfile("export_")
+  on.exit({ DBI::dbDisconnect(con, shutdown = TRUE); unlink(dir, recursive = TRUE) }, add = TRUE)
+  DBI::dbExecute(con, "LOAD h3;")
+  # 9,000 res-7 cells over 20 x 20 degrees of ocean, in a shuffled order, and their
+  # parents at res 5 (so the res-5 file has several row groups too)
+  DBI::dbExecute(con, "
+    CREATE TABLE c7 AS
+    SELECT DISTINCT CAST(h3_latlng_to_cell(-30 + (hash(i) % 20000) / 1000.0,
+                                           -40 + (hash(i + 7) % 20000) / 1000.0, 7) AS BIGINT) AS cell_id
+    FROM range(9000) t(i);")
+  DBI::dbExecute(con, "
+    CREATE TABLE idx_h3 AS
+    SELECT res::UTINYINT AS res, cell_id, n, n::BIGINT AS sp, 0.5::DOUBLE AS shannon,
+           0.5::DOUBLE AS simpson, NULL::DOUBLE AS es
+    FROM (SELECT 7 AS res, cell_id, (hash(cell_id) % 100)::BIGINT AS n FROM c7
+          UNION ALL
+          SELECT DISTINCT 5 AS res, CAST(h3_cell_to_parent(cell_id, 5) AS BIGINT), 1::BIGINT FROM c7
+          UNION ALL
+          SELECT DISTINCT 1 AS res, CAST(h3_cell_to_parent(cell_id, 1) AS BIGINT), 1::BIGINT FROM c7)
+    ORDER BY hash(cell_id);")
+  DBI::dbExecute(con, "
+    CREATE TABLE idx_h3_eov AS SELECT e.eov, i.* FROM idx_h3 i, (VALUES ('fish'), ('seabirds')) e(eov)
+    ORDER BY hash(i.cell_id, e.eov);")
+  DBI::dbExecute(con, "
+    CREATE TABLE idx_h3_taxon AS
+    SELECT 'class' AS rank, 'Aves' AS taxon, * FROM idx_h3 WHERE res IN (1, 5) ORDER BY hash(cell_id);")
+  DBI::dbExecute(con, "
+    CREATE TABLE occ_h3 (res UTINYINT, cell_id BIGINT, aphiaid BIGINT,
+      species VARCHAR, date_year SMALLINT, records BIGINT);")
+  n7 <- DBI::dbGetQuery(con, "SELECT COUNT(*)::DOUBLE AS n FROM c7")$n
+  n5 <- DBI::dbGetQuery(con, "SELECT COUNT(*)::DOUBLE AS n FROM idx_h3 WHERE res = 5")$n
+  n1 <- DBI::dbGetQuery(con, "SELECT COUNT(*)::DOUBLE AS n FROM idx_h3 WHERE res = 1")$n
+  expect_gt(n5, 2048)  # so the res-5 file needs more than one row group
+
+  obis_h3_export_parquet(con, dir, "test", res_decade = 1L, res_year = integer(0),
+                         row_group_rows = 2048L, parent_res = c("7" = 3L), parent_min_rows = 100,
+                         threads = 4L, verbose = FALSE)
+  out <- file.path(dir, "test")
+  pq  <- file.path(out, list.files(out, "\\.parquet$", recursive = TRUE))
+  pq  <- pq[grepl("/(all|eov|taxon)/", pq)]
+  expect_gt(length(pq), 6L)
+  expect_true(any(grepl("/all/res=7/p=[0-9a-f]+/data_0.parquet$", pq)))
+
+  lst <- paste0("[", paste0("'", pq, "'", collapse = ", "), "]")
+  # rows in cell_id order within each file
+  ord <- DBI::dbGetQuery(con, glue::glue("
+    SELECT COUNT(*) FILTER (WHERE d <= 0)::DOUBLE AS bad, COUNT(*)::DOUBLE AS n FROM (
+      SELECT cell_id - lag(cell_id) OVER (PARTITION BY filename ORDER BY file_row_number) AS d
+      FROM read_parquet({lst}, filename = true, file_row_number = true, hive_partitioning = false))"))
+  expect_equal(ord$bad, 0)
+  expect_equal(ord$n, (n7 + n5 + n1) * 3 + n5 + n1)  # all, two EOVs, one taxon
+  # row groups: at most row_group_rows, and each group's cell_id range above the previous one's
+  rg <- DBI::dbGetQuery(con, glue::glue("
+    SELECT file_name, row_group_id, row_group_num_rows::DOUBLE AS rows,
+           stats_min_value::BIGINT AS mn, stats_max_value::BIGINT AS mx
+    FROM parquet_metadata({lst}) WHERE path_in_schema = 'cell_id'"))
+  expect_lte(max(rg$rows), 2048)
+  expect_gte(max(table(rg$file_name)), 2L)
+  overlap <- DBI::dbGetQuery(con, glue::glue("
+    SELECT COUNT(*)::DOUBLE AS n FROM (
+      SELECT mn, lag(mx) OVER (PARTITION BY file_name ORDER BY row_group_id) AS prev_mx
+      FROM (SELECT file_name, row_group_id, stats_min_value::BIGINT AS mn, stats_max_value::BIGINT AS mx
+            FROM parquet_metadata({lst}) WHERE path_in_schema = 'cell_id'))
+    WHERE prev_mx IS NOT NULL AND mn <= prev_mx"))
+  expect_equal(overlap$n, 0)
+  js <- jsonlite::read_json(file.path(out, "release.json"))
+  expect_equal(js$sorted_by, "cell_id")
+  expect_equal(js$row_group_rows, 2048L)
+  expect_equal(js$row_group_rows_max, 2048)
+})

@@ -1,3 +1,20 @@
+# obisindicators 0.11.0
+
+* **Every indicator layer file is sorted by `cell_id` in small row groups.**
+  `obis_h3_export_parquet()` gains `row_group_rows` (default 10000; DuckDB
+  rounds up, so a group holds at most 10,240 rows) and writes each file of the
+  `all`, `eov`, `taxon`, decade and year layers with its own sorted `COPY`
+  (`obis_h3_write_partitions()`, `order_by = "cell_id"`), so the `cell_id`
+  statistics of consecutive row groups are disjoint and a reader that knows
+  the cells under a tile range-reads only those groups. DuckDB's
+  `PARTITION_BY` wrote the groups out of order (the v20261012 `all/res=5`
+  file had 6 groups of up to 122,880 rows, not in `cell_id` order). The paths
+  are unchanged (the explicit writer encodes partition values as DuckDB did:
+  all 7,370 v20261012 taxon paths compare equal). `release.json` records
+  `sorted_by`, `row_group_rows` and `row_group_rows_max` (the largest group
+  written). `max_open` is no longer used.
+* Fix: `taxon_groups.parquet` no longer fails for a taxon layer without res 1.
+
 # obisindicators 0.10.1
 
 * **New `obis_h3_add_place_exact(release_dir, coll, source, manifest)`**: registers
