@@ -25,7 +25,8 @@
 # Steps: (a) preflight disk (exit 2 if < MIN_FREE_GB) (a2) WoRMS taxonomy: rebuild
 # $TAXON_PARQUET from ChecklistBank's WoRMS archive when its version changed (b) sync
 # (c) build (taxon gap-fill from the WoRMS REST API included) (d) export obis_h3_export_parquet() (e) validate vs the
-# previous release (exit 4) (f) aws s3 sync, no --delete (g) latest.json LAST
+# previous release (exit 4) (f) aws s3 sync, no --delete (g) latest.json, then (g2) the stable
+# collection.json (validated with om-catalog, exit 5)
 # (h) summary.
 #
 # Exit codes: 0 ok, 1 step failed, 2 not enough disk, 3 another run holds the lock,
@@ -463,6 +464,22 @@ PY
   fi
   run aws s3 cp "$latest" "s3://$S3_BUCKET/$S3_PREFIX/latest.json" \
     --content-type application/json --cache-control max-age=300
+
+  # ---- (g2) the stable collection.json, after latest.json -----------------------
+  # the release's collection.json with absolute hrefs into $RELEASE/, at a url the atlas links once
+  # (obis_h3_stac_stable()); validated against the h3 profile before upload
+  step "g2. collection.json (stable url)"
+  stable="$DIR_OUT/collection.json"
+  run in_r OBIS_PKG_ROOT="$PKG_ROOT" Rscript -e '
+    a <- commandArgs(TRUE)
+    for (f in list.files(file.path(Sys.getenv("OBIS_PKG_ROOT"), "R"), "[.]R$", full.names = TRUE)) source(f)
+    obis_h3_stac_stable(a[1], a[2], file = a[3])' "$OUT" "$PUBLIC_BASE/$RELEASE/" "$stable"
+  OM_CATALOG="${OM_CATALOG:-npx -y -p @oceanmetrics/catalog@0.4.0 om-catalog}"
+  if [ "$DRY" -eq 0 ]; then
+    $OM_CATALOG validate h3 "$stable" || die "collection.json fails om-catalog validate h3: not uploaded" 5
+  fi
+  run aws s3 cp "$stable" "s3://$S3_BUCKET/$S3_PREFIX/collection.json" \
+    --content-type application/json --cache-control max-age=300
 else
   step "f/g. upload and latest.json SKIPPED"
 fi
@@ -475,6 +492,7 @@ store:     ${STORE:-<n/a>}
 export:    $OUT ($(du -sh "$OUT" 2>/dev/null | cut -f1 || echo '?'))
 s3:        $DEST
 latest:    $PUBLIC_BASE/latest.json
+stac:      $PUBLIC_BASE/collection.json
 dry-run:   $DRY
 next (manual, needs sudo): data-raw/deploy_obis_h3.sh --skip-sync --skip-build --store ${STORE:-<store>} --yes
 rollback:  re-publish an older latest.json (older releases stay on S3):

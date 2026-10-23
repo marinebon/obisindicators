@@ -7,7 +7,8 @@
 obis_h3_stac_collection(
   release_dir,
   file = file.path(release_dir, "collection.json"),
-  id = "obis-h3"
+  id = "obis_h3",
+  items = TRUE
 )
 }
 \arguments{
@@ -15,22 +16,46 @@ obis_h3_stac_collection(
 
 \item{file}{output file (default \code{collection.json} in \code{release_dir}).}
 
-\item{id}{the collection id (default \code{"obis-h3"}).}
+\item{id}{the collection id (default \code{"obis_h3"}, the id the atlas's
+\code{?c=obis_h3} names).}
+
+\item{items}{write the Items under \verb{release_dir/items/} and link them
+(default TRUE).}
 }
 \value{
-invisibly, the path written.
+invisibly, the paths written (the collection, then the Items).
 }
 \description{
 Reads a release's \code{release.json} (from \code{\link[=obis_h3_export_parquet]{obis_h3_export_parquet()}}) and
 writes \code{collection.json}, a STAC Collection for the Ocean Metrics \code{h3}
-profile (\code{platform/packages/catalog/schemas/h3.schema.json}): the
-resolutions, the \code{all} layer's path template with its parent splits
-(\code{h3:layout}), the indicator columns (\code{table:columns}) and, when the release
-has one, the species table (\code{h3:species_table}: its template, resolutions,
-class partitions, sort, columns and lookup). The profile's fields describe
-the \code{all} layer; the other layers (EOV, taxon, decade, year) and the heads
-list are in pass-through keys, \code{obis:layers} (each with a \code{{key}} template,
-and \code{h3:periods} for the decade and year layers) and \code{obis:species}
-(\code{name_key}, \code{null_class}, \code{heads}), which the profile allows.
+profile 1.1 (\code{platform/packages/catalog/schemas/h3.schema.json}), plus one
+STAC Item per map layer under \verb{items/} (\code{all} and each EOV), with the hooks
+the atlas reads:
+}
+\details{
+\itemize{
+\item \code{h3:resolutions}, \code{h3:layout} (the \code{all} layer's template, its parent
+splits and \code{row_group_rows}, the largest row group of a cell-sorted file),
+\code{table:columns};
+\item \code{h3:periods}, a list of two period sets, decades and years, each with its
+values, placeholder, resolutions and template;
+\item \code{h3:species_table} (template, resolutions, class partitions, sort,
+columns with \code{name_key}, \code{year_min}, \code{year_max} and the decade variant's
+\code{period}, lookup, heads) and \code{h3:heads} (the heads are \code{taxon} layers);
+\item \code{cube:dimensions}: \code{layer} (\code{all} and the EOVs, one Item each), \code{indicator}
+(the five columns), \code{period} (\code{all}, the decades as \verb{<yyy0>s}, the years
+as \verb{<yyyy>}) and \code{res}; \code{atlas:metric} (the default indicator, \code{es});
+\item \code{item_assets} (each Item's \code{data}, \code{decade} and \code{year} assets: a layer
+folder and the path template under it);
+\item the assets \code{stats} (the legend's source: p02 to p98 per layer, key,
+period, res and variable), \code{taxon_groups} (the taxa and heads to search,
+with their paths), \code{files}, \code{release}, the species lookup, the heads list
+and \code{species_flat}.
+}
+
+Every href is relative to the release folder; \code{\link[=obis_h3_stac_stable]{obis_h3_stac_stable()}} makes
+the copy with absolute hrefs that lives at a stable url. The other layers
+(taxon, decade, year, species) stay listed under \code{obis:layers} and
+\code{obis:species}.
 }
 \concept{store}

@@ -1160,79 +1160,173 @@ obis_h3_year_sql <- function(res, eov = FALSE, years = NULL, esn = 50L, from = "
 EXPORT_COLUMN_TYPES <- c(h3 = "VARCHAR", cell_id = "BIGINT", n = "BIGINT", sp = "BIGINT",
                          shannon = "DOUBLE", simpson = "DOUBLE", es = "DOUBLE")
 
-# the URI of the Ocean Metrics h3 STAC profile (its $id)
-OM_H3_PROFILE <- "https://oceanmetrics.io/schemas/h3/v1.0.0/schema.json"
+# the URI of the Ocean Metrics h3 STAC profile (its $id): 1.1 allows two period sets,
+# the species table's years, h3:heads and h3:layout.row_group_rows
+OM_H3_PROFILE <- "https://oceanmetrics.io/schemas/h3/v1.1.0/schema.json"
+
+# the indicator columns as the atlas lists them (cube:dimensions indicator)
+STAC_INDICATORS <- c(es = "ES(50), expected species in 50 records", sp = "Species richness",
+                     shannon = "Shannon diversity", simpson = "Simpson index", n = "Records")
 
 #' Write the STAC Collection of an obis-h3 release
 #'
 #' Reads a release's `release.json` (from [obis_h3_export_parquet()]) and
 #' writes `collection.json`, a STAC Collection for the Ocean Metrics `h3`
-#' profile (`platform/packages/catalog/schemas/h3.schema.json`): the
-#' resolutions, the `all` layer's path template with its parent splits
-#' (`h3:layout`), the indicator columns (`table:columns`) and, when the release
-#' has one, the species table (`h3:species_table`: its template, resolutions,
-#' class partitions, sort, columns and lookup). The profile's fields describe
-#' the `all` layer; the other layers (EOV, taxon, decade, year) and the heads
-#' list are in pass-through keys, `obis:layers` (each with a `{key}` template,
-#' and `h3:periods` for the decade and year layers) and `obis:species`
-#' (`name_key`, `null_class`, `heads`), which the profile allows.
+#' profile 1.1 (`platform/packages/catalog/schemas/h3.schema.json`), plus one
+#' STAC Item per map layer under `items/` (`all` and each EOV), with the hooks
+#' the atlas reads:
+#'
+#' - `h3:resolutions`, `h3:layout` (the `all` layer's template, its parent
+#'   splits and `row_group_rows`, the largest row group of a cell-sorted file),
+#'   `table:columns`;
+#' - `h3:periods`, a list of two period sets, decades and years, each with its
+#'   values, placeholder, resolutions and template;
+#' - `h3:species_table` (template, resolutions, class partitions, sort,
+#'   columns with `name_key`, `year_min`, `year_max` and the decade variant's
+#'   `period`, lookup, heads) and `h3:heads` (the heads are `taxon` layers);
+#' - `cube:dimensions`: `layer` (`all` and the EOVs, one Item each), `indicator`
+#'   (the five columns), `period` (`all`, the decades as `<yyy0>s`, the years
+#'   as `<yyyy>`) and `res`; `atlas:metric` (the default indicator, `es`);
+#' - `item_assets` (each Item's `data`, `decade` and `year` assets: a layer
+#'   folder and the path template under it);
+#' - the assets `stats` (the legend's source: p02 to p98 per layer, key,
+#'   period, res and variable), `taxon_groups` (the taxa and heads to search,
+#'   with their paths), `files`, `release`, the species lookup, the heads list
+#'   and `species_flat`.
+#'
+#' Every href is relative to the release folder; [obis_h3_stac_stable()] makes
+#' the copy with absolute hrefs that lives at a stable url. The other layers
+#' (taxon, decade, year, species) stay listed under `obis:layers` and
+#' `obis:species`.
 #'
 #' @param release_dir the release directory (holding `release.json`).
 #' @param file output file (default `collection.json` in `release_dir`).
-#' @param id the collection id (default `"obis-h3"`).
-#' @return invisibly, the path written.
+#' @param id the collection id (default `"obis_h3"`, the id the atlas's
+#'   `?c=obis_h3` names).
+#' @param items write the Items under `release_dir/items/` and link them
+#'   (default TRUE).
+#' @return invisibly, the paths written (the collection, then the Items).
 #' @concept store
 #' @export
 obis_h3_stac_collection <- function(release_dir, file = file.path(release_dir, "collection.json"),
-                                    id = "obis-h3") {
-  stopifnot(requireNamespace("jsonlite", quietly = TRUE))
+                                    id = "obis_h3", items = TRUE) {
+  stopifnot(requireNamespace("jsonlite", quietly = TRUE),
+            is.character(id), length(id) == 1L, nzchar(id))
   js <- jsonlite::read_json(file.path(release_dir, "release.json"))
-  tpl <- function(x) gsub("<([A-Za-z_]+)>", "{\\1}", x)  # release.json <key> -> STAC {key}
+  tpl  <- function(x) gsub("<([A-Za-z_]+)>", "{\\1}", x)  # release.json <key> -> STAC {key}
   ints <- function(x) as.integer(unlist(x))
+  L    <- js$layers
+  rel_after <- function(x, prefix) sub(paste0("^", prefix, "/"), "", x)
 
-  all <- js$layers$all
+  all <- L$all
   layout <- list(template = tpl(all$template))
   if (length(all$parent_res)) {
     layout$parent_template <- tpl(all$template_parent)
     layout$parent_res      <- lapply(all$parent_res, as.integer)
   }
+  # the most rows a row group can hold: row_group_rows as DuckDB rounds it (a multiple of 2048),
+  # or the largest group written when that is more
+  if (is.numeric(js$row_group_rows) && length(js$row_group_rows) == 1L && js$row_group_rows >= 1) {
+    rg <- ceiling(js$row_group_rows / 2048) * 2048
+    if (is.numeric(js$row_group_rows_max) && length(js$row_group_rows_max) == 1L)
+      rg <- max(rg, js$row_group_rows_max)
+    layout$row_group_rows <- as.integer(rg)
+  }
+
+  decs  <- if (is.list(js$decades)) ints(js$decades) else integer(0)
+  years <- ints(js$years)
+  has   <- function(l) !is.null(L[[l]]) && isTRUE(L[[l]]$rows > 0)
+  periods <- list()
+  if (has("decade_all") && length(decs))
+    periods[[length(periods) + 1L]] <- list(
+      grain = "decade", values = I(as.character(decs)), placeholder = "decade",
+      resolutions = I(ints(js$res_decade)), template = tpl(L$decade_all$template))
+  if (has("year_all") && length(years))
+    periods[[length(periods) + 1L]] <- list(
+      grain = "year", values = I(as.character(years)), placeholder = "year",
+      resolutions = I(ints(js$res_year)), template = tpl(L$year_all$template))
 
   # every layer, as a template with {key} placeholders
-  obis_layers <- lapply(names(js$layers), function(l) {
-    x <- js$layers[[l]]
-    o <- list(template = tpl(x$template), keys = I(as.character(unlist(x$partitions))),
+  obis_layers <- lapply(names(L), function(l) {
+    x <- L[[l]]
+    o <- list(template = tpl(unlist(x$template)), keys = I(as.character(unlist(x$partitions))),
               rows = x$rows, files = x$files, bytes = x$bytes)
     if (length(x$parent_res)) {
       o$parent_template <- tpl(x$template_parent)
       o$parent_res      <- lapply(x$parent_res, as.integer)
     }
-    if (l %in% c("decade_all", "decade_eov") && is.list(js$decades))
-      o$`h3:periods` <- list(grain = "decade", values = I(as.character(ints(js$decades))),
-                             placeholder = "decade")
-    if (l %in% c("year_all", "year_eov") && length(js$years))
-      o$`h3:periods` <- list(grain = "year", values = I(as.character(ints(js$years))),
-                             placeholder = "year")
+    if (l %in% c("decade_all", "decade_eov") && length(decs))
+      o$`h3:periods` <- list(grain = "decade", values = I(as.character(decs)), placeholder = "decade")
+    if (l %in% c("year_all", "year_eov") && length(years))
+      o$`h3:periods` <- list(grain = "year", values = I(as.character(years)), placeholder = "year")
     o
   })
-  names(obis_layers) <- names(js$layers)
+  names(obis_layers) <- names(L)
 
   yr <- ints(js$year_range)
   t0 <- if (length(yr) == 2L) sprintf("%04d-01-01T00:00:00Z", yr[1]) else NULL
   snap <- if (is.null(js$obis_snapshot)) "" else js$obis_snapshot
-  t1 <- if (grepl("^\\d{4}-\\d{2}-\\d{2}$", snap))
-    paste0(js$obis_snapshot, "T00:00:00Z") else NULL
+  t1 <- if (grepl("^\\d{4}-\\d{2}-\\d{2}$", snap)) paste0(snap, "T00:00:00Z") else NULL
+
+  # the map layers, one Item each: all taxa and every EOV with a layer
+  eovs <- character(0)
+  if (has("eov")) {
+    dd <- list.dirs(file.path(release_dir, "eov"), recursive = FALSE, full.names = FALSE)
+    eovs <- sort(sub("^eov=", "", dd[grepl("^eov=", dd)]))
+  }
+  lyr_ids    <- c("all", eovs)
+  lyr_labels <- c(all = "All taxa", if (length(eovs)) unname(obis_eov_label(eovs)))
+  names(lyr_labels) <- lyr_ids
+  period_vals <- c("all", if (length(decs)) paste0(decs, "s"), if (length(years)) as.character(years))
+  period_lab  <- c(all = "All years",
+                   if (length(decs)) stats::setNames(paste0(decs, "s"), paste0(decs, "s")),
+                   if (length(years)) stats::setNames(as.character(years), as.character(years)))
+
+  cube <- list(
+    layer = list(
+      type = "other", title = "Taxa",
+      description = "all taxa or an Essential Ocean Variable (one Item each); taxon groups and heads come from the taxon_groups asset",
+      values = I(lyr_ids), `atlas:labels` = as.list(lyr_labels)),
+    indicator = list(
+      type = "other", title = "Indicator",
+      description = "a column of every layer file (h3, cell_id, n, sp, shannon, simpson, es), not an Item: switching it fetches nothing",
+      values = I(names(STAC_INDICATORS)), `atlas:labels` = as.list(STAC_INDICATORS)),
+    period = list(
+      type = "temporal", title = "Period",
+      description = paste(
+        "all years, a decade written <yyy0>s (path key decade=<yyy0>, h3:periods grain decade)",
+        "or a year <yyyy> (path key year=<yyyy>, grain year); a period is a path within each Item"),
+      values = I(period_vals), `atlas:labels` = as.list(period_lab),
+      extent = list(t0, t1)),
+    res = list(
+      type = "other", title = "Hexagon size",
+      description = "H3 resolution: each is its own file (the indicators do not add up across cells); a decade or year layer stops at its h3:periods resolutions",
+      values = I(ints(js$res))))
+
+  item_assets <- list(
+    data = list(type = "application/vnd.apache.parquet", roles = I("data"),
+                title = "the layer over all years: one folder per resolution",
+                description = "h3:template under the folder: res={res}/data_0.parquet, or the parent split res={res}/p={parent}/data_0.parquet at the h3:layout parent_res resolutions"),
+    decade = list(type = "application/vnd.apache.parquet", roles = I("data"),
+                  title = "the layer per decade", description = "h3:template decade={decade}/res={res}/data_0.parquet"),
+    year = list(type = "application/vnd.apache.parquet", roles = I("data"),
+                title = "the layer per year", description = "h3:template year={year}/res={res}/data_0.parquet"))
 
   col <- list(
     type            = "Collection",
     stac_version    = "1.1.0",
-    stac_extensions = I(c(OM_H3_PROFILE, "https://stac-extensions.github.io/table/v1.2.0/schema.json")),
+    stac_extensions = I(c(OM_H3_PROFILE,
+                          "https://stac-extensions.github.io/table/v1.2.0/schema.json",
+                          "https://stac-extensions.github.io/datacube/v2.2.0/schema.json",
+                          "https://stac-extensions.github.io/item-assets/v1.0.0/schema.json")),
     id              = id,
     title           = "OBIS biodiversity indicators on H3",
     description     = paste(
       "Records, species richness, Shannon, Simpson and ES(50) per H3 cell from the",
       "Ocean Biodiversity Information System (OBIS) snapshot", snap,
       paste0("(release ", js$release, "),"), "for all taxa, Essential Ocean Variables, taxa",
-      "(phylum to family), decades and years, with the species x hex x count table."),
+      "(phylum to family, and the heads above class), decades and years, with the species x",
+      "hex x count table and its first and last years."),
     license         = "other",
     extent          = list(
       spatial  = list(bbox = list(c(-180, -90, 180, 90))),
@@ -1247,43 +1341,193 @@ obis_h3_stac_collection <- function(release_dir, file = file.path(release_dir, "
     `h3:layout`      = layout,
     `table:columns`  = lapply(names(EXPORT_COLUMN_TYPES), function(k) list(
       name = k, type = unname(EXPORT_COLUMN_TYPES[k]), description = js$columns[[k]])),
+    `cube:dimensions` = cube,
+    `atlas:metric`   = "es",
+    item_assets      = item_assets,
     `obis:release`   = js$release,
     `obis:layers`    = obis_layers,
     assets = list(
       release = list(href = "./release.json", type = "application/json",
                      title = "release metadata", roles = I("metadata")),
       files   = list(href = "./files.parquet", type = "application/vnd.apache.parquet",
-                     title = "file manifest", roles = I("metadata")),
-      stats   = list(href = "./stats.parquet", type = "application/vnd.apache.parquet",
-                     title = "value ranges per layer, key, period, res and variable",
+                     title = "file manifest: every Parquet file with its url_path, rows and bytes",
                      roles = I("metadata")),
+      stats   = list(href = "./stats.parquet", type = "application/vnd.apache.parquet",
+                     title = "the legend's source: min, p02, p50, p98, max and n_cells per layer, key, rank, decade, year, res and variable",
+                     roles = I(c("metadata", "legend")),
+                     `table:columns` = lapply(c("layer", "key", "rank", "decade", "year", "res", "variable",
+                                                "min", "p02", "p50", "p98", "max", "n_cells"),
+                                              function(k) list(name = k))),
       taxon_groups = list(href = "./taxon_groups.parquet", type = "application/vnd.apache.parquet",
-                          title = "taxa and EOVs with totals and paths", roles = I("metadata"))))
+                          title = "the taxa to search: EOVs, rank layers (phylum to family) and the heads above class, with records and paths",
+                          roles = I(c("metadata", "search")))))
+  if (length(periods)) col$`h3:periods` <- periods
   if (is.null(t0) && is.null(t1))
     col$extent$temporal$interval <- list(list(NULL, NULL))
 
-  sp <- js$layers$species
+  sp <- L$species
   if (!is.null(sp)) {
+    cols <- sp$columns
+    if (!is.null(L$species_decade)) cols$period <- "decade"
     col$`h3:species_table` <- list(
       href_template = sp$href_template,
       resolutions   = I(ints(sp$resolutions)),
       partition_by  = I(unlist(sp$partition_by)),
       sorted_by     = I(unlist(sp$sorted_by)),
-      columns       = sp$columns,
-      lookup        = sp$lookup)
+      columns       = cols,
+      lookup        = sp$lookup,
+      heads         = sp$heads$href)
+    if (isTRUE(sp$heads$built))
+      col$`h3:heads` <- list(layer = if (is.null(sp$heads$layer)) "taxon" else sp$heads$layer,
+                             href = sp$heads$href)
     col$`obis:species` <- list(
       name_key   = sp$name_key,
       null_class = sp$null_class,
       heads      = sp$heads,
       columns    = sp$table_columns,
-      lookup_columns = sp$lookup_columns)
+      lookup_columns = sp$lookup_columns,
+      decade     = if (!is.null(L$species_decade)) list(
+        href_template = L$species_decade$href_template,
+        resolutions   = I(ints(L$species_decade$resolutions)),
+        decades       = I(as.character(ints(L$species_decade$decades)))),
+      flat       = if (!is.null(L$species_flat)) list(
+        href_template  = L$species_flat$href_template,
+        resolutions    = I(ints(L$species_flat$resolutions)),
+        sorted_by      = I(unlist(L$species_flat$sorted_by)),
+        row_group_rows = L$species_flat$row_group_rows))
+    col$`obis:species` <- col$`obis:species`[!vapply(col$`obis:species`, is.null, logical(1))]
     col$assets$species_lookup <- list(
       href = paste0("./", sp$lookup$href), type = "application/vnd.apache.parquet",
       title = "species lookup: names, name_key, lineage", roles = I("metadata"))
     col$assets$species_heads <- list(
       href = paste0("./", sp$heads$href), type = "application/json",
-      title = "pre-aggregated heads still to build", roles = I("metadata"))
+      title = "the pre-aggregated heads and the layer serving each", roles = I("metadata"))
+    if (!is.null(L$species_flat))
+      for (r in ints(L$species_flat$resolutions))
+        col$assets[[paste0("species_flat_res", r)]] <- list(
+          href = paste0("./species_flat/res=", r, ".parquet"), type = "application/vnd.apache.parquet",
+          title = paste0("the species of each cell at res ", r, ", one file sorted by cell_id (the Cell pane)"),
+          roles = I("data"))
   }
+
+  # one Item per map layer ----
+  out <- file
+  if (items) {
+    d_it <- file.path(release_dir, "items")
+    dir.create(d_it, showWarnings = FALSE)
+    bbox <- c(-180, -90, 180, 90)
+    for (i in seq_along(lyr_ids)) {
+      k   <- lyr_ids[i]
+      dir <- if (k == "all") "all" else paste0("eov/eov=", k)
+      it  <- list(
+        type = "Feature", stac_version = "1.1.0",
+        stac_extensions = I(OM_H3_PROFILE),
+        id = k, collection = id,
+        bbox = bbox,
+        geometry = list(type = "Polygon", coordinates = list(list(
+          c(-180, -90), c(180, -90), c(180, 90), c(-180, 90), c(-180, -90)))),
+        properties = list(
+          title = unname(lyr_labels[k]), datetime = NULL,
+          start_datetime = t0, end_datetime = t1,
+          `atlas:dims` = list(layer = k), `atlas:metric` = "es"),
+        links = list(
+          list(rel = "collection", href = "../collection.json", type = "application/json"),
+          list(rel = "parent",     href = "../collection.json", type = "application/json")),
+        assets = list(
+          data = list(href = paste0("../", dir, "/"), type = "application/vnd.apache.parquet",
+                      roles = I("data"), title = paste(lyr_labels[k], "over all years"),
+                      `h3:template` = "res={res}/data_0.parquet",
+                      `h3:parent_template` = if (length(all$parent_res)) "res={res}/p={parent}/data_0.parquet")))
+      if (is.null(it$properties$start_datetime)) it$properties$start_datetime <- NULL
+      if (is.null(it$properties$end_datetime))   it$properties$end_datetime   <- NULL
+      if (is.null(it$assets$data$`h3:parent_template`)) it$assets$data$`h3:parent_template` <- NULL
+      d_lay <- if (k == "all") "decade_all" else "decade_eov"
+      y_lay <- if (k == "all") "year_all" else "year_eov"
+      if (has(d_lay) && length(decs))
+        it$assets$decade <- list(href = paste0("../decade/", dir, "/"), type = "application/vnd.apache.parquet",
+                                 roles = I("data"), title = paste(lyr_labels[k], "per decade"),
+                                 `h3:template` = "decade={decade}/res={res}/data_0.parquet")
+      if (has(y_lay) && length(years))
+        it$assets$year <- list(href = paste0("../year/", dir, "/"), type = "application/vnd.apache.parquet",
+                               roles = I("data"), title = paste(lyr_labels[k], "per year"),
+                               `h3:template` = "year={year}/res={res}/data_0.parquet")
+      f_it <- file.path(d_it, paste0(k, ".json"))
+      jsonlite::write_json(it, f_it, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
+      col$links[[length(col$links) + 1L]] <- list(rel = "item", href = paste0("./items/", k, ".json"),
+                                                  type = "application/json", title = unname(lyr_labels[k]))
+      out <- c(out, f_it)
+    }
+  }
+  jsonlite::write_json(col, file, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
+  invisible(out)
+}
+
+#' Write the stable-url copy of an obis-h3 release's STAC Collection
+#'
+#' The atlas links one collection url that survives a monthly release:
+#' `obis-h3/collection.json`, next to `latest.json`. This writes it from the
+#' release's own `collection.json` ([obis_h3_stac_collection()]) with every
+#' relative href and path template made absolute under `base_url` (the
+#' release folder, e.g.
+#' `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/v20261012/`):
+#' the links (Items included), the assets, `h3:layout`, `h3:periods`
+#' templates, `h3:species_table` (its template, lookup and heads), `h3:heads`
+#' and the `obis:layers` templates. Its `self` link is `self_url`. The Items
+#' stay in the release folder, where their own relative hrefs resolve.
+#'
+#' @param release_dir the release directory (holding `collection.json`).
+#' @param base_url the release folder's public url, ending in `/`.
+#' @param file output file (default `collection.json` in the parent of
+#'   `release_dir`).
+#' @param self_url the stable url of the file (default `base_url`'s parent plus
+#'   `collection.json`).
+#' @return invisibly, the path written.
+#' @concept store
+#' @export
+obis_h3_stac_stable <- function(release_dir, base_url,
+                                file = file.path(dirname(normalizePath(release_dir)), "collection.json"),
+                                self_url = NULL) {
+  stopifnot(requireNamespace("jsonlite", quietly = TRUE),
+            is.character(base_url), length(base_url) == 1L, grepl("^https://.+/$", base_url))
+  if (is.null(self_url)) self_url <- paste0(sub("[^/]+/$", "", base_url), "collection.json")
+  col <- jsonlite::read_json(file.path(release_dir, "collection.json"))
+  absu <- function(h) {
+    if (!is.character(h)) return(h)
+    ifelse(grepl("^[a-z]+://", h), h, paste0(base_url, sub("^\\./", "", h)))
+  }
+  col$links <- lapply(col$links, function(l) {
+    l$href <- if (identical(l$rel, "self")) self_url else absu(l$href)
+    l
+  })
+  col$links[[length(col$links) + 1L]] <- list(rel = "via", href = paste0(base_url, "collection.json"),
+                                              type = "application/json",
+                                              title = "the release's own collection.json (relative hrefs)")
+  col$assets <- lapply(col$assets, function(a) { a$href <- absu(a$href); a })
+  for (k in c("template", "parent_template"))
+    if (!is.null(col$`h3:layout`[[k]])) col$`h3:layout`[[k]] <- absu(col$`h3:layout`[[k]])
+  if (!is.null(col$`h3:periods`))
+    col$`h3:periods` <- lapply(col$`h3:periods`, function(p) {
+      if (!is.null(p$template)) p$template <- absu(p$template)
+      p
+    })
+  st <- col$`h3:species_table`
+  if (!is.null(st)) {
+    st$href_template <- absu(st$href_template)
+    st$lookup$href   <- absu(st$lookup$href)
+    if (!is.null(st$heads)) st$heads <- absu(st$heads)
+    col$`h3:species_table` <- st
+  }
+  if (!is.null(col$`h3:heads`$href)) col$`h3:heads`$href <- absu(col$`h3:heads`$href)
+  col$`obis:layers` <- lapply(col$`obis:layers`, function(l) {
+    l$template <- absu(unlist(l$template))
+    if (!is.null(l$parent_template)) l$parent_template <- absu(l$parent_template)
+    if (length(l$template) > 1L) l$template <- I(l$template)
+    l
+  })
+  for (k in c("decade", "flat"))
+    if (!is.null(col$`obis:species`[[k]]$href_template))
+      col$`obis:species`[[k]]$href_template <- absu(col$`obis:species`[[k]]$href_template)
+  col$`obis:release_base` <- base_url
   jsonlite::write_json(col, file, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
   invisible(file)
 }

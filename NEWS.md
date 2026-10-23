@@ -66,6 +66,26 @@
   the store's lookup; `data-raw/run_place_exact.R` reads
   `<out dir>/species/species.parquet` (or `OBIS_SPECIES_LOOKUP`) and fails when
   the species do not sum to the indicators.
+* **`collection.json` for the `h3` profile 1.1, with the atlas hooks.**
+  `obis_h3_stac_collection()` now writes the collection with id `obis_h3` (was
+  `obis-h3`; the atlas names it `?c=obis_h3`) for profile
+  `https://oceanmetrics.io/schemas/h3/v1.1.0/schema.json`: `h3:periods` as two
+  period sets (decades at `res_decade`, years at `res_year`, each with its
+  template), `h3:layout.row_group_rows`, `h3:species_table.columns` with
+  `name_key`, `year_min`, `year_max` and the decade variant's `period`,
+  `h3:heads` (`{layer: "taxon"}`), `cube:dimensions` (`layer`: all and the EOVs;
+  `indicator`; `period`: all, decades as `<yyy0>s`, years; `res`),
+  `atlas:metric` (`es`), `item_assets`, and one STAC Item per map layer
+  (`items/<all|eov>.json`, with `data`, `decade` and `year` assets: a folder and
+  the path template under it). `stats.parquet` is the asset with role `legend`,
+  `taxon_groups.parquet` the one with role `search`. New argument `items`.
+* **New `obis_h3_stac_stable(release_dir, base_url)`** writes the copy for a
+  stable url, `obis-h3/collection.json`, with every href and template absolute
+  under the release folder; `data-raw/refresh_obis_h3.sh` writes it after
+  `latest.json` (step g2), validated with `om-catalog validate h3` (exit 5 when
+  it fails). Both validate against the 1.1 schema (jsonvalidate and the node
+  CLI), with counter-fixtures (a period set without `placeholder`, `year_min`
+  without `year_max`) failing.
 * Fix: `taxon_groups.parquet` no longer fails for a taxon layer without res 1.
 
 # obisindicators 0.10.1
