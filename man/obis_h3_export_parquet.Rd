@@ -14,7 +14,9 @@ obis_h3_export_parquet(
   res_species = c(3L, 4L, 5L),
   species_decades = TRUE,
   res_species_decade = c(3L, 4L),
-  res_species_flat = 3L,
+  res_species_flat = 1:3,
+  species_flat_split = c(`3` = 1L),
+  split_row_group_rows = 2048L,
   heads = TRUE,
   res_heads = 1:7,
   parent_res = c(`6` = 2L, `7` = 3L),
@@ -65,8 +67,16 @@ present.}
 (default 3 and 4: the decade filter on a WoRMS subtree).}
 
 \item{res_species_flat}{the resolutions of the unpartitioned species table
-\verb{species_flat/res=<r>.parquet} (default 3: the cell query); \code{integer(0)}
+\verb{species_flat/res=<r>.parquet} (default 1 to 3, 0.12.0: the cell query;
+the finest from the store, the others rolled up from it); \code{integer(0)}
 skips it.}
+
+\item{species_flat_split}{resolution = parent resolution of the split
+\verb{species_flat/res=<r>/p=<parent>.parquet} (default \code{c("3" = 1L)}); NULL
+writes none. A resolution not in \code{res_species_flat} is skipped.}
+
+\item{split_row_group_rows}{rows per row group of the split files (default
+2048).}
 
 \item{heads}{write the pre-aggregated heads as taxon layers (default TRUE;
 needs the species table and the store's \code{taxon} table).}
@@ -151,10 +161,12 @@ directly with DuckDB-WASM (one small file per map layer and H3 resolution):
   year/all/year=<yyyy>/res=<r>/             per year, all taxa    (res in res_year)
   year/eov/eov=<eov>/year=<yyyy>/res=<r>/   per year and EOV      (res in res_year)
   species/res=<r>/class=<class>/data_0.parquet  species x hex x count (res in res_species)
-  species/species.parquet                   the species lookup: names, name_key, lineage
+  species/species.parquet                   the species lookup: names, name_key, lineage, eov
+  species/lineage.parquet                   aphiaid, name_key, lineage only (0.12.0)
   species/heads.json                        the pre-aggregated heads and the layer serving each
   species_decade/res=<r>/decade=<d>/class=<class>/  per decade (res in res_species_decade)
   species_flat/res=<r>.parquet              one cell-sorted file, every class (res_species_flat)
+  species_flat/res=<r>/p=<parent>.parquet   the same split by parent cell (species_flat_split)
   place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
   place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
                                             exact point-in-polygon indicators (only with place_exact)
@@ -247,10 +259,22 @@ cell" from static files. Columns \verb{h3, cell_id, name_key, aphiaid, n}
 named classes) and the layer that serves each. Each species row also
 carries \code{year_min} and \code{year_max}, the first and last year the aphiaid was
 recorded in the cell (within the decade in \verb{species_decade/}), for the Cell
-pane. \verb{species_flat/res=<r>.parquet} (default res 3) is the same table in one
+pane. \verb{species_flat/res=<r>.parquet} (default res 1 to 3) is the same table in one
 file for every class, sorted by \verb{cell_id, aphiaid} in row groups of
 \code{row_group_rows}, so the species of one cell are a range read of one file
 (spike 2: 0.53 MB for a res-1 cell) instead of one row group per class file.
+The finest of \code{res_species_flat} is written from the store (with \code{h3}); each
+coarser one is it rolled up (\code{\link[=obis_h3_write_species_flat]{obis_h3_write_species_flat()}}: \code{n} summed,
+\code{year_min} the least, \code{year_max} the greatest, no \code{h3}), so a coarse
+hexagon reads its own rows, not its children's. \code{species_flat_split} splits
+a resolution by a parent cell, \verb{species_flat/res=3/p=<res-1 parent>.parquet}
+by default (no \code{h3}, row groups of \code{split_row_group_rows}), so a cell reads
+a file whose footer comes with the first range read. The lookup
+\code{species/species.parquet} carries each species' \code{eov}
+(\code{\link[=obis_h3_species_eov_sql]{obis_h3_species_eov_sql()}}, the EOV layers' own membership join; NULL for
+none) and \code{species/lineage.parquet} holds its \verb{aphiaid, name_key, lineage}
+alone (\code{\link[=obis_h3_write_species_lookup]{obis_h3_write_species_lookup()}}), both in row groups of
+\code{row_group_rows}.
 
 \strong{The heads} (\code{heads = TRUE}) are written as ordinary taxon layers,
 \verb{taxon/rank=<rank>/taxon=<name>/res=<r>/} at \code{res_heads}

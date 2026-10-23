@@ -309,7 +309,7 @@ test_that("export: year and species layers, release.json, and the Animalia subtr
   expect_equal(sf[, names(s3)], s3)
   lk <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/species/species.parquet')"))
   expect_equal(nrow(lk), 7L)
-  expect_equal(names(lk), vapply(SPECIES_LOOKUP_COLUMNS, `[[`, "", "name"))
+  expect_equal(names(lk), c(vapply(SPECIES_LOOKUP_COLUMNS, `[[`, "", "name"), "eov"))  # eov: 0.12.0
   hj <- jsonlite::read_json(file.path(out, "species/heads.json"))
   expect_true(hj$built)
   expect_equal(hj$n, 3L)
@@ -347,7 +347,10 @@ test_that("export: year and species layers, release.json, and the Animalia subtr
   expect_equal(sp$columns, list(cell = "cell_id", species = "aphiaid", count = "n",
                                 name_key = "name_key", year_min = "year_min", year_max = "year_max"))
   expect_equal(js$layers$species_flat$href_template, "species_flat/res={res}.parquet")
-  expect_equal(js$layers$species_flat$rows, 11)
+  # 0.12.0: res 1, 2 and 3 (11 rows each here) and the res-3 split (11 rows again)
+  expect_equal(js$layers$species_flat$rows, 44)
+  expect_equal(vapply(js$layers$species_flat$by_res, function(b) b$rows, 0), c(11, 11, 11))
+  expect_equal(js$layers$species_flat$split[[1]]$rows, 11)
   expect_equal(unlist(js$layers$species_decade$resolutions), 3:4)
   expect_equal(js$layers$species_decade$columns$period, "decade")
   expect_equal(sp$lookup$href, "species/species.parquet")

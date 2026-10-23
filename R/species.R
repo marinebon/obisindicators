@@ -379,3 +379,457 @@ obis_h3_heads_sql <- function(res, heads, lookup = "species_lookup", from = "occ
            n::BIGINT AS n, sp::BIGINT AS sp, shannon, simpson, es
     FROM ({ind}) _h")
 }
+
+# 0.12.0: the species_flat roll-ups and split, the split lineage file and the EOV of each species ----
+
+# the columns of the 0.12 species_flat files (res 1, 2 and the res-3 split): those of
+# species_flat/res=3.parquet without h3 (cell_id gives it)
+SPECIES_FLAT_COLUMNS <- c("cell_id", "name_key", "aphiaid", "n", "year_min", "year_max")
+
+# the lookup's eov column (0.12.0) and the lineage file's columns
+SPECIES_EOV_COLUMN <- list(
+  name = "eov", type = "VARCHAR",
+  description = paste(
+    "the EOV whose layer counts this aphiaid: the store's eov table (each EOV's IOOS seeds",
+    "expanded down the WoRMS taxon tree, obis_eov_bake()) joined on taxonID = aphiaid, as the",
+    "eov/ layers join occ_h3; NULL when no EOV layer counts it"))
+SPECIES_LINEAGE_COLUMNS <- list(
+  list(name = "aphiaid",  type = "BIGINT",   description = "WoRMS AphiaID, one row each, sorted"),
+  list(name = "name_key", type = "INTEGER",  description = "the lookup's name_key"),
+  list(name = "lineage",  type = "BIGINT[]", description = "the aphiaid itself, then its ancestors (the lookup's lineage)"))
+
+#' SQL rolling a cell-sorted species table up to a coarser resolution
+#'
+#' One row per (cell at `res`, aphiaid) from a finer species table with the
+#' columns of `species_flat/res=<r>.parquet`: `n` summed, `year_min` the least
+#' and `year_max` the greatest over the finer cells (NULL only when every
+#' finer row's year is NULL), `name_key` carried (one per aphiaid). This is the
+#' atlas's `sumBySpecies` over a cell's children, written once in the release;
+#' it equals [obis_h3_species_sql()] at `res` straight from the store, since
+#' that rolls the same `occ_h3` tier up with the same sums, minima and maxima.
+#'
+#' @param from a table name or a table function such as
+#'   `read_parquet('species_flat/res=3.parquet')`, with `cell_id`, `name_key`,
+#'   `aphiaid`, `n`, `year_min` and `year_max`.
+#' @param res the coarser H3 resolution (0 to 15; coarser than `from`'s).
+#' @return a SQL string (a SELECT, unordered) with the columns
+#'   `cell_id, name_key, aphiaid, n, year_min, year_max`.
+#' @concept store
+#' @export
+#' @examples
+#' cat(obis_h3_species_rollup_sql("read_parquet('species_flat/res=3.parquet')", 1))
+obis_h3_species_rollup_sql <- function(from, res) {
+  stopifnot(is.character(from), length(from) == 1L, nzchar(from),
+            is.numeric(res), length(res) == 1L, res %in% 0:15)
+  glue::glue("
+    SELECT CAST(h3_cell_to_parent(cell_id, {as.integer(res)}) AS BIGINT) AS cell_id,
+           name_key::INTEGER AS name_key, aphiaid::BIGINT AS aphiaid, SUM(n)::BIGINT AS n,
+           MIN(year_min)::SMALLINT AS year_min, MAX(year_max)::SMALLINT AS year_max
+    FROM {from}
+    GROUP BY 1, 2, 3")
+}
+
+#' Write the species_flat roll-ups and the parent split
+#'
+#' From the finest cell-sorted species file `flat_dir/res=<from_res>.parquet`
+#' (written by [obis_h3_export_parquet()]), writes
+#'
+#' - `res=<r>.parquet` for each `r` in `res` (coarser than `from_res`): one row
+#'   per cell and species, [obis_h3_species_rollup_sql()], so a coarse
+#'   hexagon's list is its own rows, not its children's;
+#' - `res=<s>/p=<parent>.parquet` for each `s = names(split)`: the rows of
+#'   `res=<s>.parquet` under one parent cell at `split[[s]]` (the parent's
+#'   lowercase hex id), so a page reads a file small enough for its footer to
+#'   come with the first range read.
+#'
+#' Every file written has the columns `cell_id, name_key, aphiaid, n,
+#' year_min, year_max` (no `h3`: `cell_id` gives it, and its string statistics
+#' are the largest part of a footer), sorted by `cell_id, aphiaid`, in row
+#' groups of `row_group_rows` (the roll-ups) or `split_row_group_rows` (the
+#' split), so the `cell_id` statistics of consecutive groups do not overlap.
+#' `res=<from_res>.parquet` is read, never rewritten.
+#'
+#' @param con a DBI connection to DuckDB with the `h3` extension loaded.
+#' @param flat_dir the release's `species_flat/` folder.
+#' @param from_res the resolution of the file the others come from (default 3).
+#' @param res the coarser resolutions to roll up to (default 1 and 2).
+#' @param split a named integer vector, resolution = parent resolution, of the
+#'   files to split (default `c("3" = 1L)`); `NULL` writes none. A split
+#'   resolution must be `from_res` or one of `res`.
+#' @param row_group_rows rows per row group of the roll-ups (default 10000).
+#' @param split_row_group_rows rows per row group of the split files (default
+#'   2048, one DuckDB vector).
+#' @param compression Parquet codec (default `"zstd"`).
+#' @return a data frame, one row per file written: `path` (relative to the
+#'   release, `species_flat/...`), `res`, `parent` (NA for a roll-up), `rows`,
+#'   `bytes`.
+#' @concept store
+#' @export
+obis_h3_write_species_flat <- function(con, flat_dir, from_res = 3L, res = c(1L, 2L),
+                                       split = c("3" = 1L), row_group_rows = 10000L,
+                                       split_row_group_rows = 2048L, compression = "zstd") {
+  stopifnot(
+    requireNamespace("DBI", quietly = TRUE),
+    is.character(flat_dir), length(flat_dir) == 1L,
+    is.numeric(from_res), length(from_res) == 1L, from_res %in% H3T_RES_IDX,
+    is.numeric(res), all(res %in% H3T_RES_IDX),
+    is.null(split) || (is.numeric(split) && !is.null(names(split)) && all(split %in% 0:15)),
+    is.numeric(row_group_rows), length(row_group_rows) == 1L, row_group_rows >= 1,
+    is.numeric(split_row_group_rows), length(split_row_group_rows) == 1L, split_row_group_rows >= 1,
+    grepl("^[A-Za-z0-9]+$", compression))
+  from_res <- as.integer(from_res)
+  res      <- sort(unique(as.integer(res)))
+  if (any(res >= from_res))
+    stop("res must be coarser than from_res (", from_res, "): ", paste(res[res >= from_res], collapse = ", "))
+  s_res <- as.integer(names(split))
+  s_par <- as.integer(split)
+  if (length(split) && (anyNA(s_res) || !all(s_res %in% c(from_res, res))))
+    stop("split names must be from_res or one of res: ", paste(names(split), collapse = ", "))
+  if (length(split) && any(s_par >= s_res))
+    stop("a split's parent resolution must be coarser than its resolution")
+  q    <- function(x) gsub("'", "''", x)
+  src  <- file.path(flat_dir, paste0("res=", from_res, ".parquet"))
+  if (!file.exists(src)) stop("no ", src)
+  cols <- paste(SPECIES_FLAT_COLUMNS, collapse = ", ")
+  opts <- function(rg) glue::glue("(FORMAT PARQUET, COMPRESSION {compression}, ROW_GROUP_SIZE {as.integer(rg)})")
+  out  <- data.frame(path = character(0), res = integer(0), parent = character(0),
+                     rows = numeric(0), bytes = numeric(0), stringsAsFactors = FALSE)
+  add  <- function(f, r, p, n) out[nrow(out) + 1L, ] <<- list(
+    file.path("species_flat", substring(f, nchar(flat_dir) + 2L)), r, p, as.numeric(n), as.numeric(file.size(f)))
+
+  # the roll-ups, each from the finest file ----
+  for (r in res) {
+    f <- file.path(flat_dir, paste0("res=", r, ".parquet"))
+    n <- DBI::dbExecute(con, glue::glue(
+      "COPY (SELECT {cols} FROM ({obis_h3_species_rollup_sql(glue::glue(\"read_parquet('{q(src)}')\"), r)}) _r
+             ORDER BY cell_id, aphiaid)
+       TO '{q(f)}' {opts(row_group_rows)};"))
+    add(f, r, NA_character_, n)
+  }
+
+  # the split: one file per parent cell, sorted by cell ----
+  tmp <- "_obis_species_flat_split"
+  on.exit(DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {tmp};")), add = TRUE)
+  for (i in seq_along(split)) {
+    s <- s_res[i]; p <- s_par[i]
+    f_s <- file.path(flat_dir, paste0("res=", s, ".parquet"))
+    DBI::dbExecute(con, glue::glue(
+      "CREATE OR REPLACE TEMP TABLE {tmp} AS
+       SELECT CAST(h3_cell_to_parent(cell_id, {p}) AS BIGINT) AS _p, {cols}
+       FROM read_parquet('{q(f_s)}') ORDER BY _p, cell_id, aphiaid;"))
+    pp <- DBI::dbGetQuery(con, glue::glue(
+      "SELECT _p::VARCHAR AS p, lower(printf('%x', _p)) AS hex, COUNT(*)::DOUBLE AS rows
+       FROM {tmp} GROUP BY 1, 2 ORDER BY 2"))
+    d <- file.path(flat_dir, paste0("res=", s))
+    dir.create(d, showWarnings = FALSE, recursive = TRUE)
+    for (j in seq_len(nrow(pp))) {
+      f <- file.path(d, paste0("p=", pp$hex[j], ".parquet"))
+      DBI::dbExecute(con, glue::glue(
+        "COPY (SELECT {cols} FROM {tmp} WHERE _p = {pp$p[j]} ORDER BY cell_id, aphiaid)
+         TO '{q(f)}' {opts(split_row_group_rows)};"))
+      add(f, s, pp$hex[j], pp$rows[j])
+    }
+    DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {tmp};"))
+  }
+  out
+}
+
+#' SQL for the EOV of each species, as the EOV layers count it
+#'
+#' The EOV layers (`eov/`, `decade/eov/`, `year/eov/`, `idx_h3_eov`) count an
+#' occurrence in an EOV when `occ_h3.aphiaid = eov.taxonID`, the store's `eov`
+#' table holding each EOV's IOOS seeds expanded down the WoRMS taxon tree
+#' ([obis_eov_bake()]). The species lookup's `eov` is that same join: the one
+#' EOV whose membership holds the aphiaid, or NULL. The seeds (Agnatha,
+#' Chondrichthyes, Osteichthyes; Scleractinia; the mangrove genera; Pinnipedia,
+#' Cetacea, Sirenia and four species; Aves; Alismatales; Chelonioidea) are
+#' disjoint subtrees of one tree, so an aphiaid is in at most one EOV;
+#' `n_eov` says how many hold it, and [obis_h3_write_species_lookup()] stops
+#' when any holds more than one rather than pick.
+#'
+#' @param eov the membership table (default `"eov"`, columns `eov`, `taxonID`).
+#' @return a SQL string (a SELECT) with `aphiaid BIGINT, eov VARCHAR, n_eov`.
+#' @concept eov
+#' @export
+#' @examples
+#' cat(obis_h3_species_eov_sql())
+obis_h3_species_eov_sql <- function(eov = "eov") {
+  stopifnot(is.character(eov), length(eov) == 1L, nzchar(eov))
+  glue::glue("
+    SELECT taxonID::BIGINT AS aphiaid, MIN(eov)::VARCHAR AS eov, COUNT(DISTINCT eov)::INTEGER AS n_eov
+    FROM {eov}
+    GROUP BY 1")
+}
+
+#' Write the species lookup with its EOV, and the split lineage file
+#'
+#' Writes `dir/species.parquet` (the rows of `lookup`, ordered by aphiaid, with
+#' the column `eov` of [obis_h3_species_eov_sql()] after the lookup's own
+#' columns) and `dir/lineage.parquet` (`aphiaid, name_key, lineage` only, the
+#' same rows), both in row groups of `row_group_rows`, so a WoRMS subtree reads
+#' the lineage without the names and a list of species reads the names
+#' without the lineage. Without an `eov` table (`eov = NULL`) the column is
+#' left out. The rows are `lookup`'s, one per aphiaid, ordered by aphiaid (the
+#' order [obis_h3_export_parquet()] writes); each file is written to a
+#' temporary name and renamed, so `lookup` may read the `species.parquet` it
+#' replaces.
+#'
+#' No IUCN Red List column is written: the store holds no Red List field (its
+#' `occ_h3` and `taxon` tables carry none).
+#'
+#' @param con a DBI connection to DuckDB.
+#' @param lookup a table name or a table function (`read_parquet('...')`) with
+#'   the lookup columns of [obis_h3_species_lookup_sql()].
+#' @param dir output folder (the release's `species/`).
+#' @param eov the EOV membership table, or NULL (default `"eov"`).
+#' @param row_group_rows rows per row group (default 10000).
+#' @param compression Parquet codec (default `"zstd"`).
+#' @return a data frame, one row per file: `path` (relative to the release),
+#'   `rows`, `bytes`, with the attribute `eov` (the number of aphiaids per EOV,
+#'   NA for none).
+#' @concept store
+#' @export
+obis_h3_write_species_lookup <- function(con, lookup, dir, eov = "eov", row_group_rows = 10000L,
+                                         compression = "zstd") {
+  stopifnot(requireNamespace("DBI", quietly = TRUE),
+            is.character(lookup), length(lookup) == 1L, nzchar(lookup),
+            is.character(dir), length(dir) == 1L,
+            is.null(eov) || (is.character(eov) && length(eov) == 1L),
+            is.numeric(row_group_rows), length(row_group_rows) == 1L, row_group_rows >= 1,
+            grepl("^[A-Za-z0-9]+$", compression))
+  q    <- function(x) gsub("'", "''", x)
+  lcol <- vapply(SPECIES_LOOKUP_COLUMNS, `[[`, "", "name")
+  sel  <- paste(sprintf('l."%s"', lcol), collapse = ", ")
+  tmp  <- "_obis_species_lookup_out"
+  on.exit(DBI::dbExecute(con, glue::glue("DROP TABLE IF EXISTS {tmp};")), add = TRUE)
+  if (is.null(eov)) {
+    DBI::dbExecute(con, glue::glue(
+      "CREATE OR REPLACE TEMP TABLE {tmp} AS SELECT {sel} FROM {lookup} l ORDER BY l.aphiaid;"))
+  } else {
+    multi <- DBI::dbGetQuery(con, glue::glue(
+      "SELECT aphiaid::DOUBLE AS aphiaid FROM ({obis_h3_species_eov_sql(eov)}) e WHERE n_eov > 1 ORDER BY 1 LIMIT 5"))
+    if (nrow(multi))
+      stop("aphiaid(s) in more than one EOV, so one eov value would misstate the EOV layers: ",
+           paste(multi$aphiaid, collapse = ", "))
+    DBI::dbExecute(con, glue::glue(
+      "CREATE OR REPLACE TEMP TABLE {tmp} AS
+       SELECT {sel}, e.eov
+       FROM {lookup} l LEFT JOIN ({obis_h3_species_eov_sql(eov)}) e ON e.aphiaid = l.aphiaid
+       ORDER BY l.aphiaid;"))
+  }
+  # one row per aphiaid, the rows of the lookup ----
+  chk  <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT COUNT(*)::DOUBLE AS n, COUNT(DISTINCT aphiaid)::DOUBLE AS k FROM {tmp}"))
+  n_in <- DBI::dbGetQuery(con, glue::glue("SELECT COUNT(*)::DOUBLE AS n FROM {lookup}"))$n
+  if (chk$n != n_in || chk$k != chk$n)
+    stop("the lookup must hold one row per aphiaid (rows ", chk$n, " of ", n_in, ", distinct ", chk$k, ")")
+  dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+  opts <- glue::glue("(FORMAT PARQUET, COMPRESSION {compression}, ROW_GROUP_SIZE {as.integer(row_group_rows)})")
+  ocol <- paste(sprintf('"%s"', c(lcol, if (!is.null(eov)) "eov")), collapse = ", ")
+  f_sp <- file.path(dir, "species.parquet")
+  f_ln <- file.path(dir, "lineage.parquet")
+  DBI::dbExecute(con, glue::glue("COPY (SELECT {ocol} FROM {tmp} ORDER BY aphiaid) TO '{q(f_sp)}.tmp' {opts};"))
+  DBI::dbExecute(con, glue::glue(
+    "COPY (SELECT aphiaid, name_key, lineage FROM {tmp} ORDER BY aphiaid) TO '{q(f_ln)}.tmp' {opts};"))
+  file.rename(paste0(f_sp, ".tmp"), f_sp)
+  file.rename(paste0(f_ln, ".tmp"), f_ln)
+  counts <- if (is.null(eov)) NA else DBI::dbGetQuery(con, glue::glue(
+    "SELECT eov, COUNT(*)::DOUBLE AS n FROM {tmp} WHERE eov IS NOT NULL GROUP BY 1 ORDER BY 1"))
+  rel <- basename(dir)
+  out <- data.frame(path = file.path(rel, c("species.parquet", "lineage.parquet")),
+                    rows = chk$n, bytes = as.numeric(file.size(c(f_sp, f_ln))), stringsAsFactors = FALSE)
+  attr(out, "eov") <- counts
+  out
+}
+
+# release.json's species_flat layer from the files under species_flat/ (path relative to the
+# release, rows, bytes): the whole file per resolution and the split by parent cell
+.obis_species_flat_layer <- function(files, from_res, split, row_group_rows, split_row_group_rows) {
+  m      <- regmatches(files$path, regexec("^species_flat/res=([0-9]+)(/p=([0-9a-f]+))?\\.parquet$", files$path))
+  ok     <- lengths(m) > 0
+  files  <- files[ok, , drop = FALSE]
+  files$res    <- as.integer(vapply(m[ok], `[`, "", 2L))
+  files$parent <- vapply(m[ok], `[`, "", 4L)
+  whole  <- files[!nzchar(files$parent), , drop = FALSE]
+  parts  <- files[nzchar(files$parent), , drop = FALSE]
+  res    <- sort(unique(whole$res))
+  by_res <- do.call(rbind, lapply(res, function(r) data.frame(
+    res = r, rows = sum(whole$rows[whole$res == r]), bytes = sum(whole$bytes[whole$res == r]),
+    columns = if (r == from_res) "h3, cell_id, name_key, aphiaid, n, year_min, year_max" else
+      paste(SPECIES_FLAT_COLUMNS, collapse = ", "),
+    from = if (r == from_res) "occ_h3 (obis_h3_species_sql())" else
+      paste0("res=", from_res, ".parquet rolled up (obis_h3_species_rollup_sql())"),
+    stringsAsFactors = FALSE)))
+  s_res  <- sort(unique(parts$res))
+  pr     <- if (length(s_res)) stats::setNames(as.list(as.integer(split[as.character(s_res)])), s_res) else list()
+  by_split <- if (length(s_res)) do.call(rbind, lapply(s_res, function(r) {
+    p <- parts[parts$res == r, ]
+    data.frame(res = r, parent_res = as.integer(split[[as.character(r)]]), files = nrow(p),
+               rows = sum(p$rows), bytes = sum(p$bytes), max_file_bytes = max(p$bytes),
+               median_file_bytes = stats::median(p$bytes))
+  })) else NULL
+  lay <- list(
+    path           = "species_flat",
+    partitions     = I(character(0)),
+    template       = "species_flat/res=<res>.parquet",
+    rows           = sum(files$rows),
+    files          = nrow(files),
+    bytes          = sum(files$bytes),
+    kind           = "species",
+    href_template  = "species_flat/res={res}.parquet",
+    resolutions    = I(res),
+    sorted_by      = I(c("cell_id", "aphiaid")),
+    row_group_rows = row_group_rows,
+    columns        = list(cell = "cell_id", species = "aphiaid", count = "n", name_key = "name_key",
+                          year_min = "year_min", year_max = "year_max"),
+    by_res         = by_res)
+  if (length(s_res)) {
+    lay$template_parent      <- "species_flat/res=<res>/p=<parent>.parquet"
+    lay$parent_template      <- "species_flat/res={res}/p={parent}.parquet"
+    lay$parent_res           <- pr
+    lay$split_row_group_rows <- split_row_group_rows
+    lay$split                <- by_split
+  }
+  lay$note <- paste(
+    "the species table of species/ in one file per res for every class, sorted by cell_id,",
+    "aphiaid in row groups of row_group_rows: the species of a cell are the rows with cell_id",
+    "BETWEEN the first and last descendant of the cell at this res (a range read of the",
+    "overlapping row groups); join species/species.parquet on aphiaid for names.",
+    paste0("res=", from_res, ".parquet comes from occ_h3 and keeps h3; each coarser res is it rolled up"),
+    "(n summed, year_min the least, year_max the greatest; no h3 column).",
+    if (length(s_res)) paste(
+      "parent_template: the same rows split by the parent cell at parent_res (no h3 column),",
+      "one file per parent with records, sorted by cell_id in row groups of",
+      "split_row_group_rows, so a cell reads one small file whose footer comes with the",
+      "first range read; the files union to res=<res>.parquet."))
+  lay
+}
+
+#' Add the 0.12 species files to a built obis-h3 release
+#'
+#' Amends a release written by [obis_h3_export_parquet()] 0.11 (or later) in
+#' place, from its own files and the store's `eov` table, without re-running
+#' the export:
+#'
+#' - `species/species.parquet` rewritten with the column `eov`
+#'   ([obis_h3_species_eov_sql()]; same rows, same order) and
+#'   `species/lineage.parquet` beside it ([obis_h3_write_species_lookup()]);
+#' - `species_flat/res=<r>.parquet` for `res_flat` and the split
+#'   `species_flat/res=<s>/p=<parent>.parquet` ([obis_h3_write_species_flat()]),
+#'   from `species_flat/res=<from_res>.parquet`, which is not rewritten;
+#' - `release.json`: `layers.species_flat` (resolutions, the split's
+#'   `template_parent`, `parent_res`, `by_res`, `split`), `layers.species`
+#'   (`lookup_columns` with `eov`, `lineage`, `eov`, `lookup_bytes`) and, with
+#'   `manifest = TRUE`, `files.parquet` (the lookup's new size, the new files
+#'   added; every other row kept).
+#'
+#' The collections are not written here: run [obis_h3_stac_collection()] and
+#' [obis_h3_stac_stable()] after.
+#'
+#' @param con a DBI connection to DuckDB with the `h3` extension loaded (the
+#'   store, for its `eov` table).
+#' @param release_dir the release directory.
+#' @param from_res the resolution of the existing flat file (default 3).
+#' @param res_flat the coarser resolutions to roll up to (default 1 and 2).
+#' @param split resolution = parent resolution of the split (default `c("3" = 1L)`).
+#' @param eov the EOV membership table, or NULL for no `eov` column.
+#' @param row_group_rows rows per row group of the roll-ups, the lookup and the
+#'   lineage file (default 10000).
+#' @param split_row_group_rows rows per row group of the split (default 2048).
+#' @param manifest also update `files.parquet` (default TRUE).
+#' @param compression Parquet codec (default `"zstd"`).
+#' @return invisibly, a data frame of the files written (`path`, `rows`,
+#'   `bytes`), with the attribute `eov` (aphiaids per EOV).
+#' @concept store
+#' @export
+obis_h3_amend_species <- function(con, release_dir, from_res = 3L, res_flat = c(1L, 2L),
+                                  split = c("3" = 1L), eov = "eov", row_group_rows = 10000L,
+                                  split_row_group_rows = 2048L, manifest = TRUE, compression = "zstd") {
+  stopifnot(requireNamespace("DBI", quietly = TRUE), requireNamespace("jsonlite", quietly = TRUE),
+            is.character(release_dir), length(release_dir) == 1L, dir.exists(release_dir),
+            is.logical(manifest), length(manifest) == 1L, !is.na(manifest))
+  rel   <- normalizePath(release_dir)
+  f_js  <- file.path(rel, "release.json")
+  f_man <- file.path(rel, "files.parquet")
+  f_lk  <- file.path(rel, "species", "species.parquet")
+  stopifnot("release_dir has no release.json" = file.exists(f_js),
+            "release_dir has no species/species.parquet" = file.exists(f_lk),
+            "release_dir has no files.parquet (manifest = FALSE skips it)" = !manifest || file.exists(f_man))
+  if (!is.null(eov) && !.obis_has_table(con, eov)) stop("no table ", eov, " (eov = NULL leaves the column out)")
+  q <- function(x) gsub("'", "''", x)
+
+  lk <- obis_h3_write_species_lookup(con, glue::glue("read_parquet('{q(f_lk)}')"), file.path(rel, "species"),
+                                     eov = eov, row_group_rows = row_group_rows, compression = compression)
+  sf <- obis_h3_write_species_flat(con, file.path(rel, "species_flat"), from_res = from_res, res = res_flat,
+                                   split = split, row_group_rows = row_group_rows,
+                                   split_row_group_rows = split_row_group_rows, compression = compression)
+
+  # every species_flat file on disk, the existing one included ----
+  fl <- sort(list.files(file.path(rel, "species_flat"), pattern = "\\.parquet$", recursive = TRUE))
+  fl <- file.path("species_flat", fl)
+  nr <- vapply(file.path(rel, fl), function(f) as.numeric(DBI::dbGetQuery(con, sprintf(
+    "SELECT num_rows FROM parquet_file_metadata('%s') LIMIT 1", q(f)))$num_rows), numeric(1))
+  flat <- data.frame(path = fl, rows = unname(nr), bytes = as.numeric(file.size(file.path(rel, fl))),
+                     stringsAsFactors = FALSE)
+
+  # release.json ----
+  js <- jsonlite::read_json(f_js)
+  rg <- as.integer(row_group_rows)
+  js$layers$species_flat <- .obis_species_flat_layer(flat, as.integer(from_res), split, rg,
+                                                     as.integer(split_row_group_rows))
+  sp <- js$layers$species
+  if (!is.null(sp)) {
+    lc <- Filter(function(x) !identical(x$name, "eov"), sp$lookup_columns)
+    sp$lookup_columns <- c(lc, if (!is.null(eov)) list(SPECIES_EOV_COLUMN))
+    sp$lookup_bytes   <- lk$bytes[1]
+    sp$lineage        <- .obis_species_lineage_meta(lk$bytes[2], lk$rows[2], rg)
+    sp$eov            <- .obis_species_eov_meta(attr(lk, "eov"))
+    js$layers$species <- sp
+  }
+
+  # files.parquet ----
+  out <- c(f_js, file.path(rel, lk$path), file.path(rel, sf$path))
+  if (manifest) {
+    old  <- DBI::dbGetQuery(con, sprintf("SELECT * FROM read_parquet('%s')", q(f_man)))
+    new  <- rbind(
+      data.frame(layer = "species_lookup", path = "species/species.parquet", rows = lk$rows[1], bytes = lk$bytes[1]),
+      data.frame(layer = "species_lineage", path = "species/lineage.parquet", rows = lk$rows[2], bytes = lk$bytes[2]),
+      data.frame(layer = "species_flat", path = flat$path, rows = flat$rows, bytes = flat$bytes))
+    new$url_path <- gsub("%", "%25", new$path, fixed = TRUE)
+    new$parent   <- ifelse(grepl("/p=[0-9a-f]+\\.parquet$", new$path),
+                           sub(".*/p=([0-9a-f]+)\\.parquet$", "\\1", new$path), NA_character_)
+    keep <- old[!old$path %in% new$path, , drop = FALSE]
+    all  <- rbind(keep[, names(new)], new[, names(new)])
+    duckdb::duckdb_register(con, "amend_species_files", all)
+    on.exit(duckdb::duckdb_unregister(con, "amend_species_files"), add = TRUE)
+    f_tmp <- paste0(f_man, ".tmp")
+    DBI::dbExecute(con, sprintf(
+      "COPY (SELECT layer, path, url_path, rows::BIGINT AS rows, bytes::BIGINT AS bytes,
+                    parent::VARCHAR AS parent FROM amend_species_files ORDER BY path)
+       TO '%s' (FORMAT PARQUET, COMPRESSION %s);", q(f_tmp), compression))
+    file.rename(f_tmp, f_man)
+    if (!is.null(js$files)) js$files$n_files <- nrow(all) + 1L
+    out <- c(out, f_man)
+  }
+  jsonlite::write_json(js, f_js, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null",
+                       dataframe = "rows")
+  res <- rbind(lk[, c("path", "rows", "bytes")], sf[, c("path", "rows", "bytes")])
+  attr(res, "eov") <- attr(lk, "eov")
+  invisible(res)
+}
+
+# release.json's species.lineage and species.eov entries
+.obis_species_lineage_meta <- function(bytes, rows, row_group_rows) list(
+  href = "species/lineage.parquet", key = "aphiaid", lineage_column = "lineage",
+  columns = SPECIES_LINEAGE_COLUMNS, sorted_by = I("aphiaid"), row_group_rows = row_group_rows,
+  rows = rows, bytes = bytes,
+  note = paste(
+    "the lookup's aphiaid, name_key and lineage only (the same rows, sorted by aphiaid), so a",
+    "WoRMS subtree (list_contains(lineage, <aphiaid>)) reads it without the names"))
+.obis_species_eov_meta <- function(counts) {
+  if (!is.data.frame(counts)) return(NULL)
+  list(column = "eov", n = stats::setNames(as.list(counts$n), counts$eov),
+       rule = SPECIES_EOV_COLUMN$description,
+       redlist = paste(
+         "no Red List column: the store's occ_h3 and taxon tables carry no IUCN Red List field"))
+}

@@ -37,10 +37,12 @@ EXPORT_MAX_OPEN <- 100L
 #'   year/all/year=<yyyy>/res=<r>/             per year, all taxa    (res in res_year)
 #'   year/eov/eov=<eov>/year=<yyyy>/res=<r>/   per year and EOV      (res in res_year)
 #'   species/res=<r>/class=<class>/data_0.parquet  species x hex x count (res in res_species)
-#'   species/species.parquet                   the species lookup: names, name_key, lineage
+#'   species/species.parquet                   the species lookup: names, name_key, lineage, eov
+#'   species/lineage.parquet                   aphiaid, name_key, lineage only (0.12.0)
 #'   species/heads.json                        the pre-aggregated heads and the layer serving each
 #'   species_decade/res=<r>/decade=<d>/class=<class>/  per decade (res in res_species_decade)
 #'   species_flat/res=<r>.parquet              one cell-sorted file, every class (res_species_flat)
+#'   species_flat/res=<r>/p=<parent>.parquet   the same split by parent cell (species_flat_split)
 #'   place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
 #'   place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
 #'                                             exact point-in-polygon indicators (only with place_exact)
@@ -134,10 +136,22 @@ EXPORT_MAX_OPEN <- 100L
 #' named classes) and the layer that serves each. Each species row also
 #' carries `year_min` and `year_max`, the first and last year the aphiaid was
 #' recorded in the cell (within the decade in `species_decade/`), for the Cell
-#' pane. `species_flat/res=<r>.parquet` (default res 3) is the same table in one
+#' pane. `species_flat/res=<r>.parquet` (default res 1 to 3) is the same table in one
 #' file for every class, sorted by `cell_id, aphiaid` in row groups of
 #' `row_group_rows`, so the species of one cell are a range read of one file
 #' (spike 2: 0.53 MB for a res-1 cell) instead of one row group per class file.
+#' The finest of `res_species_flat` is written from the store (with `h3`); each
+#' coarser one is it rolled up ([obis_h3_write_species_flat()]: `n` summed,
+#' `year_min` the least, `year_max` the greatest, no `h3`), so a coarse
+#' hexagon reads its own rows, not its children's. `species_flat_split` splits
+#' a resolution by a parent cell, `species_flat/res=3/p=<res-1 parent>.parquet`
+#' by default (no `h3`, row groups of `split_row_group_rows`), so a cell reads
+#' a file whose footer comes with the first range read. The lookup
+#' `species/species.parquet` carries each species' `eov`
+#' ([obis_h3_species_eov_sql()], the EOV layers' own membership join; NULL for
+#' none) and `species/lineage.parquet` holds its `aphiaid, name_key, lineage`
+#' alone ([obis_h3_write_species_lookup()]), both in row groups of
+#' `row_group_rows`.
 #'
 #' **The heads** (`heads = TRUE`) are written as ordinary taxon layers,
 #' `taxon/rank=<rank>/taxon=<name>/res=<r>/` at `res_heads`
@@ -188,8 +202,14 @@ EXPORT_MAX_OPEN <- 100L
 #' @param res_species_decade the resolutions of the per-decade species table
 #'   (default 3 and 4: the decade filter on a WoRMS subtree).
 #' @param res_species_flat the resolutions of the unpartitioned species table
-#'   `species_flat/res=<r>.parquet` (default 3: the cell query); `integer(0)`
+#'   `species_flat/res=<r>.parquet` (default 1 to 3, 0.12.0: the cell query;
+#'   the finest from the store, the others rolled up from it); `integer(0)`
 #'   skips it.
+#' @param species_flat_split resolution = parent resolution of the split
+#'   `species_flat/res=<r>/p=<parent>.parquet` (default `c("3" = 1L)`); NULL
+#'   writes none. A resolution not in `res_species_flat` is skipped.
+#' @param split_row_group_rows rows per row group of the split files (default
+#'   2048).
 #' @param heads write the pre-aggregated heads as taxon layers (default TRUE;
 #'   needs the species table and the store's `taxon` table).
 #' @param res_heads the resolutions of the heads (default 1-7; res 6 and 7 are
@@ -253,7 +273,9 @@ obis_h3_export_parquet <- function(
   res_species      = c(3L, 4L, 5L),
   species_decades  = TRUE,
   res_species_decade = c(3L, 4L),
-  res_species_flat = 3L,
+  res_species_flat = 1:3,
+  species_flat_split = c("3" = 1L),
+  split_row_group_rows = 2048L,
   heads            = TRUE,
   res_heads        = 1:7,
   parent_res       = c("6" = 2L, "7" = 3L),
@@ -287,6 +309,8 @@ obis_h3_export_parquet <- function(
     all(as.integer(res_heads) %in% H3T_RES_IDX),
     all(as.integer(res_species_decade) %in% H3T_RES_IDX),
     all(as.integer(res_species_flat) %in% H3T_RES_IDX),
+    is.null(species_flat_split) || (is.numeric(species_flat_split) && !is.null(names(species_flat_split))),
+    is.numeric(split_row_group_rows), length(split_row_group_rows) == 1L, split_row_group_rows >= 1,
     is.logical(heads), length(heads) == 1L,
     is.null(years) || is.numeric(years),
     is.logical(species_decades), length(species_decades) == 1L,
@@ -601,10 +625,10 @@ obis_h3_export_parquet <- function(
       "CREATE OR REPLACE TEMP TABLE {lk} AS {obis_h3_species_lookup_sql(taxon = taxon_tbl)}"))
     n_lookup <- DBI::dbGetQuery(con, glue::glue("SELECT COUNT(*)::DOUBLE AS n FROM {lk}"))$n
     if (n_lookup > 0) {
-      dir.create(file.path(out, "species"), showWarnings = FALSE)
-      DBI::dbExecute(con, glue::glue(
-        "COPY (SELECT * FROM {lk} ORDER BY aphiaid) TO '{q(file.path(out, 'species', 'species.parquet'))}'
-         (FORMAT PARQUET, COMPRESSION {compression}, ROW_GROUP_SIZE 100000);"))
+      # the lookup with each species' EOV, and its lineage in a file of its own (0.12.0)
+      lk_files <- obis_h3_write_species_lookup(
+        con, lk, file.path(out, "species"), eov = if (has_eov) "eov" else NULL,
+        row_group_rows = row_group_rows, compression = compression)
       rows_sp <- 0
       for (r in res_species) {
         say("species res ", r, " (occ_h3 tier ", .obis_tier(r), ") ...")
@@ -640,35 +664,28 @@ obis_h3_export_parquet <- function(
       }
 
       # the species table unpartitioned, one cell-sorted file per res, for the cell query ----
+      # the finest res from the store, each coarser one rolled up from it, then the parent split
       if (length(res_species_flat)) {
         dir.create(file.path(out, "species_flat"), showWarnings = FALSE)
-        rows_sf <- 0
-        for (r in res_species_flat) {
-          say("species flat res ", r, " ...")
-          f <- file.path(out, "species_flat", paste0("res=", r, ".parquet"))
-          rows_sf <- rows_sf + DBI::dbExecute(con, glue::glue(
-            "COPY (SELECT h3, cell_id, name_key, aphiaid, n, year_min, year_max
-                   FROM ({obis_h3_species_sql(r, lookup = lk)}) _f ORDER BY cell_id, aphiaid)
-             TO '{q(f)}' (FORMAT PARQUET, COMPRESSION {compression}, ROW_GROUP_SIZE {row_group_rows});"))
-        }
-        layers$species_flat <- list(
-          path          = "species_flat",
-          partitions    = I(character(0)),
-          template      = "species_flat/res=<res>.parquet",
-          rows          = rows_sf,
-          kind          = "species",
-          href_template = "species_flat/res={res}.parquet",
-          resolutions   = I(res_species_flat),
-          sorted_by     = I(c("cell_id", "aphiaid")),
-          row_group_rows = row_group_rows,
-          columns       = list(cell = "cell_id", species = "aphiaid", count = "n", name_key = "name_key",
-                               year_min = "year_min", year_max = "year_max"),
-          note          = paste(
-            "the species table of species/ in one file per res for every class, sorted by",
-            "cell_id, aphiaid in row groups of row_group_rows: the species of a cell are the",
-            "rows with cell_id BETWEEN the first and last descendant of the cell at this res",
-            "(a range read of the overlapping row groups); join species/species.parquet on",
-            "aphiaid for names"))
+        r_top <- max(res_species_flat)
+        say("species flat res ", r_top, " ...")
+        DBI::dbExecute(con, glue::glue(
+          "COPY (SELECT h3, cell_id, name_key, aphiaid, n, year_min, year_max
+                 FROM ({obis_h3_species_sql(r_top, lookup = lk)}) _f ORDER BY cell_id, aphiaid)
+           TO '{q(file.path(out, 'species_flat', paste0('res=', r_top, '.parquet')))}'
+           (FORMAT PARQUET, COMPRESSION {compression}, ROW_GROUP_SIZE {row_group_rows});"))
+        sf_split <- species_flat_split[names(species_flat_split) %in% as.character(res_species_flat)]
+        if (length(species_flat_split) && !length(sf_split))
+          say("species flat: no split, ", paste(names(species_flat_split), collapse = ", "),
+              " not in res_species_flat")
+        say("species flat roll-ups (res ", paste(setdiff(res_species_flat, r_top), collapse = ", "),
+            ") and split ...")
+        obis_h3_write_species_flat(
+          con, file.path(out, "species_flat"), from_res = r_top, res = setdiff(res_species_flat, r_top),
+          split = if (length(sf_split)) sf_split else NULL, row_group_rows = row_group_rows,
+          split_row_group_rows = split_row_group_rows, compression = compression)
+        layers$species_flat <- list(path = "species_flat", partitions = I(character(0)),
+                                    template = "species_flat/res=<res>.parquet", rows = 0)
       }
 
       # the heads: Animalia and every taxon spanning two or more named classes, written
@@ -799,7 +816,8 @@ obis_h3_export_parquet <- function(
                              n_built = n_built, layer = "taxon"),
         lookup_rows   = n_lookup,
         table_columns = SPECIES_COLUMNS,
-        lookup_columns = SPECIES_LOOKUP_COLUMNS,
+        lookup_columns = c(SPECIES_LOOKUP_COLUMNS, if (has_eov) list(SPECIES_EOV_COLUMN)),
+        eov           = .obis_species_eov_meta(attr(lk_files, "eov")),
         note          = paste(
           "one row per (cell, aphiaid) with n = SUM(records) and year_min, year_max the first",
           "and last year recorded (NULL without a year), one data_0.parquet per",
@@ -934,12 +952,15 @@ obis_h3_export_parquet <- function(
     bytes    = as.numeric(file.size(file.path(out, files))),
     stringsAsFactors = FALSE)
   manifest$parent <- ifelse(grepl("/p=[0-9a-f]+/", files),
-                            sub(".*/p=([0-9a-f]+)/.*", "\\1", files), NA_character_)
+                            sub(".*/p=([0-9a-f]+)/.*", "\\1", files),
+                            ifelse(grepl("/p=[0-9a-f]+\\.parquet$", files),
+                                   sub(".*/p=([0-9a-f]+)\\.parquet$", "\\1", files), NA_character_))
 
   manifest$layer <- "meta"  # stats.parquet, taxon_groups.parquet
   for (l in names(layers))
     manifest$layer[startsWith(manifest$path, paste0(layers[[l]]$path, "/"))] <- l
   manifest$layer[manifest$path == "species/species.parquet"] <- "species_lookup"
+  manifest$layer[manifest$path == "species/lineage.parquet"] <- "species_lineage"
   f_files <- file.path(out, "files.parquet")
   duckdb::duckdb_register(con, "export_files", manifest)
   on.exit(duckdb::duckdb_unregister(con, "export_files"), add = TRUE)
@@ -976,7 +997,13 @@ obis_h3_export_parquet <- function(
       data.frame(res = r, rows = sum(lf$rows), files = nrow(lf), bytes = sum(lf$bytes))
     }))
     layers$species$lookup_bytes <- manifest$bytes[manifest$layer == "species_lookup"]
+    ln <- manifest[manifest$layer == "species_lineage", ]
+    if (nrow(ln)) layers$species$lineage <- .obis_species_lineage_meta(ln$bytes, ln$rows, row_group_rows)
   }
+  if (!is.null(layers$species_flat))
+    layers$species_flat <- .obis_species_flat_layer(
+      manifest[manifest$layer == "species_flat", c("path", "rows", "bytes")], max(res_species_flat),
+      species_flat_split, row_group_rows, as.integer(split_row_group_rows))
   info <- list(
     release                = release,
     # the OBIS data date: the newest object of s3://obis-open-data/occurrence/ the store was built
@@ -1393,11 +1420,13 @@ obis_h3_stac_collection <- function(release_dir, file = file.path(release_dir, "
         href_template = L$species_decade$href_template,
         resolutions   = I(ints(L$species_decade$resolutions)),
         decades       = I(as.character(ints(L$species_decade$decades)))),
-      flat       = if (!is.null(L$species_flat)) list(
-        href_template  = L$species_flat$href_template,
-        resolutions    = I(ints(L$species_flat$resolutions)),
-        sorted_by      = I(unlist(L$species_flat$sorted_by)),
-        row_group_rows = L$species_flat$row_group_rows))
+      flat       = if (!is.null(L$species_flat)) .obis_stac_species_flat(L$species_flat),
+      lineage    = if (!is.null(sp$lineage)) list(
+        href = sp$lineage$href, key = sp$lineage$key, lineage_column = sp$lineage$lineage_column,
+        columns = I(vapply(sp$lineage$columns, function(x) x$name, "")),
+        sorted_by = I(unlist(sp$lineage$sorted_by)), row_group_rows = sp$lineage$row_group_rows),
+      eov        = if (!is.null(sp$eov)) list(column = sp$eov$column, rule = sp$eov$rule,
+                                              n = sp$eov$n))
     col$`obis:species` <- col$`obis:species`[!vapply(col$`obis:species`, is.null, logical(1))]
     col$assets$species_lookup <- list(
       href = paste0("./", sp$lookup$href), type = "application/vnd.apache.parquet",
@@ -1405,6 +1434,11 @@ obis_h3_stac_collection <- function(release_dir, file = file.path(release_dir, "
     col$assets$species_heads <- list(
       href = paste0("./", sp$heads$href), type = "application/json",
       title = "the pre-aggregated heads and the layer serving each", roles = I("metadata"))
+    if (!is.null(sp$lineage))
+      col$assets$species_lineage <- list(
+        href = paste0("./", sp$lineage$href), type = "application/vnd.apache.parquet",
+        title = "species lineage: aphiaid, name_key, lineage only (a WoRMS subtree without the names)",
+        roles = I("metadata"))
     if (!is.null(L$species_flat))
       for (r in ints(L$species_flat$resolutions))
         col$assets[[paste0("species_flat_res", r)]] <- list(
@@ -1528,9 +1562,36 @@ obis_h3_stac_stable <- function(release_dir, base_url,
     l
   })
   for (k in c("decade", "flat"))
-    if (!is.null(col$`obis:species`[[k]]$href_template))
-      col$`obis:species`[[k]]$href_template <- absu(col$`obis:species`[[k]]$href_template)
+    for (h in c("href_template", "parent_template"))
+      if (!is.null(col$`obis:species`[[k]][[h]]))
+        col$`obis:species`[[k]][[h]] <- absu(col$`obis:species`[[k]][[h]])
+  if (!is.null(col$`obis:species`$lineage$href))
+    col$`obis:species`$lineage$href <- absu(col$`obis:species`$lineage$href)
   col$`obis:release_base` <- base_url
   jsonlite::write_json(col, file, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
   invisible(file)
+}
+
+# the collection's obis:species.flat from release.json's species_flat layer: the per-resolution
+# files ({res}) and, with a split, the parent template ({res}, {parent}) and its parent_res. The
+# h3 profile 1.1 closes h3:species_table (additionalProperties false), so the flat files are
+# described here, beside it, as the atlas reads them (obis:species.flat, obisindicators 0.11)
+.obis_stac_species_flat <- function(f) {
+  ints <- function(x) as.integer(unlist(x))
+  o <- list(
+    href_template  = f$href_template,
+    resolutions    = I(ints(f$resolutions)),
+    sorted_by      = I(unlist(f$sorted_by)),
+    row_group_rows = f$row_group_rows)
+  if (!is.null(f$columns)) o$columns <- f$columns
+  if (length(f$parent_res)) {
+    o$parent_template      <- f$parent_template
+    o$parent_res           <- lapply(f$parent_res, as.integer)
+    o$split_row_group_rows <- f$split_row_group_rows
+  }
+  if (is.list(f$by_res)) o$file_columns <- stats::setNames(
+    lapply(f$by_res, function(b) I(strsplit(b$columns, ", ", fixed = TRUE)[[1]])),
+    vapply(f$by_res, function(b) as.character(b$res), ""))
+  if (length(f$parent_res)) o$file_columns$parent <- I(SPECIES_FLAT_COLUMNS)
+  o
 }
