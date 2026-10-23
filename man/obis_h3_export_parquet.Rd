@@ -91,9 +91,11 @@ written whole even when its res is in \code{parent_res} (default 50000).}
 \item{compression}{Parquet compression codec (default \code{"zstd"}).}
 
 \item{row_group_rows}{rows per Parquet row group of the indicator layer
-files (default 10000; DuckDB rounds up to a multiple of 2048, so a group
-holds at most 10,240). Recorded in \code{release.json} (\code{row_group_rows}, and
-the largest group written as \code{row_group_rows_max}).}
+files (default 10000). A group holds at most 2 x \code{row_group_rows}: DuckDB
+rounds to 2,048-row vectors and may go past the target (v20261012: 12,045
+at most). What a reader may rely on is the order and the disjoint
+\code{cell_id} statistics. Recorded in \code{release.json} (\code{row_group_rows}, and the
+largest group written as \code{row_group_rows_max}).}
 
 \item{overwrite}{replace an existing \verb{dir_out/release/} (default FALSE: stop).}
 

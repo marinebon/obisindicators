@@ -765,7 +765,7 @@ test_that("every indicator file is sorted by cell_id in row groups of row_group_
     SELECT file_name, row_group_id, row_group_num_rows::DOUBLE AS rows,
            stats_min_value::BIGINT AS mn, stats_max_value::BIGINT AS mx
     FROM parquet_metadata({lst}) WHERE path_in_schema = 'cell_id'"))
-  expect_lte(max(rg$rows), 2048)
+  expect_lte(max(rg$rows), 2 * 2048)  # at most 2 x row_group_rows (DuckDB rounds to 2,048-row vectors)
   expect_gte(max(table(rg$file_name)), 2L)
   overlap <- DBI::dbGetQuery(con, glue::glue("
     SELECT COUNT(*)::DOUBLE AS n FROM (
@@ -778,7 +778,7 @@ test_that("every indicator file is sorted by cell_id in row groups of row_group_
   fs <- file.path(out, "stats.parquet")
   sm <- DBI::dbGetQuery(con, glue::glue(
     "SELECT MAX(row_group_num_rows)::DOUBLE AS m FROM parquet_metadata('{fs}')"))$m
-  expect_lte(sm, 2048)
+  expect_lte(sm, 2 * 2048)
   so <- DBI::dbGetQuery(con, glue::glue(
     "SELECT layer, key FROM read_parquet('{fs}', file_row_number = true) ORDER BY file_row_number"))
   expect_identical(so, so[order(so$layer, so$key, method = "radix"), , drop = FALSE], ignore_attr = TRUE)
@@ -786,5 +786,6 @@ test_that("every indicator file is sorted by cell_id in row groups of row_group_
   js <- jsonlite::read_json(file.path(out, "release.json"))
   expect_equal(js$sorted_by, "cell_id")
   expect_equal(js$row_group_rows, 2048L)
-  expect_equal(js$row_group_rows_max, 2048)
+  expect_lte(js$row_group_rows_max, 2 * 2048)
+  expect_equal(js$row_group_rows_max, max(rg$rows))
 })

@@ -206,9 +206,11 @@ EXPORT_MAX_OPEN <- 100L
 #'   `COPY`, so no more than one is open at a time. Kept so old calls still run.
 #' @param compression Parquet compression codec (default `"zstd"`).
 #' @param row_group_rows rows per Parquet row group of the indicator layer
-#'   files (default 10000; DuckDB rounds up to a multiple of 2048, so a group
-#'   holds at most 10,240). Recorded in `release.json` (`row_group_rows`, and
-#'   the largest group written as `row_group_rows_max`).
+#'   files (default 10000). A group holds at most 2 x `row_group_rows`: DuckDB
+#'   rounds to 2,048-row vectors and may go past the target (v20261012: 12,045
+#'   at most). What a reader may rely on is the order and the disjoint
+#'   `cell_id` statistics. Recorded in `release.json` (`row_group_rows`, and the
+#'   largest group written as `row_group_rows_max`).
 #' @param overwrite replace an existing `dir_out/release/` (default FALSE: stop).
 #' @param decades decades (first year) to export in the decade layers; default
 #'   1960-2020. NULL exports every decade present.

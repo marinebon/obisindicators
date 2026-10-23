@@ -2,7 +2,8 @@
 
 * **Every indicator layer file is sorted by `cell_id` in small row groups.**
   `obis_h3_export_parquet()` gains `row_group_rows` (default 10000; DuckDB
-  rounds up, so a group holds at most 10,240 rows) and writes each file of the
+  row groups are at most 2 x `row_group_rows`; DuckDB rounds to 2,048-row
+  vectors: 12,045 rows at most in v20261012) and writes each file of the
   `all`, `eov`, `taxon`, decade and year layers with its own sorted `COPY`
   (`obis_h3_write_partitions()`, `order_by = "cell_id"`), so the `cell_id`
   statistics of consecutive row groups are disjoint and a reader that knows
