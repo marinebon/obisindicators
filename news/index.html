@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">obisindicators</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -50,6 +50,12 @@
       <small>Source: <a href="https://github.com/marinebon/obisindicators/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.1" id="obisindicators-0101">obisindicators 0.10.1<a class="anchor" aria-label="anchor" href="#obisindicators-0101"></a></h2>
+<ul><li>
+<strong>New <code>obis_h3_add_place_exact(release_dir, coll, source, manifest)</code></strong>: registers a <code>place_exact/coll=&lt;coll&gt;/</code> collection written into a release that was built without it (or without that collection), for example the gazetteer <code>places</code> (the 18 national marine sanctuaries) computed with <code>data-raw/run_place_exact.R</code> on a staging copy of the published release. <code>release.json</code> gets the collection under <code>layers$place_exact$collections</code> (from its <code>meta.json</code>) and the layer’s <code>rows</code>, <code>files</code> and <code>bytes</code> over every collection on disk; <code>files.parquet</code> has its <code>place_exact</code> rows replaced by one row per file on disk and <code>files$n_files</code> is updated (<code>manifest = FALSE</code> leaves it alone). Other layers, <code>stats.parquet</code> and a hand-edited layer <code>note</code> are untouched, and a second call gives the same files.</li>
+<li>The exact place layer’s <code>template</code>, <code>columns</code> and <code>note</code> in <code>release.json</code> come from one internal helper shared by the export and the new function.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.10.0" id="obisindicators-0100">obisindicators 0.10.0<a class="anchor" aria-label="anchor" href="#obisindicators-0100"></a></h2>
 <ul><li>

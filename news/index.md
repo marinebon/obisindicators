@@ -1,5 +1,24 @@
 # Changelog
 
+## obisindicators 0.10.1
+
+- **New
+  `obis_h3_add_place_exact(release_dir, coll, source, manifest)`**:
+  registers a `place_exact/coll=<coll>/` collection written into a
+  release that was built without it (or without that collection), for
+  example the gazetteer `places` (the 18 national marine sanctuaries)
+  computed with `data-raw/run_place_exact.R` on a staging copy of the
+  published release. `release.json` gets the collection under
+  `layers$place_exact$collections` (from its `meta.json`) and the
+  layer’s `rows`, `files` and `bytes` over every collection on disk;
+  `files.parquet` has its `place_exact` rows replaced by one row per
+  file on disk and `files$n_files` is updated (`manifest = FALSE` leaves
+  it alone). Other layers, `stats.parquet` and a hand-edited layer
+  `note` are untouched, and a second call gives the same files.
+- The exact place layer’s `template`, `columns` and `note` in
+  `release.json` come from one internal helper shared by the export and
+  the new function.
+
 ## obisindicators 0.10.0
 
 - **Year layers.**
