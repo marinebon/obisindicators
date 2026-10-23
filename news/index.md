@@ -1,5 +1,69 @@
 # Changelog
 
+## obisindicators 0.12.0
+
+- **`species_flat` per resolution.**
+  [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
+  writes `species_flat/res=1.parquet` and `res=2.parquet` beside
+  `res=3.parquet` (`res_species_flat` now defaults to `1:3`): the finest
+  resolution comes from the store as before (with `h3`), each coarser
+  one is it rolled up, one row per cell and species with `n` summed,
+  `year_min` the least and `year_max` the greatest (NULL only when every
+  year is NULL), so a res-1 hexagon reads its own rows instead of its
+  res-3 children’s. The roll-up files have the columns
+  `cell_id, name_key, aphiaid, n, year_min, year_max` (no `h3`). New
+  exported
+  [`obis_h3_species_rollup_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_rollup_sql.md)
+  (the roll-up, equal to
+  [`obis_h3_species_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_sql.md)
+  at that resolution straight from the store) and
+  [`obis_h3_write_species_flat()`](https://marinebon.org/obisindicators/reference/obis_h3_write_species_flat.md).
+- **The res-3 species table split by res-1 parent**:
+  `species_flat/res=3/p=<res-1 parent>.parquet`, one file per parent
+  with records, without the `h3` column, sorted by `cell_id, aphiaid` in
+  row groups of `split_row_group_rows` (default 2048; at most 2 x, as
+  DuckDB writes them: 4,081 rows in v20261012) with `cell_id`
+  statistics, so a cell’s file is small enough for its footer to come
+  with the first range read. The files union to `res=3.parquet`, which
+  is kept. New arguments `species_flat_split` (default `c("3" = 1L)`,
+  resolution = parent resolution; NULL for none) and
+  `split_row_group_rows`. `release.json` `layers.species_flat` gains
+  `template_parent`, `parent_template`, `parent_res`, `by_res` and
+  `split`; `files.parquet` gives each split file’s `parent`.
+- **The species lookup carries each species’ EOV** and **its lineage has
+  a file of its own.** `species/species.parquet` gains `eov`: the EOV
+  whose layer counts the aphiaid, the store’s `eov` table joined on
+  `taxonID = aphiaid` as the `eov/` layers join `occ_h3`
+  ([`obis_h3_species_eov_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_eov_sql.md));
+  NULL when no EOV counts it, and the column is left out when the store
+  has no `eov` table. The seeds are disjoint subtrees of one tree, so an
+  aphiaid is in one EOV at most; an aphiaid in two is an error, not a
+  choice. `species/lineage.parquet` holds `aphiaid, name_key, lineage`
+  only, sorted by aphiaid, so a WoRMS subtree reads the lineage without
+  the names. Both are written in row groups of `row_group_rows`
+  ([`obis_h3_write_species_lookup()`](https://marinebon.org/obisindicators/reference/obis_h3_write_species_lookup.md)).
+  No `redlist_code` column: the store’s `occ_h3` and `taxon` tables
+  carry no IUCN Red List field (the OBIS snapshot’s
+  `interpreted.redlist_category` is not brought into the store).
+- **[`obis_h3_amend_species()`](https://marinebon.org/obisindicators/reference/obis_h3_amend_species.md)**
+  adds these files to a release built by 0.11 in place: the lookup
+  rewritten with `eov` (same rows, same order), the lineage file, the
+  roll-ups and the split from the existing `res=3.parquet` (not
+  rewritten), `release.json` and `files.parquet` (the new files added,
+  every other row kept). Used to amend v20261012.
+- **The collection describes them.**
+  [`obis_h3_stac_collection()`](https://marinebon.org/obisindicators/reference/obis_h3_stac_collection.md)
+  lists `obis:species.flat` at every flat resolution with the split’s
+  `parent_template` (`species_flat/res={res}/p={parent}.parquet`),
+  `parent_res` and the columns of each file, `obis:species.lineage`,
+  `obis:species.eov`, and the assets `species_flat_res<r>` and
+  `species_lineage`;
+  [`obis_h3_stac_stable()`](https://marinebon.org/obisindicators/reference/obis_h3_stac_stable.md)
+  makes those hrefs absolute. The h3 profile 1.1 closes
+  `h3:species_table` (no keys beyond its seven), so the flat files stay
+  described under `obis:species.flat`, where the atlas reads them;
+  `h3:species_table` is unchanged.
+
 ## obisindicators 0.11.0
 
 - **Every indicator layer file is sorted by `cell_id` in small row

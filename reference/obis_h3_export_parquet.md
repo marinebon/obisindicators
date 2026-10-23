@@ -19,7 +19,9 @@ obis_h3_export_parquet(
   res_species = c(3L, 4L, 5L),
   species_decades = TRUE,
   res_species_decade = c(3L, 4L),
-  res_species_flat = 3L,
+  res_species_flat = 1:3,
+  species_flat_split = c(`3` = 1L),
+  split_row_group_rows = 2048L,
   heads = TRUE,
   res_heads = 1:7,
   parent_res = c(`6` = 2L, `7` = 3L),
@@ -93,8 +95,19 @@ obis_h3_export_parquet(
 - res_species_flat:
 
   the resolutions of the unpartitioned species table
-  `species_flat/res=<r>.parquet` (default 3: the cell query);
+  `species_flat/res=<r>.parquet` (default 1 to 3, 0.12.0: the cell
+  query; the finest from the store, the others rolled up from it);
   `integer(0)` skips it.
+
+- species_flat_split:
+
+  resolution = parent resolution of the split
+  `species_flat/res=<r>/p=<parent>.parquet` (default `c("3" = 1L)`);
+  NULL writes none. A resolution not in `res_species_flat` is skipped.
+
+- split_row_group_rows:
+
+  rows per row group of the split files (default 2048).
 
 - heads:
 
@@ -214,10 +227,12 @@ invisibly, a character vector of the files written (absolute paths).
       year/all/year=<yyyy>/res=<r>/             per year, all taxa    (res in res_year)
       year/eov/eov=<eov>/year=<yyyy>/res=<r>/   per year and EOV      (res in res_year)
       species/res=<r>/class=<class>/data_0.parquet  species x hex x count (res in res_species)
-      species/species.parquet                   the species lookup: names, name_key, lineage
+      species/species.parquet                   the species lookup: names, name_key, lineage, eov
+      species/lineage.parquet                   aphiaid, name_key, lineage only (0.12.0)
       species/heads.json                        the pre-aggregated heads and the layer serving each
       species_decade/res=<r>/decade=<d>/class=<class>/  per decade (res in res_species_decade)
       species_flat/res=<r>.parquet              one cell-sorted file, every class (res_species_flat)
+      species_flat/res=<r>/p=<parent>.parquet   the same split by parent cell (species_flat_split)
       place/coll=<slug>/data_0.parquet          per-place pooled indicators (only with place_collections)
       place_exact/coll=<slug>/indicators.parquet, years.parquet, meta.json
                                                 exact point-in-polygon indicators (only with place_exact)
@@ -327,11 +342,25 @@ Animalia and every taxon spanning two or more named classes) and the
 layer that serves each. Each species row also carries `year_min` and
 `year_max`, the first and last year the aphiaid was recorded in the cell
 (within the decade in `species_decade/`), for the Cell pane.
-`species_flat/res=<r>.parquet` (default res 3) is the same table in one
-file for every class, sorted by `cell_id, aphiaid` in row groups of
+`species_flat/res=<r>.parquet` (default res 1 to 3) is the same table in
+one file for every class, sorted by `cell_id, aphiaid` in row groups of
 `row_group_rows`, so the species of one cell are a range read of one
 file (spike 2: 0.53 MB for a res-1 cell) instead of one row group per
-class file.
+class file. The finest of `res_species_flat` is written from the store
+(with `h3`); each coarser one is it rolled up
+([`obis_h3_write_species_flat()`](https://marinebon.org/obisindicators/reference/obis_h3_write_species_flat.md):
+`n` summed, `year_min` the least, `year_max` the greatest, no `h3`), so
+a coarse hexagon reads its own rows, not its children's.
+`species_flat_split` splits a resolution by a parent cell,
+`species_flat/res=3/p=<res-1 parent>.parquet` by default (no `h3`, row
+groups of `split_row_group_rows`), so a cell reads a file whose footer
+comes with the first range read. The lookup `species/species.parquet`
+carries each species' `eov`
+([`obis_h3_species_eov_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_eov_sql.md),
+the EOV layers' own membership join; NULL for none) and
+`species/lineage.parquet` holds its `aphiaid, name_key, lineage` alone
+([`obis_h3_write_species_lookup()`](https://marinebon.org/obisindicators/reference/obis_h3_write_species_lookup.md)),
+both in row groups of `row_group_rows`.
 
 **The heads** (`heads = TRUE`) are written as ordinary taxon layers,
 `taxon/rank=<rank>/taxon=<name>/res=<r>/` at `res_heads`

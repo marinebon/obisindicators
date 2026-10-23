@@ -15,6 +15,8 @@ R.
   : Benchmark queries against a store
 - [`obis_bench_queries()`](https://marinebon.org/obisindicators/reference/obis_bench_queries.md)
   : The paper's default benchmark query set
+- [`obis_h3_amend_species()`](https://marinebon.org/obisindicators/reference/obis_h3_amend_species.md)
+  : Add the 0.12 species files to a built obis-h3 release
 - [`obis_h3_export_parquet()`](https://marinebon.org/obisindicators/reference/obis_h3_export_parquet.md)
   : Export an obis_h3 store to hive-partitioned Parquet
 - [`obis_h3_heads_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_heads_sql.md)
@@ -23,6 +25,8 @@ R.
   : The pre-aggregated heads the species table still needs
 - [`obis_h3_species_lookup_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_lookup_sql.md)
   : SQL for the species lookup of the species x hex x count table
+- [`obis_h3_species_rollup_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_rollup_sql.md)
+  : SQL rolling a cell-sorted species table up to a coarser resolution
 - [`obis_h3_species_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_sql.md)
   : SQL for the species x hex x count table at one resolution
 - [`obis_h3_species_subtree_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_subtree_sql.md)
@@ -33,6 +37,10 @@ R.
   : Write the stable-url copy of an obis-h3 release's STAC Collection
 - [`obis_h3_write_partitions()`](https://marinebon.org/obisindicators/reference/obis_h3_write_partitions.md)
   : Write a query to one Parquet file per partition, sorted
+- [`obis_h3_write_species_flat()`](https://marinebon.org/obisindicators/reference/obis_h3_write_species_flat.md)
+  : Write the species_flat roll-ups and the parent split
+- [`obis_h3_write_species_lookup()`](https://marinebon.org/obisindicators/reference/obis_h3_write_species_lookup.md)
+  : Write the species lookup with its EOV, and the split lineage file
 - [`obis_h3_year_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_year_sql.md)
   : SQL for the per-year indicator layers
 - [`obis_h3t_query()`](https://marinebon.org/obisindicators/reference/obis_h3t_query.md)
@@ -171,6 +179,8 @@ IOOS Marine Life Data Network definitions.
   : Essential Ocean Variable (EOV) taxonomic seeds
 - [`obis_eov_sql()`](https://marinebon.org/obisindicators/reference/obis_eov_sql.md)
   : Build an h3t tile SQL query for an Essential Ocean Variable
+- [`obis_h3_species_eov_sql()`](https://marinebon.org/obisindicators/reference/obis_h3_species_eov_sql.md)
+  : SQL for the EOV of each species, as the EOV layers count it
 
 ## Visualize
 

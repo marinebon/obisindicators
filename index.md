@@ -77,9 +77,12 @@ and each partition is exactly one `data_0.parquet`.
       year/all/year=<yyyy>/res=<r>/                    per year, every year present (res 1-5)
       year/eov/eov=<eov>/year=<yyyy>/res=<r>/          per year and EOV
       species/res=<3,4,5>/class=<class>/data_0.parquet species x hex x count: h3, cell_id, name_key, aphiaid, n
-      species/species.parquet                          one row per aphiaid: name_key, names, ranks, lineage, records
+      species/species.parquet                          one row per aphiaid: name_key, names, ranks, lineage, records, eov
+      species/lineage.parquet                          aphiaid, name_key, lineage only (a subtree without the names)
       species/heads.json                               taxa that still need a pre-aggregated head
       species_decade/res=<r>/decade=<d>/class=<class>/ per decade (species_decades = TRUE only)
+      species_flat/res=<1,2,3>.parquet                 every class in one cell-sorted file per res (res 1-2 rolled up)
+      species_flat/res=3/p=<res-1 parent>.parquet      res 3 split by res-1 parent, no h3 column (the Cell pane)
       place/coll=<slug>/data_0.parquet                 per-place pooled indicators (place_collections only)
       place_exact/coll=<slug>/indicators.parquet       exact point-in-polygon indicators, plus years.parquet
                                                        and meta.json (place_exact only)
