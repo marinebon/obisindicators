@@ -453,6 +453,149 @@ obis_place_exact_write <- function(result, dir, coll) {
   invisible(c(f_ind, f_yr, f_meta))
 }
 
+#' Add an exact place collection to an existing `obis-h3` release
+#'
+#' [obis_place_exact_write()] puts `place_exact/coll=<coll>/` into a release
+#' directory; this registers it the way [obis_h3_export_parquet()] does for a
+#' `place_exact` collection exported in the same run: `release.json` gets the
+#' `layers$place_exact` entry (the collection from its `meta.json`, plus the
+#' layer's `rows`, `files` and `bytes` over every collection on disk), and,
+#' with `manifest = TRUE`, `files.parquet` has its `place_exact` rows replaced by
+#' one row per file on disk and `files$n_files` in `release.json` is updated.
+#' The layer's `template`, `columns` and `note` are kept when `release.json` already has
+#' them. Nothing else in the release is touched (`stats.parquet`, the other layers'
+#' rows, `collection.json`), and running it again for the same `coll` gives the
+#' same entries.
+#'
+#' Use it to add a collection after a release was built (for example the
+#' gazetteer `places` sanctuaries, computed with `data-raw/run_place_exact.R`),
+#' on a staging copy of the release: `release_dir` must hold `release.json`, and
+#' `files.parquet` when `manifest = TRUE`, plus every collection the release
+#' already lists (a collection listed in `release.json` but missing on disk is
+#' kept in `collections` with a warning, and not counted in `rows`, `files`, `bytes`).
+#'
+#' @param release_dir the release directory (holding `release.json`, `files.parquet`
+#'   and `place_exact/coll=<coll>/{indicators,years}.parquet`, `meta.json`).
+#' @param coll the collection slug already written under `place_exact/`.
+#' @param source optional text recorded as the collection's `source` (where the
+#'   polygons came from); default: the existing entry's, else omitted.
+#' @param manifest also update `files.parquet` (default `TRUE`).
+#' @param compression Parquet compression of the rewritten `files.parquet`.
+#'
+#' @return invisibly, the paths of the files rewritten (`release.json`, and
+#'   `files.parquet` with `manifest = TRUE`).
+#' @concept analyze
+#' @export
+obis_h3_add_place_exact <- function(release_dir, coll, source = NULL, manifest = TRUE,
+                                    compression = "zstd") {
+  stopifnot(requireNamespace("DBI", quietly = TRUE),
+            requireNamespace("duckdb", quietly = TRUE),
+            requireNamespace("jsonlite", quietly = TRUE),
+            is.character(release_dir), length(release_dir) == 1L, dir.exists(release_dir),
+            is.character(coll), length(coll) == 1L, grepl("^[A-Za-z0-9._-]+$", coll),
+            is.null(source) || (is.character(source) && length(source) == 1L),
+            is.logical(manifest), length(manifest) == 1L, !is.na(manifest))
+  rel   <- normalizePath(release_dir)
+  f_js  <- file.path(rel, "release.json")
+  f_man <- file.path(rel, "files.parquet")
+  stopifnot("release_dir has no release.json" = file.exists(f_js),
+            "release_dir has no files.parquet (manifest = FALSE skips it)" =
+              !manifest || file.exists(f_man))
+  d <- file.path(rel, "place_exact", paste0("coll=", coll))
+  need <- file.path(d, c("indicators.parquet", "years.parquet", "meta.json"))
+  if (!all(file.exists(need)))
+    stop("missing under ", d, ": ", paste(basename(need)[!file.exists(need)], collapse = ", "))
+  q <- function(x) gsub("'", "''", x)
+
+  # every place_exact file on disk ----
+  fx <- sort(list.files(file.path(rel, "place_exact"), pattern = "^(indicators|years)\\.parquet$",
+                        recursive = TRUE))
+  fx <- fx[grepl("^coll=[A-Za-z0-9._-]+/", fx)]
+  paths <- file.path("place_exact", fx)
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  nr <- vapply(file.path(rel, paths), function(f) as.numeric(DBI::dbGetQuery(con, sprintf(
+    "SELECT num_rows FROM parquet_file_metadata('%s') LIMIT 1", q(f)))$num_rows), numeric(1))
+  on_disk <- data.frame(
+    layer = "place_exact", path = paths, url_path = gsub("%", "%25", paths, fixed = TRUE),
+    rows = unname(nr), bytes = as.numeric(file.size(file.path(rel, paths))),
+    parent = NA_character_, stringsAsFactors = FALSE)
+
+  # release.json ----
+  js  <- jsonlite::read_json(f_js)   # lists stay arrays, scalars stay scalars when written back
+  pxl <- .pe_layer_meta()
+  lay <- js$layers$place_exact
+  if (is.null(lay)) lay <- list(path = "place_exact", partitions = list("coll"))
+  meta <- jsonlite::read_json(file.path(d, "meta.json"))
+  ent  <- list(source = if (is.null(source)) lay$collections[[coll]]$source else source,
+               places = as.integer(meta$n_places), records_in = meta$records_in,
+               records_out = meta$records_out, records_total = meta$records_total,
+               overlaps = meta$overlaps)
+  lay$collections[[coll]] <- ent[!vapply(ent, is.null, logical(1))]
+  listed <- names(lay$collections)
+  gone <- setdiff(listed, unique(sub("^coll=([^/]+)/.*", "\\1", fx)))
+  if (length(gone))
+    warning("release.json lists collection(s) not on disk under ", file.path(rel, "place_exact"), ": ",
+            paste(gone, collapse = ", "), call. = FALSE)
+  # the layer's descriptive fields are kept when the release has them (a note may be edited by hand)
+  if (is.null(lay$template)) lay$template <- as.list(pxl$template)
+  if (is.null(lay$columns))  lay$columns  <- lapply(pxl$columns, as.list)
+  if (is.null(lay$note))     lay$note     <- pxl$note
+  lay$rows     <- sum(on_disk$rows)
+  lay$files    <- nrow(on_disk)
+  lay$bytes    <- sum(on_disk$bytes)
+  added <- if (is.null(lay$added)) "added after the release was built" else lay$added
+  tag   <- paste0("coll=", coll, " ")
+  if (!grepl(tag, added, fixed = TRUE))
+    added <- paste0(sub("[; ]*$", "", added), "; ", tag, "added ",
+                    format(Sys.time(), "%Y-%m-%d", tz = "UTC"),
+                    " by obis_h3_add_place_exact() ", .obisindicators_version())
+  if (manifest)   # files.parquet now lists the layer
+    added <- sub("the release files.parquet does not list it", "files.parquet lists it since this addition",
+                 added, fixed = TRUE)
+  lay$added <- added
+  js$layers$place_exact <- lay
+
+  # files.parquet ----
+  out <- f_js
+  if (manifest) {
+    old <- DBI::dbGetQuery(con, sprintf("SELECT * FROM read_parquet('%s')", q(f_man)))
+    keep <- old[old$layer != "place_exact", , drop = FALSE]
+    new  <- rbind(keep[, names(on_disk)], on_disk)
+    new  <- new[order(new$path), ]
+    duckdb::duckdb_register(con, "add_pe_files", new)
+    on.exit(duckdb::duckdb_unregister(con, "add_pe_files"), add = TRUE)
+    f_tmp <- paste0(f_man, ".tmp")
+    DBI::dbExecute(con, sprintf(
+      "COPY (SELECT layer, path, url_path, rows::BIGINT AS rows, bytes::BIGINT AS bytes,
+                    parent::VARCHAR AS parent FROM add_pe_files ORDER BY path)
+       TO '%s' (FORMAT PARQUET, COMPRESSION %s);", q(f_tmp), compression))
+    file.rename(f_tmp, f_man)
+    if (!is.null(js$files)) js$files$n_files <- nrow(new) + 1L
+    out <- c(f_js, f_man)
+  }
+  jsonlite::write_json(js, f_js, auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
+  invisible(out)
+}
+
+# the release.json fields of the place_exact layer that do not depend on the collections
+.pe_layer_meta <- function() {
+  list(
+    template = I(c("place_exact/coll=<coll>/indicators.parquet",
+                   "place_exact/coll=<coll>/years.parquet")),
+    columns  = list(
+      indicators = I(c("place_id", "eov", "decade", "n", "sp", "shannon", "simpson", "es",
+                       "hill_1", "hill_2", "bp", "density")),
+      years      = I(c("place_id", "eov", "year", "n", "sp", "shannon", "simpson", "es",
+                       "hill_1", "hill_2", "bp", "density"))),
+    note = paste(
+      "indicators of each place computed from the OBIS occurrences inside the true polygon",
+      "(exact point-in-polygon, no H3), one row per place x eov ('all' | EOV) x decade",
+      "(NULL = all years) in indicators.parquet and x year in years.parquet; n = records,",
+      "sp = species, bp = Berger-Parker max(ni)/n, hill_1 = exp(shannon), hill_2 = 1/simpson,",
+      "density = n / area_km2 (records per km2); es is NULL where n < esn. values only, no geometry."))
+}
+
 # helpers ----
 
 # decades argument as a sorted integer vector (empty = none)

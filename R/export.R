@@ -489,20 +489,11 @@ obis_h3_export_parquet <- function(
         overlaps      = dg$overlaps$n)
     }
     add_layer("place_exact", "place_exact", "coll", rows_x)
-    layers$place_exact$template <- I(c("place_exact/coll=<coll>/indicators.parquet",
-                                       "place_exact/coll=<coll>/years.parquet"))
+    pxl <- .pe_layer_meta()
+    layers$place_exact$template <- pxl$template
     layers$place_exact$collections <- colls_x
-    layers$place_exact$columns <- list(
-      indicators = I(c("place_id", "eov", "decade", "n", "sp", "shannon", "simpson", "es",
-                       "hill_1", "hill_2", "bp", "density")),
-      years      = I(c("place_id", "eov", "year", "n", "sp", "shannon", "simpson", "es",
-                       "hill_1", "hill_2", "bp", "density")))
-    layers$place_exact$note <- paste(
-      "indicators of each place computed from the OBIS occurrences inside the true polygon",
-      "(exact point-in-polygon, no H3), one row per place x eov ('all' | EOV) x decade",
-      "(NULL = all years) in indicators.parquet and x year in years.parquet; n = records,",
-      "sp = species, bp = Berger-Parker max(ni)/n, hill_1 = exp(shannon), hill_2 = 1/simpson,",
-      "density = n / area_km2 (records per km2); es is NULL where n < esn. values only, no geometry.")
+    layers$place_exact$columns <- pxl$columns
+    layers$place_exact$note <- pxl$note
   }
 
   # year layers: the same per year, from min(date_year) to max(date_year) ----

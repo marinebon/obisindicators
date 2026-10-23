@@ -505,6 +505,109 @@ test_that("export with place_exact writes the exact place tables, listed in file
                "place_exact_occ")
 })
 
+test_that("obis_h3_add_place_exact() registers a collection added to a built release", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("jsonlite")
+  skip_if_not_installed("sf")
+  skip_if_not_installed("h3")
+  skip_if_not(h3_ext_ok(), "duckdb h3 community extension unavailable")
+  skip_if_not(spatial_ext_ok(), "duckdb spatial extension unavailable")
+
+  fx  <- make_paper_fixture()
+  con <- fx$con
+  dir <- tempfile("export_")
+  src <- tempfile("exact_src_")
+  dir.create(src)
+  on.exit({
+    DBI::dbDisconnect(con, shutdown = TRUE); unlink(fx$db)
+    unlink(c(dir, src), recursive = TRUE) }, add = TRUE)
+
+  occ <- data.frame(
+    decimalLongitude = c(-50, -50, -60, 60), decimalLatitude = c(10, 10, 20, 40),
+    species   = c("Chelonia mydas", "Caretta caretta", "Chelonia mydas", "Larus argentatus"),
+    date_year = c(2015L, 1975L, 2015L, 2015L),
+    aphiaid   = c(987097L, 987098L, 987097L, 1840L),
+    records   = c(120L, 80L, 60L, 300L))
+  duckdb::duckdb_register(con, "exact_occ", occ)
+  DBI::dbExecute(con, glue::glue("COPY exact_occ TO '{src}/occ.parquet' (FORMAT PARQUET)"))
+  duckdb::duckdb_unregister(con, "exact_occ")
+  box <- function(x0, y0, x1, y1) pe_poly(matrix(c(x0, y0, x1, y0, x1, y1, x0, y1), ncol = 2, byrow = TRUE))
+  f_a <- file.path(src, "a.parquet")
+  f_b <- file.path(src, "b.parquet")
+  pe_write_places(f_a, pe_sf(P1 = box(-65, 5, -45, 25)))
+  pe_write_places(f_b, pe_sf(Q1 = box(55, 35, 65, 45), Q2 = box(-70, 15, -55, 25)))
+
+  # a release built with one collection, and one built without any
+  obis_h3_export_parquet(con, dir, "v1", res_decade = 5L, verbose = FALSE,
+                         place_exact = list(coll_a = f_a), place_exact_occ = file.path(src, "occ.parquet"))
+  obis_h3_export_parquet(con, dir, "v0", res_decade = 5L, verbose = FALSE)
+  rel <- file.path(dir, "v1")
+  man <- function(r) DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{r}/files.parquet')"))
+  m0  <- man(rel)
+  js0 <- jsonlite::read_json(file.path(rel, "release.json"))
+
+  # the second collection is computed and written, then registered
+  obis_place_exact_write(
+    obis_place_indicators_exact(file.path(src, "occ.parquet"), f_b, eov = con), rel, "coll_b")
+  expect_false("coll_b" %in% basename(dirname(man(rel)$path[man(rel)$layer == "place_exact"])))
+  expect_error(obis_h3_add_place_exact(rel, "nope"), "missing under")
+  obis_h3_add_place_exact(rel, "coll_b", source = "b.parquet")
+  m1 <- man(rel)
+  pe <- m1[m1$layer == "place_exact", ]
+  expect_equal(sort(pe$path), c(
+    "place_exact/coll=coll_a/indicators.parquet", "place_exact/coll=coll_a/years.parquet",
+    "place_exact/coll=coll_b/indicators.parquet", "place_exact/coll=coll_b/years.parquet"))
+  expect_equal(pe$bytes[match(pe$path, pe$path)],
+               file.size(file.path(rel, pe$path)), ignore_attr = TRUE)
+  expect_equal(pe$rows[pe$path == "place_exact/coll=coll_b/indicators.parquet"],
+               DBI::dbGetQuery(con, glue::glue("SELECT COUNT(*)::DOUBLE AS n FROM read_parquet(
+                 '{rel}/place_exact/coll=coll_b/indicators.parquet', hive_partitioning = false)"))$n)
+  # every other file row is unchanged
+  expect_equal(m1[m1$layer != "place_exact", ], m0[m0$layer != "place_exact", ], ignore_attr = TRUE)
+  js <- jsonlite::read_json(file.path(rel, "release.json"))
+  expect_equal(names(js$layers$place_exact$collections), c("coll_a", "coll_b"))
+  expect_equal(js$layers$place_exact$collections$coll_a, js0$layers$place_exact$collections$coll_a)
+  expect_equal(js$layers$place_exact$collections$coll_b$places, 2L)
+  expect_equal(js$layers$place_exact$collections$coll_b$source, "b.parquet")
+  expect_equal(js$layers$place_exact$collections$coll_b$records_total, 560)
+  expect_equal(js$layers$place_exact$files, 4L)
+  expect_equal(js$layers$place_exact$rows, sum(pe$rows))
+  expect_equal(js$layers$place_exact$bytes, sum(pe$bytes))
+  expect_equal(js$files$n_files, nrow(m1) + 1L)
+  expect_equal(js$layers$place_exact$template, js0$layers$place_exact$template)
+  # nothing else in release.json changed
+  other <- setdiff(names(js0), "files")
+  expect_equal(js[setdiff(other, "layers")], js0[setdiff(other, "layers")])
+  expect_equal(js$layers[names(js$layers) != "place_exact"], js0$layers[names(js0$layers) != "place_exact"])
+
+  # a hand-edited note survives
+  jn <- jsonlite::read_json(file.path(rel, "release.json"))
+  jn$layers$place_exact$note <- "edited by hand"
+  jsonlite::write_json(jn, file.path(rel, "release.json"), auto_unbox = TRUE, pretty = TRUE, digits = NA)
+  obis_h3_add_place_exact(rel, "coll_b")
+  expect_equal(jsonlite::read_json(file.path(rel, "release.json"))$layers$place_exact$note, "edited by hand")
+
+  # idempotent
+  obis_h3_add_place_exact(rel, "coll_b")
+  expect_equal(man(rel), m1)
+  expect_equal(jsonlite::read_json(file.path(rel, "release.json"))$layers$place_exact$collections, js$layers$place_exact$collections)
+
+  # a release without the layer gets it; manifest = FALSE leaves files.parquet alone
+  r0 <- file.path(dir, "v0")
+  m_before <- man(r0)
+  obis_place_exact_write(
+    obis_place_indicators_exact(file.path(src, "occ.parquet"), f_a, eov = con), r0, "coll_a")
+  obis_h3_add_place_exact(r0, "coll_a", manifest = FALSE)
+  expect_equal(man(r0), m_before)
+  j0 <- jsonlite::read_json(file.path(r0, "release.json"))
+  expect_equal(names(j0$layers$place_exact$collections), "coll_a")
+  expect_equal(j0$layers$place_exact$files, 2L)
+  obis_h3_add_place_exact(r0, "coll_a")
+  expect_equal(sort(man(r0)$path[man(r0)$layer == "place_exact"]),
+               c("place_exact/coll=coll_a/indicators.parquet", "place_exact/coll=coll_a/years.parquet"))
+})
+
 test_that("export writes exactly one data_0.parquet per partition", {
   # regression: on the global store (~11k taxon partitions) DuckDB split 251
   # partitions into data_0 + data_1 once more than partitioned_write_max_open_files

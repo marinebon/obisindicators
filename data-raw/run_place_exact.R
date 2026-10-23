@@ -15,6 +15,10 @@
 # Env (defaults): OBIS_MEMORY=16GB OBIS_THREADS=6 OBIS_MAX_TEMP=200GB OBIS_TEMP_DIR=<out dir>/.tmp
 #   OBIS_MAX_VERTICES=256  OBIS_ESN=50  OBIS_PKG_ROOT=<this checkout>
 #
+# To add the collection to a release that was built without it, run this against a staging copy
+# of the release (<out dir>) and then obis_h3_add_place_exact(<out dir>, "<coll>"), which updates
+# the staging release.json and files.parquet.
+#
 # Prints the timing and the totals check, and exits 1 when records_in + records_out differs from
 # records_total although no places overlap (records are being lost or double counted), 2 on a usage
 # error. With overlapping places the check uses records_in_unique and a warning is printed.
