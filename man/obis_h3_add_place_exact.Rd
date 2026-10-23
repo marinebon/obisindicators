@@ -38,7 +38,8 @@ layer's \code{rows}, \code{files} and \code{bytes} over every collection on disk
 with \code{manifest = TRUE}, \code{files.parquet} has its \code{place_exact} rows replaced by
 one row per file on disk and \code{files$n_files} in \code{release.json} is updated.
 The layer's \code{template}, \code{columns} and \code{note} are kept when \code{release.json} already has
-them. Nothing else in the release is touched (\code{stats.parquet}, the other layers'
+them, except that a collection with \code{species.parquet} adds the species template and
+columns to an entry written before 0.11.0. Nothing else in the release is touched (\code{stats.parquet}, the other layers'
 rows, \code{collection.json}), and running it again for the same \code{coll} gives the
 same entries.
 }

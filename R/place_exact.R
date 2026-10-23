@@ -62,6 +62,15 @@ PLACE_EXACT_MAX_ROUNDS <- 24L
 #' @param years per-year rows: `TRUE` (default) every year with records,
 #'   `FALSE` or `NULL` none, or an integer vector of years.
 #' @param esn expected sample size for ES(n); default 50.
+#' @param species also return the species of each place (default TRUE): one row
+#'   per place x aphiaid x name with its records and first and last year, from
+#'   the same point-in-polygon pass, so the Place page lists exact species
+#'   rather than those of the H3 cells it overlaps.
+#' @param lookup optional species lookup giving `name_key` (the release's
+#'   `species/species.parquet`, as a path, or a data frame with `species` and
+#'   `name_key`): a place's species name gets the lookup's `name_key`, so the
+#'   rows join the release lookup; a name the lookup lacks gets a key above its
+#'   largest. Without it, `name_key` is a dense rank of the names in the result.
 #' @param max_vertices the most vertices a polygon piece may have before it is
 #'   cut into quadrants (default 256, at least 8). It only affects speed and
 #'   memory, not results.
@@ -85,6 +94,11 @@ PLACE_EXACT_MAX_ROUNDS <- 24L
 #'     `bp` (Berger-Parker, `max(ni) / n`, the `maxp` of [calc_indicators()])
 #'     and `density` (`n / area_km2`, records per km2).
 #'   - `years`: the same per place x `eov` x `year`.
+#'   - `species` (with `species = TRUE`): one row per place x `aphiaid` x
+#'     `name_key` with records: `place_id`, `aphiaid`, `name_key` (one per
+#'     species name: a place's distinct `name_key` count is its `sp`), `n`
+#'     (records; they sum to the place's all-taxa `n`), `year_min`, `year_max`
+#'     (NA when no record has a year), ordered by place and records, most first.
 #'   - `diagnostics`: `records_in` (records summed over the places, all taxa and
 #'     years), `records_out` (filtered records outside every place),
 #'     `records_total` (filtered records), `records_in_unique` (`records_total -
@@ -112,6 +126,8 @@ obis_place_indicators_exact <- function(
   decades           = TRUE,
   years             = TRUE,
   esn               = 50L,
+  species           = TRUE,
+  lookup            = NULL,
   max_vertices      = 256L,
   con               = NULL,
   memory_limit      = NULL,
@@ -126,6 +142,9 @@ obis_place_indicators_exact <- function(
   stopifnot(requireNamespace("DBI", quietly = TRUE),
             requireNamespace("duckdb", quietly = TRUE),
             is.numeric(esn), length(esn) == 1L, esn >= 1,
+            is.logical(species), length(species) == 1L, !is.na(species),
+            is.null(lookup) || is.data.frame(lookup) ||
+              (is.character(lookup) && length(lookup) == 1L),
             is.numeric(max_vertices), length(max_vertices) == 1L, is.finite(max_vertices),
             max_vertices >= 8)
   if (!is.null(grid_deg))
@@ -149,7 +168,7 @@ obis_place_indicators_exact <- function(
   nm  <- function(x) paste0("pe", id, "_", x)
   tbl <- list(pl = nm("places"), pcs = nm("pieces"), occ = nm("occ"), loc = nm("loc"),
               lp = nm("loc_place"), po = nm("place_occ"), ov = nm("overlap"), eov = nm("eov"),
-              cur = nm("cur"), nxt = nm("next"))
+              cur = nm("cur"), nxt = nm("next"), nk = nm("name_key"), lk = nm("lookup"))
   vws <- character(0)
   on.exit({
     for (v in vws) try(duckdb::duckdb_unregister(con, v), silent = TRUE)
@@ -379,7 +398,53 @@ obis_place_indicators_exact <- function(
   years_df <- run(p_yr, "year")
   if (is.null(years_df)) years_df <- empty("year")
 
-  list(indicators = indicators, years = years_df, diagnostics = diagnostics)
+  # species per place: records, first and last year, a name_key per species name ----
+  out <- list(indicators = indicators, years = years_df)
+  if (species) {
+    say("species per place ...")
+    if (is.null(lookup)) {
+      DBI::dbExecute(con, glue::glue("
+        CREATE TEMP TABLE {tbl$nk} AS
+        SELECT species, (dense_rank() OVER (ORDER BY species))::INTEGER AS name_key
+        FROM (SELECT DISTINCT species FROM {tbl$po})"))
+    } else {
+      if (is.data.frame(lookup)) {
+        stopifnot("`lookup` needs columns species and name_key" =
+                    all(c("species", "name_key") %in% names(lookup)))
+        vw <- nm("lookup_src")
+        duckdb::duckdb_register(con, vw, lookup[, c("species", "name_key")])
+        vws <- c(vws, vw)
+        lk_src <- vw
+      } else {
+        stopifnot("`lookup` file not found" = file.exists(path.expand(lookup)))
+        lk_src <- paste0("read_parquet('", gsub("'", "''", path.expand(lookup)), "')")
+      }
+      DBI::dbExecute(con, glue::glue("
+        CREATE TEMP TABLE {tbl$lk} AS
+        SELECT DISTINCT species::VARCHAR AS species, name_key::INTEGER AS name_key
+        FROM {lk_src} WHERE species IS NOT NULL AND name_key IS NOT NULL"))
+      dup <- DBI::dbGetQuery(con, glue::glue(
+        "SELECT COUNT(*)::DOUBLE AS n FROM (SELECT species FROM {tbl$lk} GROUP BY 1 HAVING COUNT(*) > 1)"))$n
+      if (dup > 0) stop("`lookup` gives ", dup, " species name(s) more than one name_key")
+      DBI::dbExecute(con, glue::glue("
+        CREATE TEMP TABLE {tbl$nk} AS
+        SELECT species, name_key FROM {tbl$lk}
+        UNION ALL
+        SELECT species, ((SELECT COALESCE(MAX(name_key), 0) FROM {tbl$lk})
+                         + dense_rank() OVER (ORDER BY species))::INTEGER AS name_key
+        FROM (SELECT DISTINCT p.species FROM {tbl$po} p ANTI JOIN {tbl$lk} USING (species))"))
+    }
+    sp_df <- DBI::dbGetQuery(con, glue::glue("
+      SELECT p.place_id, p.aphiaid::DOUBLE AS aphiaid, k.name_key, SUM(p.records)::DOUBLE AS n,
+             MIN(p.date_year)::INTEGER AS year_min, MAX(p.date_year)::INTEGER AS year_max
+      FROM {tbl$po} p JOIN {tbl$nk} k USING (species)
+      GROUP BY 1, 2, 3
+      ORDER BY p.place_id, n DESC, k.name_key, aphiaid NULLS LAST"))
+    rownames(sp_df) <- NULL
+    out$species <- sp_df
+  }
+  out$diagnostics <- diagnostics
+  out
 }
 
 #' Write the exact place indicators as Parquet
@@ -392,6 +457,8 @@ obis_place_indicators_exact <- function(
 #'                                                    simpson, es, hill_1, hill_2, bp, density
 #' <dir>/place_exact/coll=<coll>/years.parquet        place_id, eov, year, n, sp, shannon,
 #'                                                    simpson, es, hill_1, hill_2, bp, density
+#' <dir>/place_exact/coll=<coll>/species.parquet      place_id, aphiaid, name_key, n, year_min,
+#'                                                    year_max (when the result has species)
 #' <dir>/place_exact/coll=<coll>/meta.json            coll, places, rows, records_in/out/total,
 #'                                                    overlaps, created, obisindicators_version
 #' ```
@@ -403,7 +470,8 @@ obis_place_indicators_exact <- function(
 #'   `dir/place_exact/coll=<coll>/`.
 #' @param coll the collection slug (letters, digits, `.`, `_`, `-`).
 #'
-#' @return invisibly, the paths of the three files written.
+#' @return invisibly, the paths of the files written (indicators, years,
+#'   species when present, meta.json).
 #' @concept analyze
 #' @export
 obis_place_exact_write <- function(result, dir, coll) {
@@ -436,12 +504,25 @@ obis_place_exact_write <- function(result, dir, coll) {
   }
   f_ind <- one(result$indicators, "decade", file.path(d, "indicators.parquet"))
   f_yr  <- one(result$years, "year", file.path(d, "years.parquet"))
+  f_sp  <- character(0)
+  if (!is.null(result$species)) {
+    f_sp <- file.path(d, "species.parquet")
+    duckdb::duckdb_register(con, "pe_write_species", result$species)
+    DBI::dbExecute(con, glue::glue("
+      COPY (
+        SELECT place_id::VARCHAR AS place_id, aphiaid::BIGINT AS aphiaid, name_key::INTEGER AS name_key,
+               n::BIGINT AS n, year_min::SMALLINT AS year_min, year_max::SMALLINT AS year_max
+        FROM pe_write_species ORDER BY place_id, n DESC, name_key, aphiaid NULLS LAST
+      ) TO '{q(f_sp)}' (FORMAT PARQUET, COMPRESSION ZSTD);"))
+    duckdb::duckdb_unregister(con, "pe_write_species")
+  }
 
   dg <- result$diagnostics
   meta <- list(
     coll                   = coll,
     n_places               = length(unique(c(result$indicators$place_id, result$years$place_id))),
-    rows                   = list(indicators = nrow(result$indicators), years = nrow(result$years)),
+    rows                   = c(list(indicators = nrow(result$indicators), years = nrow(result$years)),
+                               if (!is.null(result$species)) list(species = nrow(result$species))),
     records_in             = dg$records_in,
     records_out            = dg$records_out,
     records_total          = dg$records_total,
@@ -450,7 +531,7 @@ obis_place_exact_write <- function(result, dir, coll) {
     obisindicators_version = .obisindicators_version())
   f_meta <- file.path(d, "meta.json")
   jsonlite::write_json(meta, f_meta, auto_unbox = TRUE, pretty = TRUE, digits = NA, na = "null")
-  invisible(c(f_ind, f_yr, f_meta))
+  invisible(c(f_ind, f_yr, f_sp, f_meta))
 }
 
 #' Add an exact place collection to an existing `obis-h3` release
@@ -463,7 +544,8 @@ obis_place_exact_write <- function(result, dir, coll) {
 #' with `manifest = TRUE`, `files.parquet` has its `place_exact` rows replaced by
 #' one row per file on disk and `files$n_files` in `release.json` is updated.
 #' The layer's `template`, `columns` and `note` are kept when `release.json` already has
-#' them. Nothing else in the release is touched (`stats.parquet`, the other layers'
+#' them, except that a collection with `species.parquet` adds the species template and
+#' columns to an entry written before 0.11.0. Nothing else in the release is touched (`stats.parquet`, the other layers'
 #' rows, `collection.json`), and running it again for the same `coll` gives the
 #' same entries.
 #'
@@ -508,7 +590,7 @@ obis_h3_add_place_exact <- function(release_dir, coll, source = NULL, manifest =
   q <- function(x) gsub("'", "''", x)
 
   # every place_exact file on disk ----
-  fx <- sort(list.files(file.path(rel, "place_exact"), pattern = "^(indicators|years)\\.parquet$",
+  fx <- sort(list.files(file.path(rel, "place_exact"), pattern = "^(indicators|years|species)\\.parquet$",
                         recursive = TRUE))
   fx <- fx[grepl("^coll=[A-Za-z0-9._-]+/", fx)]
   paths <- file.path("place_exact", fx)
@@ -541,6 +623,13 @@ obis_h3_add_place_exact <- function(release_dir, coll, source = NULL, manifest =
   if (is.null(lay$template)) lay$template <- as.list(pxl$template)
   if (is.null(lay$columns))  lay$columns  <- lapply(pxl$columns, as.list)
   if (is.null(lay$note))     lay$note     <- pxl$note
+  # a collection with species.parquet (0.11.0) adds its template and columns to an older entry
+  if (any(grepl("/species\\.parquet$", fx))) {
+    tp <- unlist(lay$template)
+    sp_tpl <- "place_exact/coll=<coll>/species.parquet"
+    if (!sp_tpl %in% tp) lay$template <- as.list(c(tp, sp_tpl))
+    if (is.null(lay$columns$species)) lay$columns$species <- as.list(pxl$columns$species)
+  }
   lay$rows     <- sum(on_disk$rows)
   lay$files    <- nrow(on_disk)
   lay$bytes    <- sum(on_disk$bytes)
@@ -582,18 +671,23 @@ obis_h3_add_place_exact <- function(release_dir, coll, source = NULL, manifest =
 .pe_layer_meta <- function() {
   list(
     template = I(c("place_exact/coll=<coll>/indicators.parquet",
-                   "place_exact/coll=<coll>/years.parquet")),
+                   "place_exact/coll=<coll>/years.parquet",
+                   "place_exact/coll=<coll>/species.parquet")),
     columns  = list(
       indicators = I(c("place_id", "eov", "decade", "n", "sp", "shannon", "simpson", "es",
                        "hill_1", "hill_2", "bp", "density")),
       years      = I(c("place_id", "eov", "year", "n", "sp", "shannon", "simpson", "es",
-                       "hill_1", "hill_2", "bp", "density"))),
+                       "hill_1", "hill_2", "bp", "density")),
+      species    = I(c("place_id", "aphiaid", "name_key", "n", "year_min", "year_max"))),
     note = paste(
       "indicators of each place computed from the OBIS occurrences inside the true polygon",
       "(exact point-in-polygon, no H3), one row per place x eov ('all' | EOV) x decade",
       "(NULL = all years) in indicators.parquet and x year in years.parquet; n = records,",
       "sp = species, bp = Berger-Parker max(ni)/n, hill_1 = exp(shannon), hill_2 = 1/simpson,",
-      "density = n / area_km2 (records per km2); es is NULL where n < esn. values only, no geometry."))
+      "density = n / area_km2 (records per km2); es is NULL where n < esn. species.parquet: one row",
+      "per place x aphiaid x name_key with n records and the first and last year; name_key is the",
+      "release lookup's (species/species.parquet), so a place's distinct name_key count is its sp",
+      "and its n sum to the place's n. values only, no geometry."))
 }
 
 # helpers ----

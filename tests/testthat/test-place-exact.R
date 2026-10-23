@@ -91,7 +91,7 @@ pe_main <- function() {
 test_that("all taxa, all years: a box and an L-shaped polygon equal calc_indicators() on the points inside", {
   skip_exact()
   fx <- pe_main(); occ <- fx$occ; res <- fx$res
-  expect_equal(names(res), c("indicators", "years", "diagnostics"))
+  expect_equal(names(res), c("indicators", "years", "species", "diagnostics"))
   expect_equal(names(res$indicators),
                c("place_id", "eov", "decade", "n", "sp", "shannon", "simpson", "es",
                  "hill_1", "hill_2", "bp", "density"))
@@ -497,8 +497,14 @@ test_that("obis_place_exact_write() writes values-only parquet and meta.json", {
   dir <- tempfile("release"); on.exit(unlink(dir, recursive = TRUE), add = TRUE)
   files <- obis_place_exact_write(res, dir, "test_coll")
   d <- file.path(dir, "place_exact", "coll=test_coll")
-  expect_true(all(file.exists(file.path(d, c("indicators.parquet", "years.parquet", "meta.json")))))
-  expect_equal(basename(files), c("indicators.parquet", "years.parquet", "meta.json"))
+  expect_true(all(file.exists(file.path(d, c("indicators.parquet", "years.parquet", "species.parquet",
+                                             "meta.json")))))
+  expect_equal(basename(files), c("indicators.parquet", "years.parquet", "species.parquet", "meta.json"))
+  sp <- DBI::dbGetQuery(DBI::dbConnect(duckdb::duckdb()), sprintf(
+    "SELECT * FROM read_parquet('%s', hive_partitioning = false)", file.path(d, "species.parquet")))
+  expect_equal(names(sp), c("place_id", "aphiaid", "name_key", "n", "year_min", "year_max"))
+  expect_equal(nrow(sp), nrow(res$species))
+  expect_equal(sum(sp$n), sum(res$species$n))
 
   con <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
@@ -523,6 +529,7 @@ test_that("obis_place_exact_write() writes values-only parquet and meta.json", {
   expect_equal(m$n_places, 2)
   expect_equal(m$rows$indicators, nrow(ind))
   expect_equal(m$rows$years, nrow(yr))
+  expect_equal(m$rows$species, nrow(res$species))
   expect_equal(m$records_in, res$diagnostics$records_in)
   expect_equal(m$records_out, res$diagnostics$records_out)
   expect_equal(m$records_total, res$diagnostics$records_total)
@@ -530,4 +537,60 @@ test_that("obis_place_exact_write() writes values-only parquet and meta.json", {
   expect_match(m$created, "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$")
   expect_false(is.null(m$obisindicators_version))
   expect_error(obis_place_exact_write(res, dir, "bad/slug"))
+})
+
+test_that("species per place: n sums to the place's n and the distinct names equal sp", {
+  skip_exact()
+  fx <- pe_main(); occ <- fx$occ; res <- fx$res
+  sp <- res$species
+  expect_equal(names(sp), c("place_id", "aphiaid", "name_key", "n", "year_min", "year_max"))
+  for (p in c("BOX", "ELL")) {
+    row <- pe_row(res, p)
+    s_p <- sp[sp$place_id == p, ]
+    expect_equal(sum(s_p$n), row$n)
+    expect_equal(length(unique(s_p$name_key)), row$sp)
+    # each species' records and years equal a count of the points inside
+    inside <- if (p == "BOX") occ[in_box(occ), ] else occ[in_ell(occ), ]
+    ref <- aggregate(list(n = inside$records), list(aphiaid = inside$aphiaid), sum)
+    expect_equal(s_p$n[match(ref$aphiaid, s_p$aphiaid)], ref$n)
+    yr  <- inside[!is.na(inside$date_year), ]
+    y0  <- tapply(yr$date_year, yr$aphiaid, min)
+    y1  <- tapply(yr$date_year, yr$aphiaid, max)
+    k   <- match(as.numeric(names(y0)), s_p$aphiaid)
+    expect_equal(s_p$year_min[k], as.integer(unname(y0)))
+    expect_equal(s_p$year_max[k], as.integer(unname(y1)))
+    expect_false(is.unsorted(rev(s_p$n)))   # most records first
+  }
+  expect_null(obis_place_indicators_exact(occ[1:50, ], pe_sf(BOX = PE_BOX), species = FALSE)$species)
+})
+
+test_that("species per place: name_key from a lookup, a name shared by two aphiaids counted once", {
+  skip_exact()
+  occ <- pe_occ()
+  top <- names(sort(table(occ$species[in_box(occ)]), decreasing = TRUE))[1]
+  i   <- which(occ$species == top)
+  occ$aphiaid[i[seq(1, length(i), by = 2)]] <- 999999   # one name, two aphiaids
+  nm  <- sort(unique(occ$species))
+  lk  <- data.frame(species = nm[-1], name_key = 100L + seq_along(nm[-1]))  # the first name is missing
+  res <- obis_place_indicators_exact(occ, pe_sf(BOX = PE_BOX), lookup = lk)
+  sp  <- res$species
+  row <- pe_row(res, "BOX")
+  expect_equal(sum(sp$n), row$n)
+  expect_equal(length(unique(sp$name_key)), row$sp)
+  expect_equal(sum(sp$name_key == lk$name_key[lk$species == top]), 2L)  # two rows, one key
+  expect_gt(nrow(sp), row$sp)
+  occ_box <- occ[in_box(occ), ]
+  if (nm[1] %in% occ_box$species)   # a name the lookup lacks gets a key above its largest
+    expect_true(all(sp$name_key[!sp$name_key %in% lk$name_key] > max(lk$name_key)))
+  expect_true(all(sp$name_key[sp$name_key %in% lk$name_key] %in% lk$name_key))
+  # the same lookup as a parquet file
+  f <- tempfile(fileext = ".parquet"); on.exit(unlink(f), add = TRUE)
+  con <- DBI::dbConnect(duckdb::duckdb()); on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  duckdb::duckdb_register(con, "lk", lk)
+  DBI::dbExecute(con, sprintf("COPY lk TO '%s' (FORMAT PARQUET)", f))
+  res_f <- obis_place_indicators_exact(occ, pe_sf(BOX = PE_BOX), lookup = f)
+  expect_equal(res_f$species, sp)
+  expect_error(obis_place_indicators_exact(occ, pe_sf(BOX = PE_BOX),
+                                           lookup = rbind(lk, data.frame(species = top, name_key = 1L))),
+               "more than one name_key")
 })

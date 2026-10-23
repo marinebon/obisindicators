@@ -489,13 +489,14 @@ test_that("export with place_exact writes the exact place tables, listed in file
   mf <- DBI::dbGetQuery(con, glue::glue("SELECT * FROM read_parquet('{out}/files.parquet')"))
   pf <- mf[mf$layer == "place_exact", ]
   expect_equal(sort(pf$path), c("place_exact/coll=test_coll/indicators.parquet",
+                                "place_exact/coll=test_coll/species.parquet",
                                 "place_exact/coll=test_coll/years.parquet"))
   js <- jsonlite::read_json(file.path(out, "release.json"))
   expect_equal(js$layers$place_exact$collections$test_coll$places, 2L)
   expect_equal(js$layers$place_exact$collections$test_coll$records_total, 805)
   expect_equal(js$layers$place_exact$collections$test_coll$records_in, 805)
-  expect_equal(js$layers$place_exact$rows, nrow(want$indicators) + nrow(want$years))
-  expect_equal(length(js$layers$place_exact$template), 2L)
+  expect_equal(js$layers$place_exact$rows, nrow(want$indicators) + nrow(want$years) + nrow(want$species))
+  expect_equal(length(js$layers$place_exact$template), 3L)
   # stats are unchanged: no place_exact rows
   st <- DBI::dbGetQuery(con, glue::glue("SELECT DISTINCT layer FROM read_parquet('{out}/stats.parquet')"))
   expect_false("place_exact" %in% st$layer)
@@ -557,8 +558,10 @@ test_that("obis_h3_add_place_exact() registers a collection added to a built rel
   m1 <- man(rel)
   pe <- m1[m1$layer == "place_exact", ]
   expect_equal(sort(pe$path), c(
-    "place_exact/coll=coll_a/indicators.parquet", "place_exact/coll=coll_a/years.parquet",
-    "place_exact/coll=coll_b/indicators.parquet", "place_exact/coll=coll_b/years.parquet"))
+    "place_exact/coll=coll_a/indicators.parquet", "place_exact/coll=coll_a/species.parquet",
+    "place_exact/coll=coll_a/years.parquet",
+    "place_exact/coll=coll_b/indicators.parquet", "place_exact/coll=coll_b/species.parquet",
+    "place_exact/coll=coll_b/years.parquet"))
   expect_equal(pe$bytes[match(pe$path, pe$path)],
                file.size(file.path(rel, pe$path)), ignore_attr = TRUE)
   expect_equal(pe$rows[pe$path == "place_exact/coll=coll_b/indicators.parquet"],
@@ -572,7 +575,7 @@ test_that("obis_h3_add_place_exact() registers a collection added to a built rel
   expect_equal(js$layers$place_exact$collections$coll_b$places, 2L)
   expect_equal(js$layers$place_exact$collections$coll_b$source, "b.parquet")
   expect_equal(js$layers$place_exact$collections$coll_b$records_total, 560)
-  expect_equal(js$layers$place_exact$files, 4L)
+  expect_equal(js$layers$place_exact$files, 6L)
   expect_equal(js$layers$place_exact$rows, sum(pe$rows))
   expect_equal(js$layers$place_exact$bytes, sum(pe$bytes))
   expect_equal(js$files$n_files, nrow(m1) + 1L)
@@ -603,10 +606,28 @@ test_that("obis_h3_add_place_exact() registers a collection added to a built rel
   expect_equal(man(r0), m_before)
   j0 <- jsonlite::read_json(file.path(r0, "release.json"))
   expect_equal(names(j0$layers$place_exact$collections), "coll_a")
-  expect_equal(j0$layers$place_exact$files, 2L)
+  expect_equal(j0$layers$place_exact$files, 3L)
   obis_h3_add_place_exact(r0, "coll_a")
   expect_equal(sort(man(r0)$path[man(r0)$layer == "place_exact"]),
-               c("place_exact/coll=coll_a/indicators.parquet", "place_exact/coll=coll_a/years.parquet"))
+               c("place_exact/coll=coll_a/indicators.parquet", "place_exact/coll=coll_a/species.parquet",
+                 "place_exact/coll=coll_a/years.parquet"))
+
+  # an entry written before 0.11.0 (two templates, no species columns) gains the species ones
+  jo <- jsonlite::read_json(file.path(r0, "release.json"))
+  jo$layers$place_exact$template <- jo$layers$place_exact$template[1:2]
+  jo$layers$place_exact$columns$species <- NULL
+  jsonlite::write_json(jo, file.path(r0, "release.json"), auto_unbox = TRUE, pretty = TRUE, digits = NA)
+  obis_h3_add_place_exact(r0, "coll_a")
+  jn <- jsonlite::read_json(file.path(r0, "release.json"))$layers$place_exact
+  expect_equal(unlist(jn$template)[3], "place_exact/coll=<coll>/species.parquet")
+  expect_equal(unlist(jn$columns$species), c("place_id", "aphiaid", "name_key", "n", "year_min", "year_max"))
+  # the export's species rows carry the release lookup's name_key
+  sx <- DBI::dbGetQuery(con, glue::glue(
+    "SELECT s.name_key AS k, l.name_key AS lk FROM read_parquet('{rel}/place_exact/coll=coll_a/species.parquet') s
+     JOIN (SELECT DISTINCT species, name_key FROM ({obis_h3_species_lookup_sql()})) l
+       ON l.species = (SELECT species FROM ({obis_h3_species_lookup_sql()}) WHERE aphiaid = s.aphiaid)"))
+  expect_gt(nrow(sx), 0L)
+  expect_equal(sx$k, sx$lk)
 })
 
 test_that("export writes exactly one data_0.parquet per partition", {

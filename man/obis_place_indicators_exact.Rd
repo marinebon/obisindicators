@@ -11,6 +11,8 @@ obis_place_indicators_exact(
   decades = TRUE,
   years = TRUE,
   esn = 50L,
+  species = TRUE,
+  lookup = NULL,
   max_vertices = 256L,
   con = NULL,
   memory_limit = NULL,
@@ -49,6 +51,17 @@ integer vector.}
 
 \item{esn}{expected sample size for ES(n); default 50.}
 
+\item{species}{also return the species of each place (default TRUE): one row
+per place x aphiaid x name with its records and first and last year, from
+the same point-in-polygon pass, so the Place page lists exact species
+rather than those of the H3 cells it overlaps.}
+
+\item{lookup}{optional species lookup giving \code{name_key} (the release's
+\code{species/species.parquet}, as a path, or a data frame with \code{species} and
+\code{name_key}): a place's species name gets the lookup's \code{name_key}, so the
+rows join the release lookup; a name the lookup lacks gets a key above its
+largest. Without it, \code{name_key} is a dense rank of the names in the result.}
+
 \item{max_vertices}{the most vertices a polygon piece may have before it is
 cut into quadrants (default 256, at least 8). It only affects speed and
 memory, not results.}
@@ -79,6 +92,11 @@ where \code{n < esn}), \code{hill_1} (\code{exp(shannon)}), \code{hill_2} (\code
 \code{bp} (Berger-Parker, \code{max(ni) / n}, the \code{maxp} of \code{\link[=calc_indicators]{calc_indicators()}})
 and \code{density} (\code{n / area_km2}, records per km2).
 \item \code{years}: the same per place x \code{eov} x \code{year}.
+\item \code{species} (with \code{species = TRUE}): one row per place x \code{aphiaid} x
+\code{name_key} with records: \code{place_id}, \code{aphiaid}, \code{name_key} (one per
+species name: a place's distinct \code{name_key} count is its \code{sp}), \code{n}
+(records; they sum to the place's all-taxa \code{n}), \code{year_min}, \code{year_max}
+(NA when no record has a year), ordered by place and records, most first.
 \item \code{diagnostics}: \code{records_in} (records summed over the places, all taxa and
 years), \code{records_out} (filtered records outside every place),
 \code{records_total} (filtered records), \code{records_in_unique} (\code{records_total - records_out}, \code{records_in} without double counting overlaps), \code{overlaps}

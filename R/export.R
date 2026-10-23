@@ -516,16 +516,23 @@ obis_h3_export_parquet <- function(
         is.character(place_exact_occ) && length(place_exact_occ) >= 1L)
     rows_x <- 0
     colls_x <- list()
+    # the species lookup's name_key, so each place's species rows join species/species.parquet
+    pe_lookup <- NULL
+    pe_cols   <- names(DBI::dbGetQuery(con, "SELECT * FROM occ_h3 LIMIT 0"))
+    if (all(c("aphiaid", "species", "genus", "family", "order", "class", "phylum", "records") %in% pe_cols))
+      pe_lookup <- DBI::dbGetQuery(con, glue::glue(
+        "SELECT DISTINCT species, name_key FROM ({obis_h3_species_lookup_sql(
+           taxon = if (has('taxon')) 'taxon' else NULL)}) _l WHERE species IS NOT NULL"))
     for (slug in slugs_x) {
       say("place_exact: ", slug, " ...")
       px  <- obis_place_indicators_exact(
         place_exact_occ, as.character(place_exact[[slug]]),
-        eov = if (has_eov) con else NULL,
+        eov = if (has_eov) con else NULL, lookup = pe_lookup,
         decades = if (is.null(decades)) TRUE else decades, years = TRUE, esn = esn,
         memory_limit = memory_limit, threads = threads, temp_dir = temp_dir,
         max_temp_dir_size = max_temp_dir_size, verbose = verbose)
       obis_place_exact_write(px, out, slug)
-      rows_x <- rows_x + nrow(px$indicators) + nrow(px$years)
+      rows_x <- rows_x + nrow(px$indicators) + nrow(px$years) + NROW(px$species)
       dg <- px$diagnostics
       colls_x[[slug]] <- list(
         source        = as.character(place_exact[[slug]])[1],

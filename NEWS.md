@@ -50,6 +50,22 @@
   (spike 2: 0.53 MB read for a res-1 cell against 5.3 MB from the class files).
   New argument `res_species_flat` (default 3); `release.json` gets
   `layers.species_flat`.
+* **Exact species per place.** `obis_place_indicators_exact()` returns
+  `species` (new argument `species = TRUE`): one row per place x `aphiaid` x
+  `name_key` with `n` records and `year_min`, `year_max`, from the same
+  point-in-polygon pass as the indicators, so the Place page's species list is
+  the record and not the H3 cells' (the species' `n` sum to the place's `n`, and
+  its distinct `name_key` count is its `sp`). New argument `lookup` (the
+  release's `species/species.parquet`, a path or a data frame) gives the
+  release's `name_key` by name, so the rows join the lookup; a name it lacks
+  gets a key above its largest. `obis_place_exact_write()` writes
+  `place_exact/coll=<coll>/species.parquet` (`place_id, aphiaid, name_key, n,
+  year_min, year_max`, most records first) and counts it in `meta.json`;
+  `obis_h3_add_place_exact()` lists it in `files.parquet` and adds its template
+  and columns to a `release.json` entry written before 0.11.0. The export passes
+  the store's lookup; `data-raw/run_place_exact.R` reads
+  `<out dir>/species/species.parquet` (or `OBIS_SPECIES_LOOKUP`) and fails when
+  the species do not sum to the indicators.
 * Fix: `taxon_groups.parquet` no longer fails for a taxon layer without res 1.
 
 # obisindicators 0.10.1

@@ -14,6 +14,7 @@
 #
 # Env (defaults): OBIS_MEMORY=16GB OBIS_THREADS=6 OBIS_MAX_TEMP=200GB OBIS_TEMP_DIR=<out dir>/.tmp
 #   OBIS_MAX_VERTICES=256  OBIS_ESN=50  OBIS_PKG_ROOT=<this checkout>
+#   OBIS_SPECIES_LOOKUP=<out dir>/species/species.parquet (the name_key of species.parquet)
 #
 # To add the collection to a release that was built without it, run this against a staging copy
 # of the release (<out dir>) and then obis_h3_add_place_exact(<out dir>, "<coll>"), which updates
@@ -67,8 +68,12 @@ if (!identical(store, "none")) {
 tmp <- Sys.getenv("OBIS_TEMP_DIR", file.path(out_dir, ".tmp"))
 t0  <- Sys.time()
 message(format(t0, "%Y-%m-%dT%H:%M:%S"), " exact place indicators: ", coll, " from ", snapshot)
+# the release's species lookup gives name_key (<out dir>/species/species.parquet, or OBIS_SPECIES_LOOKUP)
+lookup <- Sys.getenv("OBIS_SPECIES_LOOKUP", file.path(out_dir, "species", "species.parquet"))
+if (!file.exists(lookup)) { message("no species lookup at ", lookup, ": name_key ranks the names"); lookup <- NULL } else
+  message("species lookup: ", lookup)
 res <- obis_place_indicators_exact(
-  snapshot, places, eov = eov,
+  snapshot, places, eov = eov, lookup = lookup,
   esn               = as.integer(Sys.getenv("OBIS_ESN", "50")),
   max_vertices      = as.integer(Sys.getenv("OBIS_MAX_VERTICES", "256")),
   memory_limit      = Sys.getenv("OBIS_MEMORY", "16GB"),
@@ -87,7 +92,15 @@ message(sprintf("done in %.1f min (compute %.1f min)",
                 as.numeric(difftime(Sys.time(), t0, units = "mins")), as.numeric(t_calc)))
 message("places: ", dg$n_places, " (", dg$n_places_with_records, " with records); pieces: ", fmt(dg$n_pieces),
         "; distinct locations: ", fmt(dg$n_locations))
-message("rows: indicators ", fmt(nrow(res$indicators)), ", years ", fmt(nrow(res$years)))
+message("rows: indicators ", fmt(nrow(res$indicators)), ", years ", fmt(nrow(res$years)),
+        ", species ", fmt(nrow(res$species)))
+# the species of each place sum to its records and count its names (the all-taxa, all-years row)
+ia <- res$indicators[res$indicators$eov == "all" & is.na(res$indicators$decade), ]
+sn <- tapply(res$species$n, res$species$place_id, sum)
+sk <- tapply(res$species$name_key, res$species$place_id, function(k) length(unique(k)))
+sp_ok <- isTRUE(all.equal(unname(sn[ia$place_id]), ia$n)) && isTRUE(all(unname(sk[ia$place_id]) == ia$sp))
+message("species check ", if (sp_ok) "ok" else "FAILED", ": n sums and name counts against the indicators")
+if (!sp_ok) quit(status = 1L)
 message("records: in ", fmt(dg$records_in), " + out ", fmt(dg$records_out), " = ", fmt(dg$records_in + dg$records_out),
         "; total ", fmt(dg$records_total), "; overlaps ", fmt(dg$overlaps$n), " locations")
 message("wrote ", dirname(files[1]))
