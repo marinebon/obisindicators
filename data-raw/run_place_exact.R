@@ -98,7 +98,9 @@ message("rows: indicators ", fmt(nrow(res$indicators)), ", years ", fmt(nrow(res
 ia <- res$indicators[res$indicators$eov == "all" & is.na(res$indicators$decade), ]
 sn <- tapply(res$species$n, res$species$place_id, sum)
 sk <- tapply(res$species$name_key, res$species$place_id, function(k) length(unique(k)))
-sp_ok <- isTRUE(all.equal(unname(sn[ia$place_id]), ia$n)) && isTRUE(all(unname(sk[ia$place_id]) == ia$sp))
+# (tapply gives 1-d arrays: as.numeric drops the dim, or all.equal compares attributes and fails)
+sp_ok <- isTRUE(all.equal(as.numeric(sn[ia$place_id]), as.numeric(ia$n))) &&
+  isTRUE(all(as.numeric(sk[ia$place_id]) == ia$sp))
 message("species check ", if (sp_ok) "ok" else "FAILED", ": n sums and name counts against the indicators")
 if (!sp_ok) quit(status = 1L)
 message("records: in ", fmt(dg$records_in), " + out ", fmt(dg$records_out), " = ", fmt(dg$records_in + dg$records_out),
